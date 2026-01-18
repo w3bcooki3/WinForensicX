@@ -120,63 +120,9 @@ A comprehensive DFIR/SIEM tool for Security Operations Centers, Incident Respond
 
 ---
 
-## 💾 Installation
-
-### Option 1: Quick Start (Recommended)
-
-```powershell
-# Download the script
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yourusername/WinForensicX/main/WinForensicX.ps1" -OutFile "WinForensicX.ps1"
-
-# Run with admin privileges
-powershell.exe -ExecutionPolicy Bypass -File .\WinForensicX.ps1 -Mode Interactive
-```
-
-### Option 2: Git Clone
-
-```bash
-git clone https://github.com/yourusername/WinForensicX.git
-cd WinForensicX
-```
-
 ```powershell
 # Run as Administrator
 .\WinForensicX.ps1 -Mode Interactive
-```
-
-### Option 3: Manual Download
-1. Download `WinForensicX.ps1` from the [Releases](https://github.com/yourusername/WinForensicX/releases) page
-2. Right-click → "Run with PowerShell" (as Administrator)
-
-### Setting Up Optional Components
-
-#### Install Sysmon (Highly Recommended)
-```powershell
-# Download Sysmon
-Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Sysmon.zip" -OutFile "Sysmon.zip"
-Expand-Archive Sysmon.zip
-
-# Install with SwiftOnSecurity config (popular baseline)
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/SwiftOnSecurity/sysmon-config/master/sysmonconfig-export.xml" -OutFile "sysmonconfig.xml"
-.\Sysmon\Sysmon64.exe -accepteula -i sysmonconfig.xml
-```
-
-#### Install YARA (Optional)
-```powershell
-# Download YARA for Windows
-Invoke-WebRequest -Uri "https://github.com/VirusTotal/yara/releases/download/v4.3.2/yara-4.3.2-2150-win64.zip" -OutFile "yara.zip"
-Expand-Archive yara.zip -DestinationPath "C:\Tools\YARA"
-
-# Add to PATH or place yara64.exe in script directory
-```
-
-#### Get Sigma Rules
-```powershell
-# Clone Sigma rule repository
-git clone https://github.com/SigmaHQ/sigma.git C:\Sigma-Rules
-
-# Or download specific rules
-Invoke-WebRequest -Uri "https://github.com/SigmaHQ/sigma/archive/refs/heads/master.zip" -OutFile "sigma-rules.zip"
 ```
 
 ---
@@ -487,16 +433,6 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 .\WinForensicX.ps1 -Mode QuickScan
 ```
 
-#### Issue: YARA Not Working
-**Solution:**
-Script automatically falls back to pattern matching. No action needed unless you want full YARA:
-```powershell
-# Download YARA from: https://github.com/VirusTotal/yara/releases
-# Place yara64.exe in script directory or PATH
-```
-
----
-
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit:
@@ -507,7 +443,7 @@ Contributions are welcome! Please feel free to submit:
 
 ### Development Setup
 ```bash
-git clone https://github.com/yourusername/WinForensicX.git
+git clone https://github.com/w3bcooki3/WinForensicX.git
 cd WinForensicX
 # Make changes
 # Test thoroughly
@@ -532,15 +468,6 @@ MIT License - See [LICENSE](LICENSE) file for details
 
 ---
 
-## 📞 Support
-
-- 📧 Email: support@winforensicx.com
-- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/WinForensicX/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/yourusername/WinForensicX/discussions)
-- 📖 Wiki: [Documentation](https://github.com/yourusername/WinForensicX/wiki)
-
----
-
 ## ⚠️ Disclaimer
 
 This tool is provided for **legitimate security analysis, incident response, and threat hunting purposes only**. Users are responsible for:
@@ -555,10 +482,6 @@ The authors assume no liability for misuse or damage caused by this tool.
 
 <div align="center">
 
-**Made with ❤️ by Security Researchers, for Security Professionals**
+**Made with ❤️ by Rahul**
 
 ⭐ Star this repo if you find it useful!
-
-[Report Bug](https://github.com/yourusername/WinForensicX/issues) • [Request Feature](https://github.com/yourusername/WinForensicX/issues)
-
-</div>
