@@ -27,12 +27,12 @@
 .PARAMETER ScanProcesses
     Enable process scanning with YARA rules
 .EXAMPLE
-    .\SecurityAnalyzer.ps1 -Mode QuickScan
-    .\SecurityAnalyzer.ps1 -Mode DeepAnalysis -Hours 48 -ExportHTML
-    .\SecurityAnalyzer.ps1 -Mode ThreatHunt -IOCFile "C:\iocs.txt"
-    .\SecurityAnalyzer.ps1 -Mode SigmaHunt -SigmaPath "C:\sigma-rules\"
-    .\SecurityAnalyzer.ps1 -YaraPath "C:\rules.yar" -ScanProcesses
-    .\SecurityAnalyzer.ps1 -Mode Interactive -SigmaPath "rules.yml" -IOCFile "iocs.txt"
+    .\WinForensicX.ps1 -Mode QuickScan
+    .\WinForensicX.ps1 -Mode DeepAnalysis -Hours 48 -ExportHTML
+    .\WinForensicX.ps1 -Mode ThreatHunt -IOCFile "C:\iocs.txt"
+    .\WinForensicX.ps1 -Mode SigmaHunt -SigmaPath "C:\sigma-rules\"
+    .\WinForensicX.ps1 -YaraPath "C:\rules.yar" -ScanProcesses
+    .\WinForensicX.ps1 -Mode Interactive -SigmaPath "rules.yml" -IOCFile "iocs.txt"
 #>
 
 [CmdletBinding()]
@@ -126,31 +126,34 @@ $script:SuspiciousProcesses = @(
     'lazagne','nirsoft','mailpv','browserpv','netpass'
 )
 
-# Color coding
 function Write-ColorOutput {
     param([string]$Message, [string]$Level = "INFO")
-    $colors = @{
-        "CRITICAL" = "Red"
-        "WARNING" = "Yellow"
-        "SUCCESS" = "Green"
-        "INFO" = "Cyan"
-        "DETAIL" = "Gray"
+    
+    $color = switch ($Level) {
+        "CRITICAL" { "Red" }
+        "WARNING" { "Yellow" }
+        "SUCCESS" { "Green" }
+        "INFO" { "Cyan" }
+        "DETAIL" { "Gray" }
+        default { "White" }
     }
-    Write-Host "[$Level] " -ForegroundColor $colors[$Level] -NoNewline
-    Write-Host $Message
+    
+    $prefix = "[$Level]"
+    Write-Host $prefix -ForegroundColor $color -NoNewline
+    Write-Host " $Message"
 }
 
-# Banner
 function Show-Banner {
     Clear-Host
-    Write-Host @"
+    $banner = @"
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
-║     Windows Event Log Security Analyzer v$Version            ║
+║     Windows Event Log Security Analyzer v$script:Version     ║
 ║     Mini SIEM/DFIR Toolkit + Sigma/YARA Threat Hunting       ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
-"@ -ForegroundColor Cyan
+"@
+    Write-Host $banner -ForegroundColor Cyan
     Write-Host ""
 }
 
@@ -159,91 +162,111 @@ function Load-IOCFile {
     param([string]$FilePath)
     
     if (-not (Test-Path $FilePath)) {
-        Write-ColorOutput "IOC file not found: $FilePath" "WARNING"
+        Write-Host "[WARNING] IOC file not found: $FilePath" -ForegroundColor Yellow
         return
     }
     
-    Write-ColorOutput "Loading IOCs from: $FilePath" "INFO"
+    Write-Host "[INFO] Loading IOCs from: $FilePath" -ForegroundColor Cyan
     
-    $iocs = Get-Content $FilePath | Where-Object { 
-        $_.Trim() -ne "" -and -not $_.StartsWith("#") 
-    }
-    
-    $script:IOCList = @()
-    
-    foreach ($ioc in $iocs) {
-        $ioc = $ioc.Trim()
-        
-        # Determine IOC type
-        $type = "Unknown"
-        if ($ioc -match '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$') {
-            $type = "IP"
-        }
-        elseif ($ioc -match '^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$') {
-            $type = "Hash"
-        }
-        elseif ($ioc -match '^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$') {
-            $type = "Domain"
-        }
-        elseif ($ioc -match '\.exe$|\.dll$|\.sys$|\.ps1$') {
-            $type = "File"
-        }
-        else {
-            $type = "String"
+    try {
+        $iocs = Get-Content $FilePath -ErrorAction Stop | Where-Object { 
+            $_.Trim() -ne "" -and -not $_.StartsWith("#") 
         }
         
-        $script:IOCList += [PSCustomObject]@{
-            Value = $ioc
-            Type = $type
-            Regex = [regex]::Escape($ioc)
+        $script:IOCList = @()
+        
+        foreach ($ioc in $iocs) {
+            $ioc = $ioc.Trim()
+            
+            # Determine IOC type
+            $type = "Unknown"
+            if ($ioc -match '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$') {
+                $type = "IP"
+            }
+            elseif ($ioc -match '^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$') {
+                $type = "Hash"
+            }
+            elseif ($ioc -match '^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$') {
+                $type = "Domain"
+            }
+            elseif ($ioc -match '\.exe$|\.dll$|\.sys$|\.ps1$') {
+                $type = "File"
+            }
+            else {
+                $type = "String"
+            }
+            
+            $script:IOCList += [PSCustomObject]@{
+                Value = $ioc
+                Type = $type
+                Regex = [regex]::Escape($ioc)
+            }
+        }
+        
+        Write-Host "[SUCCESS] Loaded $($script:IOCList.Count) IOCs" -ForegroundColor Green
+        
+        # Show IOC breakdown
+        $breakdown = $script:IOCList | Group-Object Type
+        foreach ($group in $breakdown) {
+            Write-Host "    $($group.Name): $($group.Count)" -ForegroundColor Gray
         }
     }
-    
-    Write-ColorOutput "  Loaded $($script:IOCList.Count) IOCs" "SUCCESS"
-    
-    # Show IOC breakdown
-    $breakdown = $script:IOCList | Group-Object Type | ForEach-Object {
-        "    $($_.Name): $($_.Count)"
+    catch {
+        Write-Host "[WARNING] Error loading IOC file: $_" -ForegroundColor Yellow
     }
-    $breakdown | ForEach-Object { Write-ColorOutput $_ "DETAIL" }
 }
 
-# Load Sigma Rules
+#Load Sigma Rules
 function Load-SigmaRules {
     param([string]$Path)
     
     if (-not (Test-Path $Path)) {
-        Write-ColorOutput "Sigma path not found: $Path" "WARNING"
+        Write-Host "[WARNING] Sigma path not found: $Path" -ForegroundColor Yellow
         return
     }
     
-    Write-ColorOutput "Loading Sigma rules from: $Path" "INFO"
+    Write-Host "[INFO] Loading Sigma rules from: $Path" -ForegroundColor Cyan
     
-    $sigmaFiles = @()
-    
-    if ((Get-Item $Path).PSIsContainer) {
-        $sigmaFiles = Get-ChildItem -Path $Path -Filter "*.yml" -Recurse
-        $sigmaFiles += Get-ChildItem -Path $Path -Filter "*.yaml" -Recurse
-    }
-    else {
-        $sigmaFiles = @(Get-Item $Path)
-    }
-    
-    foreach ($file in $sigmaFiles) {
-        try {
-            $content = Get-Content $file.FullName -Raw
-            $rule = Parse-SigmaRule -Content $content -FilePath $file.FullName
-            
-            if ($rule) {
-                $script:SigmaRules += $rule
+    try {
+        $sigmaFiles = @()
+        
+        if ((Get-Item $Path).PSIsContainer) {
+            $sigmaFiles = Get-ChildItem -Path $Path -Filter "*.yml" -Recurse -ErrorAction SilentlyContinue
+            $sigmaFiles += Get-ChildItem -Path $Path -Filter "*.yaml" -Recurse -ErrorAction SilentlyContinue
+        }
+        else {
+            $sigmaFiles = @(Get-Item $Path)
+        }
+        
+        # Limit to prevent overflow
+        if ($sigmaFiles.Count -gt 100) {
+            Write-Host "[WARNING] Found $($sigmaFiles.Count) Sigma files. Limiting to first 100 to prevent overflow." -ForegroundColor Yellow
+            $sigmaFiles = $sigmaFiles | Select-Object -First 100
+        }
+        
+        $script:SigmaRules = @()
+        $loaded = 0
+        
+        foreach ($file in $sigmaFiles) {
+            try {
+                $content = Get-Content $file.FullName -Raw -ErrorAction Stop
+                $rule = Parse-SigmaRule -Content $content -FilePath $file.FullName
+                
+                if ($rule) {
+                    $script:SigmaRules += $rule
+                    $loaded++
+                }
+            }
+            catch {
+                Write-Host "[WARNING] Failed to parse: $($file.Name)" -ForegroundColor Yellow
             }
         }
-        catch {
-            Write-ColorOutput "  Failed to parse: $($file.Name) - $_" "WARNING"
-        }
+        
+        Write-Host "[SUCCESS] Loaded $loaded Sigma rules" -ForegroundColor Green
     }
-    
-    Write-ColorOutput "  Loaded $($script:SigmaRules.Count) Sigma rules" "SUCCESS"
+    catch {
+        Write-Host "[WARNING] Error loading Sigma rules: $_" -ForegroundColor Yellow
+    }
 }
 
 # Parse Sigma Rule (simplified YAML parser for Sigma)
@@ -335,7 +358,7 @@ function Test-SigmaMatch {
         return $false
     }
     
-    # Simple detection logic (supports basic AND conditions)
+    # Simple detection logic
     $matches = 0
     $requiredMatches = 0
     
@@ -391,28 +414,32 @@ function Hunt-IOCsInEvents {
         return
     }
     
-    Write-ColorOutput "Hunting for $($script:IOCList.Count) IOCs in event logs..." "INFO"
+    Write-Host "[INFO] Hunting for $($script:IOCList.Count) IOCs in event logs..." -ForegroundColor Cyan
     
-    # Get all security-relevant events
     $logNames = @("Security", "System", "Application", "Microsoft-Windows-Sysmon/Operational",
-                  "Microsoft-Windows-PowerShell/Operational", "Microsoft-Windows-DNS-Client/Operational")
+                  "Microsoft-Windows-PowerShell/Operational")
     
     $allEvents = @()
+    $maxEventsPerLog = 2000  # Limit to prevent overflow
+    
     foreach ($logName in $logNames) {
         try {
-            $events = Get-WinEvent -LogName $logName -MaxEvents 10000 -ErrorAction SilentlyContinue |
+            $events = Get-WinEvent -LogName $logName -MaxEvents $maxEventsPerLog -ErrorAction SilentlyContinue |
                       Where-Object { $_.TimeCreated -gt $StartTime }
-            $allEvents += $events
+            if ($events) {
+                $allEvents += $events
+            }
         }
         catch {
             continue
         }
     }
     
-    Write-ColorOutput "  Scanning $($allEvents.Count) events..." "DETAIL"
+    Write-Host "[INFO] Scanning $($allEvents.Count) events..." -ForegroundColor Gray
     
+    $matchCount = 0
     foreach ($event in $allEvents) {
-        $eventData = $event.Message + " " + ($event.Properties.Value -join " ")
+        $eventData = "$($event.Message) $($event.Properties.Value -join ' ')"
         
         foreach ($ioc in $script:IOCList) {
             if ($eventData -match $ioc.Regex) {
@@ -429,13 +456,14 @@ function Hunt-IOCsInEvents {
                 
                 $script:Findings.IOCMatches += $finding
                 $script:Findings.SuspiciousIndicators += $finding
+                $matchCount++
                 
-                Write-ColorOutput "  IOC MATCH: $($ioc.Type) - $($ioc.Value) in Event $($event.Id)" "CRITICAL"
+                Write-Host "[CRITICAL] IOC MATCH: $($ioc.Type) - $($ioc.Value) in Event $($event.Id)" -ForegroundColor Red
             }
         }
     }
     
-    Write-ColorOutput "  Found $($script:Findings.IOCMatches.Count) IOC matches" "WARNING"
+    Write-Host "[WARNING] Found $matchCount IOC matches" -ForegroundColor Yellow
 }
 
 # Sigma Rule Hunting
@@ -446,26 +474,34 @@ function Hunt-SigmaRules {
         return
     }
     
-    Write-ColorOutput "Running Sigma rule detection..." "INFO"
+    Write-Host "[INFO] Running Sigma rule detection..." -ForegroundColor Cyan
     
     $logNames = @("Security", "System", "Application", "Microsoft-Windows-Sysmon/Operational",
-                  "Microsoft-Windows-PowerShell/Operational", "Microsoft-Windows-Windows Defender/Operational")
+                  "Microsoft-Windows-PowerShell/Operational")
     
     $allEvents = @()
+    $maxEventsPerLog = 1000  # Reduced limit
+    
     foreach ($logName in $logNames) {
         try {
-            $events = Get-WinEvent -LogName $logName -MaxEvents 10000 -ErrorAction SilentlyContinue |
+            $events = Get-WinEvent -LogName $logName -MaxEvents $maxEventsPerLog -ErrorAction SilentlyContinue |
                       Where-Object { $_.TimeCreated -gt $StartTime }
-            $allEvents += $events
+            if ($events) {
+                $allEvents += $events
+            }
         }
         catch {
             continue
         }
     }
     
-    Write-ColorOutput "  Matching $($allEvents.Count) events against $($script:SigmaRules.Count) Sigma rules..." "DETAIL"
+    Write-Host "[INFO] Matching $($allEvents.Count) events against $($script:SigmaRules.Count) rules..." -ForegroundColor Gray
     
-    foreach ($rule in $script:SigmaRules) {
+    $matchCount = 0
+    # Limit rule checking to prevent overflow
+    $rulesToCheck = $script:SigmaRules | Select-Object -First 50
+    
+    foreach ($rule in $rulesToCheck) {
         foreach ($event in $allEvents) {
             if (Test-SigmaMatch -Event $event -SigmaRule $rule) {
                 $severity = switch ($rule.Level) {
@@ -488,16 +524,18 @@ function Hunt-SigmaRules {
                 
                 $script:Findings.SigmaMatches += $finding
                 $script:Findings.SuspiciousIndicators += $finding
+                $matchCount++
                 
-                Write-ColorOutput "  SIGMA MATCH: $($rule.Title) - Level: $($rule.Level)" $severity
+                $color = if ($severity -eq "CRITICAL") { "Red" } else { "Yellow" }
+                Write-Host "[$severity] SIGMA MATCH: $($rule.Title) - Level: $($rule.Level)" -ForegroundColor $color
             }
         }
     }
     
-    Write-ColorOutput "  Found $($script:Findings.SigmaMatches.Count) Sigma rule matches" "WARNING"
+    Write-Host "[WARNING] Found $matchCount Sigma rule matches" -ForegroundColor Yellow
 }
 
-# YARA Process Scanning (simulated - requires YARA binary)
+# YARA Process Scanning
 function Scan-ProcessesWithYara {
     param([string]$YaraRulePath)
     
@@ -524,9 +562,6 @@ function Scan-ProcessesWithYara {
     
     foreach ($proc in $processes) {
         try {
-            # Dump process memory (simplified)
-            $dumpPath = "$env:TEMP\proc_$($proc.Id).dmp"
-            
             # Run YARA
             $result = & $yaraExe.Source $YaraRulePath $proc.Id 2>$null
             
@@ -702,81 +737,104 @@ function Get-EventLogData {
 function Analyze-Authentication {
     param([datetime]$StartTime, [string]$EvtxFile)
     
-    Write-ColorOutput "Analyzing authentication events..." "INFO"
+    Write-Host "[INFO] Analyzing authentication events..." -ForegroundColor Cyan
     
-    $authEvents = @(4624,4625,4634,4647,4648,4672,4768,4769,4776)
-    $events = Get-EventLogData -LogName "Security" -EventIDs $authEvents -StartTime $StartTime -EvtxFile $EvtxFile
-    
-    $successful = $events | Where-Object {$_.Id -eq 4624}
-    $failed = $events | Where-Object {$_.Id -eq 4625}
-    
-    # Brute force detection
-    $failedByUser = $failed | Group-Object {$_.Properties[5].Value} | Where-Object {$_.Count -gt 5}
-    
-    foreach ($user in $failedByUser) {
-        $finding = @{
-            Type = "Brute Force Detected"
-            User = $user.Name
-            FailedAttempts = $user.Count
-            SourceIPs = ($user.Group | ForEach-Object {$_.Properties[19].Value} | Select-Object -Unique)
-            Severity = "CRITICAL"
-            Timestamp = ($user.Group | Select-Object -First 1).TimeCreated
+    try {
+        $authEvents = @(4624,4625,4634,4647,4648,4672,4768,4769,4776)
+        $events = Get-EventLogData -LogName "Security" -EventIDs $authEvents -StartTime $StartTime -EvtxFile $EvtxFile
+        
+        $successful = $events | Where-Object {$_.Id -eq 4624}
+        $failed = $events | Where-Object {$_.Id -eq 4625}
+        
+        # Brute force detection
+        $failedByUser = $failed | Group-Object {
+            try { $_.Properties[5].Value } catch { "Unknown" }
+        } | Where-Object {$_.Count -gt 5}
+        
+        foreach ($user in $failedByUser) {
+            $finding = @{
+                Type = "Brute Force Detected"
+                User = $user.Name
+                FailedAttempts = $user.Count
+                SourceIPs = ($user.Group | ForEach-Object {
+                    try { $_.Properties[19].Value } catch { "Unknown" }
+                } | Select-Object -Unique)
+                Severity = "CRITICAL"
+                Timestamp = ($user.Group | Select-Object -First 1).TimeCreated
+            }
+            $script:Findings.Authentication += $finding
+            $script:Findings.SuspiciousIndicators += $finding
         }
-        $script:Findings.Authentication += $finding
-        $script:Findings.SuspiciousIndicators += $finding
+        
+        Write-Host "[INFO] Found $($successful.Count) successful and $($failed.Count) failed logons" -ForegroundColor Gray
     }
-    
-    Write-ColorOutput "  Found $($successful.Count) successful and $($failed.Count) failed logons" "DETAIL"
+    catch {
+        Write-Host "[WARNING] Error analyzing authentication: $_" -ForegroundColor Yellow
+    }
 }
 
 # Process Activity Analysis
 function Analyze-ProcessActivity {
     param([datetime]$StartTime, [string]$EvtxFile)
     
-    Write-ColorOutput "Analyzing process execution..." "INFO"
+    Write-Host "[INFO] Analyzing process execution..." -ForegroundColor Cyan
     
-    $events = Get-EventLogData -LogName "Security" -EventIDs @(4688) -StartTime $StartTime -EvtxFile $EvtxFile
-    
-    foreach ($event in $events) {
-        $cmdLine = $event.Properties[8].Value
-        $process = $event.Properties[5].Value
-        $parent = $event.Properties[13].Value
+    try {
+        $events = Get-EventLogData -LogName "Security" -EventIDs @(4688) -StartTime $StartTime -EvtxFile $EvtxFile
         
-        $isSuspicious = $false
-        $reasons = @()
+        # Limit to prevent overflow
+        $eventsToAnalyze = $events | Select-Object -First 1000
         
-        foreach ($susCmd in $script:SuspiciousCommands) {
-            if ($cmdLine -match [regex]::Escape($susCmd)) {
-                $isSuspicious = $true
-                $reasons += "Suspicious command: $susCmd"
+        foreach ($event in $eventsToAnalyze) {
+            try {
+                $cmdLine = $event.Properties[8].Value
+                $process = $event.Properties[5].Value
+                $parent = $event.Properties[13].Value
+                
+                $isSuspicious = $false
+                $reasons = @()
+                
+                foreach ($susCmd in $script:SuspiciousCommands) {
+                    if ($cmdLine -match [regex]::Escape($susCmd)) {
+                        $isSuspicious = $true
+                        $reasons += "Suspicious command: $susCmd"
+                        break  # Stop after first match
+                    }
+                }
+                
+                if ($cmdLine -match "encodedcommand|frombase64string|-enc |-e ") {
+                    $isSuspicious = $true
+                    $reasons += "Encoded/Base64 command detected"
+                }
+                
+                $finding = @{
+                    Type = "Process Execution"
+                    Process = $process
+                    CommandLine = $cmdLine
+                    ParentProcess = $parent
+                    User = $event.Properties[1].Value
+                    Timestamp = $event.TimeCreated
+                    Suspicious = $isSuspicious
+                    Reasons = $reasons -join "; "
+                    Severity = if ($isSuspicious) {"WARNING"} else {"INFO"}
+                }
+                
+                $script:Findings.ProcessActivity += $finding
+                
+                if ($isSuspicious) {
+                    $script:Findings.SuspiciousIndicators += $finding
+                }
+            }
+            catch {
+                continue
             }
         }
         
-        if ($cmdLine -match "encodedcommand|frombase64string|-enc |-e ") {
-            $isSuspicious = $true
-            $reasons += "Encoded/Base64 command detected"
-        }
-        
-        $finding = @{
-            Type = "Process Execution"
-            Process = $process
-            CommandLine = $cmdLine
-            ParentProcess = $parent
-            User = $event.Properties[1].Value
-            Timestamp = $event.TimeCreated
-            Suspicious = $isSuspicious
-            Reasons = $reasons -join "; "
-            Severity = if ($isSuspicious) {"WARNING"} else {"INFO"}
-        }
-        
-        $script:Findings.ProcessActivity += $finding
-        
-        if ($isSuspicious) {
-            $script:Findings.SuspiciousIndicators += $finding
-        }
+        Write-Host "[INFO] Analyzed $($eventsToAnalyze.Count) process executions" -ForegroundColor Gray
     }
-    
-    Write-ColorOutput "  Analyzed $($events.Count) process executions" "DETAIL"
+    catch {
+        Write-Host "[WARNING] Error analyzing process activity: $_" -ForegroundColor Yellow
+    }
 }
 
 # PowerShell Activity Analysis
@@ -983,7 +1041,8 @@ function Start-Analysis {
 # Interactive Mode
 function Start-InteractiveMode {
     while ($true) {
-        Write-Host "`n╔════════════════════════════════════════╗" -ForegroundColor Cyan
+        Write-Host "`n" -NoNewline
+        Write-Host "╔════════════════════════════════════════╗" -ForegroundColor Cyan
         Write-Host "║       INTERACTIVE INVESTIGATION       ║" -ForegroundColor Cyan
         Write-Host "╚════════════════════════════════════════╝" -ForegroundColor Cyan
         Write-Host ""
@@ -1214,17 +1273,20 @@ function Kill-TargetProcess {
     $processName = Read-Host "Enter process name or PID to terminate"
     
     Write-Host "WARNING: This will terminate the process!" -ForegroundColor Red
-    $confirm = Read-Host "Type 'CONFIRM' to proceed"
+    $confirm = Read-Host "Type CONFIRM to proceed"
     
     if ($confirm -eq "CONFIRM") {
         try {
-            if ($processName -match '^\d+) {
+            if ($processName -match '^\d+$') {
+                # PID provided
                 Stop-Process -Id $processName -Force
+                Write-ColorOutput "Process (PID: $processName) terminated" "SUCCESS"
             }
             else {
-                Stop-Process -Name $processName -Force
+                # Process name provided
+                Get-Process -Name $processName | Stop-Process -Force
+                Write-ColorOutput "Process '$processName' terminated" "SUCCESS"
             }
-            Write-ColorOutput "Process terminated successfully" "SUCCESS"
         }
         catch {
             Write-ColorOutput "Failed to terminate process: $_" "WARNING"
@@ -1237,21 +1299,31 @@ function Kill-TargetProcess {
     Read-Host "`nPress Enter to continue"
 }
 
-# Block IP/Domain
+# Block Network Target
 function Block-NetworkTarget {
-    $target = Read-Host "Enter IP or Domain to block"
+    $target = Read-Host "Enter IP address or domain to block"
     
-    Write-Host "WARNING: This will create a firewall rule!" -ForegroundColor Red
-    $confirm = Read-Host "Type 'CONFIRM' to proceed"
+    Write-Host "WARNING: This will add a firewall rule to block the target!" -ForegroundColor Red
+    $confirm = Read-Host "Type CONFIRM to proceed"
     
     if ($confirm -eq "CONFIRM") {
         try {
-            $ruleName = "BLOCKED_$target_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-            New-NetFirewallRule -DisplayName $ruleName -Direction Outbound -Action Block -RemoteAddress $target -ErrorAction Stop
-            Write-ColorOutput "Firewall rule created: $ruleName" "SUCCESS"
+            $ruleName = "WinForensicX_Block_$($target -replace '[^\w]', '_')"
+            
+            if ($target -match '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$') {
+                # IP address
+                New-NetFirewallRule -DisplayName $ruleName -Direction Outbound -Action Block -RemoteAddress $target -ErrorAction Stop
+                Write-ColorOutput "Firewall rule created to block IP: $target" "SUCCESS"
+            }
+            else {
+                # Domain - block via hosts file
+                $hostsPath = "$env:SystemRoot\System32\drivers\etc\hosts"
+                Add-Content -Path $hostsPath -Value "`n127.0.0.1 $target"
+                Write-ColorOutput "Added $target to hosts file (redirected to 127.0.0.1)" "SUCCESS"
+            }
         }
         catch {
-            Write-ColorOutput "Failed to create firewall rule: $_" "WARNING"
+            Write-ColorOutput "Failed to block target: $_" "WARNING"
         }
     }
     else {
@@ -1266,176 +1338,275 @@ function Export-Findings {
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
     
     if ($ExportJSON) {
-        $jsonPath = "SecurityAnalysis_$timestamp.json"
+        $jsonPath = "WinForensicX_Report_$timestamp.json"
         $script:Findings | ConvertTo-Json -Depth 10 | Out-File $jsonPath
-        Write-ColorOutput "JSON report exported: $jsonPath" "SUCCESS"
+        Write-ColorOutput "JSON report exported to: $jsonPath" "SUCCESS"
     }
     
     if ($ExportHTML) {
-        $htmlPath = "SecurityAnalysis_$timestamp.html"
-        Export-HTMLReport -OutputPath $htmlPath
-        Write-ColorOutput "HTML report exported: $htmlPath" "SUCCESS"
+        $htmlPath = "WinForensicX_Report_$timestamp.html"
+        Generate-HTMLReport -OutputPath $htmlPath
+        Write-ColorOutput "HTML report exported to: $htmlPath" "SUCCESS"
     }
     
     Read-Host "`nPress Enter to continue"
 }
 
-# HTML Report Generation
-function Export-HTMLReport {
+# Generate HTML Report
+function Generate-HTMLReport {
     param([string]$OutputPath)
-    
-    Write-ColorOutput "Generating HTML report..." "INFO"
-    
-    $iocSection = ""
-    if ($script:Findings.IOCMatches.Count -gt 0) {
-        $iocSection = "<h2 style='color: #e74c3c;'>🎯 IOC Matches ($($script:Findings.IOCMatches.Count))</h2><div class='section'>"
-        foreach ($match in $script:Findings.IOCMatches) {
-            $iocSection += "<div class='finding critical'><strong>IOC:</strong> $($match.IOC) ($($match.IOCType))<br>"
-            $iocSection += "<strong>Event:</strong> $($match.EventID) | <strong>Log:</strong> $($match.LogName)<br>"
-            $iocSection += "<strong>Time:</strong> $($match.Timestamp)<br>"
-            $iocSection += "<strong>Message:</strong> $($match.Message)</div>"
-        }
-        $iocSection += "</div>"
-    }
-    
-    $sigmaSection = ""
-    if ($script:Findings.SigmaMatches.Count -gt 0) {
-        $sigmaSection = "<h2 style='color: #e67e22;'>📋 Sigma Rule Matches ($($script:Findings.SigmaMatches.Count))</h2><div class='section'>"
-        foreach ($match in $script:Findings.SigmaMatches) {
-            $sigmaSection += "<div class='finding warning'><strong>Rule:</strong> $($match.RuleTitle)<br>"
-            $sigmaSection += "<strong>Description:</strong> $($match.RuleDescription)<br>"
-            $sigmaSection += "<strong>Level:</strong> $($match.RuleLevel) | <strong>Event:</strong> $($match.EventID)<br>"
-            $sigmaSection += "<strong>Time:</strong> $($match.Timestamp)<br>"
-            $sigmaSection += "<strong>Message:</strong> $($match.Message)</div>"
-        }
-        $sigmaSection += "</div>"
-    }
-    
-    $yaraSection = ""
-    if ($script:Findings.YaraMatches.Count -gt 0) {
-        $yaraSection = "<h2 style='color: #9b59b6;'>🔍 YARA/Pattern Matches ($($script:Findings.YaraMatches.Count))</h2><div class='section'>"
-        foreach ($match in $script:Findings.YaraMatches) {
-            $yaraSection += "<div class='finding critical'><strong>Process:</strong> $($match.Process) (PID: $($match.PID))<br>"
-            $yaraSection += "<strong>Path:</strong> $($match.Path)<br>"
-            if ($match.Pattern) {
-                $yaraSection += "<strong>Pattern:</strong> $($match.Pattern)<br>"
-            }
-            if ($match.CommandLine) {
-                $yaraSection += "<strong>CommandLine:</strong> $($match.CommandLine)<br>"
-            }
-            $yaraSection += "<strong>Time:</strong> $($match.Timestamp)</div>"
-        }
-        $yaraSection += "</div>"
-    }
     
     $html = @"
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Windows Security Analysis Report</title>
+    <title>WinForensicX Security Report</title>
     <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; margin-bottom: 20px; }
-        .header h1 { margin: 0; font-size: 28px; }
-        .header p { margin: 5px 0 0 0; opacity: 0.9; }
-        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .summary-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .summary-card h3 { margin: 0 0 10px 0; color: #666; font-size: 14px; }
-        .summary-card .number { font-size: 32px; font-weight: bold; color: #667eea; }
-        .critical { color: #e74c3c !important; }
-        .warning { color: #f39c12 !important; }
-        .success { color: #27ae60 !important; }
-        .section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        h2 { color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
-        .finding { background: #f8f9fa; padding: 15px; margin: 10px 0; border-left: 4px solid #667eea; border-radius: 4px; }
-        .finding.critical { border-left-color: #e74c3c; background: #fee; }
-        .finding.warning { border-left-color: #f39c12; background: #fffaed; }
-        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background: #667eea; color: white; }
-        tr:hover { background: #f5f5f5; }
-        .footer { text-align: center; padding: 20px; color: #999; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: #1a1a1a; color: #e0e0e0; }
+        h1 { color: #00d4ff; border-bottom: 3px solid #00d4ff; padding-bottom: 10px; }
+        h2 { color: #00ff88; margin-top: 30px; border-left: 4px solid #00ff88; padding-left: 10px; }
+        h3 { color: #ffd700; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 10px; margin-bottom: 30px; }
+        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+        .summary-card { background: #2a2a2a; padding: 15px; border-radius: 8px; border-left: 4px solid #00d4ff; }
+        .critical { color: #ff4444; font-weight: bold; }
+        .warning { color: #ffaa00; font-weight: bold; }
+        .success { color: #00ff88; font-weight: bold; }
+        .info { color: #00d4ff; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; background: #2a2a2a; }
+        th { background: #3a3a3a; color: #00d4ff; padding: 12px; text-align: left; border-bottom: 2px solid #00d4ff; }
+        td { padding: 10px; border-bottom: 1px solid #404040; }
+        tr:hover { background: #333; }
+        .finding { background: #2a2a2a; margin: 10px 0; padding: 15px; border-radius: 5px; border-left: 4px solid #ff4444; }
+        .timestamp { color: #888; font-size: 0.9em; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.85em; margin-right: 5px; }
+        .badge-critical { background: #ff4444; color: white; }
+        .badge-warning { background: #ffaa00; color: black; }
+        .badge-info { background: #00d4ff; color: black; }
+        .badge-success { background: #00ff88; color: black; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🛡️ Windows Security Analysis Report</h1>
-        <p>Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss") | Analysis Period: Last $Hours hours</p>
+        <h1>🔍 WinForensicX Security Analysis Report</h1>
+        <p><strong>Generated:</strong> $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")</p>
+        <p><strong>Analysis Period:</strong> Last $Hours hours</p>
+        <p><strong>System:</strong> $env:COMPUTERNAME</p>
     </div>
+"@
+
+    # Executive Summary
+    $totalFindings = ($script:Findings.SuspiciousIndicators.Count + 
+                      $script:Findings.IOCMatches.Count + 
+                      $script:Findings.SigmaMatches.Count +
+                      $script:Findings.YaraMatches.Count)
     
+    $criticalCount = ($script:Findings.SuspiciousIndicators | Where-Object {$_.Severity -eq "CRITICAL"}).Count
+    $warningCount = ($script:Findings.SuspiciousIndicators | Where-Object {$_.Severity -eq "WARNING"}).Count
+    
+    $html += @"
+    <h2>📊 Executive Summary</h2>
     <div class="summary">
         <div class="summary-card">
+            <h3>Total Findings</h3>
+            <div style="font-size: 2em; color: #00d4ff;">$totalFindings</div>
+        </div>
+        <div class="summary-card">
+            <h3>Critical Issues</h3>
+            <div style="font-size: 2em;" class="critical">$criticalCount</div>
+        </div>
+        <div class="summary-card">
+            <h3>Warnings</h3>
+            <div style="font-size: 2em;" class="warning">$warningCount</div>
+        </div>
+        <div class="summary-card">
             <h3>IOC Matches</h3>
-            <div class="number critical">$($script:Findings.IOCMatches.Count)</div>
+            <div style="font-size: 2em; color: #ff4444;">$($script:Findings.IOCMatches.Count)</div>
         </div>
         <div class="summary-card">
             <h3>Sigma Matches</h3>
-            <div class="number warning">$($script:Findings.SigmaMatches.Count)</div>
+            <div style="font-size: 2em; color: #ff4444;">$($script:Findings.SigmaMatches.Count)</div>
         </div>
         <div class="summary-card">
             <h3>YARA Matches</h3>
-            <div class="number critical">$($script:Findings.YaraMatches.Count)</div>
-        </div>
-        <div class="summary-card">
-            <h3>Suspicious Indicators</h3>
-            <div class="number warning">$($script:Findings.SuspiciousIndicators.Count)</div>
+            <div style="font-size: 2em; color: #ff4444;">$($script:Findings.YaraMatches.Count)</div>
         </div>
     </div>
-    
-    $iocSection
-    $sigmaSection
-    $yaraSection
-    
-    <h2>🔒 Suspicious Indicators</h2>
-    <div class="section">
-        $(if ($script:Findings.SuspiciousIndicators.Count -gt 0) {
-            $script:Findings.SuspiciousIndicators | ForEach-Object {
-                "<div class='finding warning'><strong>$($_.Type)</strong><br>$($_.Reasons)<br><strong>Time:</strong> $($_.Timestamp)</div>"
+"@
+
+    # IOC Matches
+    if ($script:Findings.IOCMatches.Count -gt 0) {
+        $html += "<h2>🎯 IOC Matches (CRITICAL)</h2>"
+        foreach ($match in $script:Findings.IOCMatches) {
+            $html += @"
+            <div class="finding">
+                <span class="badge badge-critical">CRITICAL</span>
+                <strong>IOC Type:</strong> $($match.IOCType) | <strong>Value:</strong> $($match.IOC)<br>
+                <strong>Event ID:</strong> $($match.EventID) | <strong>Log:</strong> $($match.LogName)<br>
+                <strong>Timestamp:</strong> <span class="timestamp">$($match.Timestamp)</span><br>
+                <strong>Message:</strong> $($match.Message -replace '<', '&lt;' -replace '>', '&gt;')
+            </div>
+"@
+        }
+    }
+
+    # Sigma Matches
+    if ($script:Findings.SigmaMatches.Count -gt 0) {
+        $html += "<h2>⚡ Sigma Rule Matches</h2>"
+        foreach ($match in $script:Findings.SigmaMatches) {
+            $badgeClass = switch ($match.RuleLevel) {
+                "critical" { "badge-critical" }
+                "high" { "badge-warning" }
+                default { "badge-info" }
             }
-        } else {
-            "<p class='success'>✅ No suspicious indicators detected</p>"
-        })
-    </div>
+            $html += @"
+            <div class="finding">
+                <span class="badge $badgeClass">$($match.RuleLevel.ToUpper())</span>
+                <strong>Rule:</strong> $($match.RuleTitle)<br>
+                <strong>Description:</strong> $($match.RuleDescription)<br>
+                <strong>Event ID:</strong> $($match.EventID) | <strong>Log:</strong> $($match.LogName)<br>
+                <strong>Timestamp:</strong> <span class="timestamp">$($match.Timestamp)</span><br>
+                <strong>Message:</strong> $($match.Message -replace '<', '&lt;' -replace '>', '&gt;')
+            </div>
+"@
+        }
+    }
+
+    # YARA Matches
+    if ($script:Findings.YaraMatches.Count -gt 0) {
+        $html += "<h2>🔬 YARA/Pattern Matches</h2>"
+        foreach ($match in $script:Findings.YaraMatches) {
+            $html += @"
+            <div class="finding">
+                <span class="badge badge-critical">DETECTION</span>
+                <strong>Type:</strong> $($match.Type)<br>
+                <strong>Process:</strong> $($match.Process) (PID: $($match.PID))<br>
+                <strong>Path:</strong> $($match.Path)<br>
+                <strong>Match:</strong> $($match.Match -or $match.Pattern)<br>
+                <strong>Timestamp:</strong> <span class="timestamp">$($match.Timestamp)</span>
+            </div>
+"@
+        }
+    }
+
+    # Authentication Events
+    if ($script:Findings.Authentication.Count -gt 0) {
+        $html += "<h2>🔐 Authentication Events</h2><table><tr><th>Type</th><th>User</th><th>Details</th><th>Severity</th><th>Timestamp</th></tr>"
+        foreach ($auth in $script:Findings.Authentication) {
+            $severityClass = $auth.Severity.ToLower()
+            $html += "<tr><td>$($auth.Type)</td><td>$($auth.User)</td><td>Failed: $($auth.FailedAttempts)</td><td><span class='$severityClass'>$($auth.Severity)</span></td><td class='timestamp'>$($auth.Timestamp)</td></tr>"
+        }
+        $html += "</table>"
+    }
+
+    # Suspicious Indicators
+    if ($script:Findings.SuspiciousIndicators.Count -gt 0) {
+        $html += "<h2>⚠️ Suspicious Indicators</h2>"
+        foreach ($indicator in $script:Findings.SuspiciousIndicators | Select-Object -First 20) {
+            $badgeClass = switch ($indicator.Severity) {
+                "CRITICAL" { "badge-critical" }
+                "WARNING" { "badge-warning" }
+                default { "badge-info" }
+            }
+            $html += @"
+            <div class="finding">
+                <span class="badge $badgeClass">$($indicator.Severity)</span>
+                <strong>Type:</strong> $($indicator.Type)<br>
+"@
+            foreach ($key in $indicator.Keys) {
+                if ($key -notin @("Type", "Severity", "Timestamp")) {
+                    $value = $indicator[$key]
+                    if ($value) {
+                        $html += "<strong>$($key):</strong> $($value -replace '<', '&lt;' -replace '>', '&gt;')<br>"
+                    }
+                }
+            }
+            $html += "<strong>Timestamp:</strong> <span class='timestamp'>$($indicator.Timestamp)</span></div>"
+        }
+    }
+
+    # Security Status
+    $html += "<h2>🛡️ Security Status</h2><table>"
+    $html += "<tr><th>Component</th><th>Status</th></tr>"
     
-    <div class="footer">
-        <p>Windows Event Log Security Analyzer v$($script:Version) | Threat Hunting Report</p>
+    if ($script:Findings.SecurityStatus.Defender) {
+        $defStatus = $script:Findings.SecurityStatus.Defender
+        if ($defStatus -is [hashtable]) {
+            $rtpStatus = if ($defStatus.RealTimeProtection) { "✅ Enabled" } else { "❌ Disabled" }
+            $html += "<tr><td>Windows Defender Real-Time Protection</td><td>$rtpStatus</td></tr>"
+        }
+    }
+    
+    if ($script:Findings.SecurityStatus.Firewall) {
+        $fwStatus = $script:Findings.SecurityStatus.Firewall
+        if ($fwStatus -is [hashtable]) {
+            $html += "<tr><td>Firewall (Public)</td><td>$(if ($fwStatus.PublicEnabled) { '✅ Enabled' } else { '❌ Disabled' })</td></tr>"
+        }
+    }
+    
+    if ($script:Findings.SecurityStatus.UAC) {
+        $uacStatus = $script:Findings.SecurityStatus.UAC
+        if ($uacStatus -is [hashtable]) {
+            $html += "<tr><td>UAC</td><td>$(if ($uacStatus.Enabled) { '✅ Enabled' } else { '❌ Disabled' })</td></tr>"
+        }
+    }
+    
+    $html += "</table>"
+
+    # Footer
+    $html += @"
+    <div style="margin-top: 50px; padding-top: 20px; border-top: 2px solid #404040; color: #888; text-align: center;">
+        <p>Report generated by WinForensicX v$script:Version</p>
+        <p>Duration: $((Get-Date) - $script:StartTime | Select-Object -ExpandProperty TotalSeconds) seconds</p>
     </div>
 </body>
 </html>
 "@
-    
+
     $html | Out-File $OutputPath -Encoding UTF8
 }
 
 # Main Execution
 Show-Banner
 
-try {
-    Write-ColorOutput "Starting Windows Security Analyzer..." "INFO"
-    Write-ColorOutput "Mode: $Mode | Analysis Period: Last $Hours hours" "INFO"
-    
-    Start-Analysis
-    
-    if ($Mode -eq "Interactive" -or $Mode -eq "SigmaHunt") {
+switch ($Mode) {
+    "QuickScan" {
+        Write-ColorOutput "Running Quick Scan..." "INFO"
+        Start-Analysis
+        Export-Findings
+        Write-ColorOutput "`nQuick Scan completed!" "SUCCESS"
+    }
+    "DeepAnalysis" {
+        Write-ColorOutput "Running Deep Analysis..." "INFO"
+        Start-Analysis
+        Export-Findings
+        Write-ColorOutput "`nDeep Analysis completed!" "SUCCESS"
+    }
+    "ThreatHunt" {
+        Write-ColorOutput "Starting Threat Hunt Mode..." "INFO"
+        Start-Analysis
+        Export-Findings
+        Write-ColorOutput "`nThreat Hunt completed!" "SUCCESS"
+    }
+    "SigmaHunt" {
+        if (-not $SigmaPath) {
+            Write-ColorOutput "SigmaHunt mode requires -SigmaPath parameter" "CRITICAL"
+            exit 1
+        }
+        Write-ColorOutput "Running Sigma-based Threat Hunt..." "INFO"
+        Load-SigmaRules -Path $SigmaPath
+        Start-Analysis
+        Export-Findings
+        Write-ColorOutput "`nSigma Hunt completed!" "SUCCESS"
+    }
+    "LiveMonitor" {
+        Write-ColorOutput "Live monitoring not implemented in this version" "WARNING"
+    }
+    "Interactive" {
+        Start-Analysis
         Start-InteractiveMode
     }
-    
-    if ($ExportHTML -or $ExportJSON) {
-        Export-Findings
-    }
-    
-    Write-ColorOutput "`n✅ Analysis complete!" "SUCCESS"
-    Write-ColorOutput "Total Findings:" "INFO"
-    Write-ColorOutput "  - IOC Matches: $($script:Findings.IOCMatches.Count)" "DETAIL"
-    Write-ColorOutput "  - Sigma Matches: $($script:Findings.SigmaMatches.Count)" "DETAIL"
-    Write-ColorOutput "  - YARA Matches: $($script:Findings.YaraMatches.Count)" "DETAIL"
-    Write-ColorOutput "  - Suspicious Indicators: $($script:Findings.SuspiciousIndicators.Count)" "DETAIL"
-}
-catch {
-    Write-ColorOutput "Error occurred: $_" "CRITICAL"
-    Write-ColorOutput $_.ScriptStackTrace "DETAIL"
 }
 
-$script:EndTime = Get-Date
-$duration = $script:EndTime - $script:StartTime
-Write-ColorOutput "`nExecution time: $($duration.TotalSeconds) seconds" "INFO"
+$duration = (Get-Date) - $script:StartTime
+Write-ColorOutput "`nTotal execution time: $([math]::Round($duration.TotalSeconds, 2)) seconds" "INFO"
