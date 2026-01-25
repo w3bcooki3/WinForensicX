@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-WinForensicX - Professional DFIR/EDR Tool
-Version: 1.5.3 (Stability & Rule-Based Hunting Edition)
+WinForensicX - DFIR/EDR Tool
+Version: 1.0 (Stability & Rule-Based Hunting Edition)
 Author: w3bcooki3
 License: MIT
 #>
