@@ -1,217 +1,95 @@
-# WinForensicX - Interactive DFIR/EDR Tool
+WinForensicX - Professional DFIR/EDR Tool
 
-![Version](https://img.shields.io/badge/version-4.0-blue.svg)
-![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+WinForensicX is a lightweight, high-performance PowerShell-based Digital Forensics and Incident Response (DFIR) tool designed for rapid triage, live system analysis, and APT hunting. It provides responders with a centralized interface to perform deep process forensics, network auditing, and real-time behavior monitoring.
 
-## What is WinForensicX?
+🚀 Core Features
 
-**WinForensicX** is an interactive PowerShell-based Digital Forensics & Incident Response (DFIR) and Endpoint Detection & Response (EDR) tool. It's a Swiss Army knife for Threat Hunters, SOC Analysts, and Security Professionals to investigate, detect, and respond to security incidents on Windows systems.
+🔍 Deep Process & Memory Forensics
 
-## What Can It Do?
+Advanced Inventory: WMI-integrated process listing with full command-line arguments.
 
-### 🔍 **Process Management**
-- List and analyze running processes
-- Detect suspicious processes (malware, unusual locations)
-- Kill malicious processes
-- Monitor process creation in real-time
-- Scan with YARA rules
+Injection Detection: Identify ghosted processes and suspicious threads.
 
-### 👥 **User Management**
-- Track user accounts and administrators
-- Monitor login history and failed attempts
-- Detect recently created/modified users
-- Create/disable/delete user accounts
+LotL Discovery: Automatic detection of Living-off-the-Land binary abuse (e.g., certutil, mshta).
 
-### 🌐 **Network Analysis**
-- View all network connections
-- Detect suspicious connections (C2 servers, malicious ports)
-- Monitor network activity live
-- Block IP addresses
-- Scan ports
+Tree Analysis: Visualize parent-child relationships to find malicious spawns.
 
-### 📊 **Event Log Analysis**
-- Analyze Security, System, and Application logs
-- Track PowerShell script execution
-- Monitor process creation events
-- Review failed login attempts
-- Export logs to CSV
+🌐 Network & C2 Hunting
 
-### ⚙️ **System Analysis**
-- Check installed software and services
-- Analyze scheduled tasks and startup programs
-- Review registry persistence mechanisms
-- Verify Windows Defender status
-- Track USB device history
+Connection Audit: Real-time view of established TCP/UDP connections.
 
-### 🎯 **IOC Hunting**
-- Load and hunt for Indicators of Compromise (IPs, domains, hashes, filenames)
-- Search across processes, network, DNS cache, and files
-- Generate detailed reports
+Hidden Listeners: Identify non-standard ports acting as listeners.
 
-## Purpose
+DNS Beaconing: Search the DNS cache for high-entropy domains or suspicious TLDs (.top, .xyz, etc.).
 
-WinForensicX was built to provide security professionals with:
+🏹 APT & IOC Hunting
 
-- **Rapid Incident Response** - Quickly identify and neutralize threats
-- **Threat Hunting** - Proactively search for IOCs and suspicious activity
-- **Forensic Analysis** - Gather evidence and understand attack timelines
-- **Security Auditing** - Assess system security posture
-- **Real-time Monitoring** - Watch for malicious activity as it happens
+Web Shell Scanner: Rapidly scan common web directories for .aspx, .php, and .jsp shells.
 
-All in a single, interactive, menu-driven PowerShell tool that requires no installation.
+Sigma-Lite: Search for common attacker patterns like Base64-encoded PowerShell commands.
 
-## How to Use
+IOC Search: Global log search for specific IPs, Domains, or File Hashes.
 
-### Prerequisites
-- **Windows 10/11** or **Windows Server 2016+**
-- **PowerShell 5.1+**
-- **Administrator privileges**
+🛡️ Live Malware Monitor
 
-### Basic Usage
+Real-time Baselines: Establish a system snapshot and monitor for new process creation.
 
-#### 1. Interactive Mode (Default)
-```powershell
-# Open PowerShell as Administrator
-.\WinForensicX.ps1
-```
-Navigate through interactive menus to investigate and respond to threats.
+Command-line Capture: Automatically log the arguments used by new processes as they spawn.
 
-#### 2. Quick Scan
-```powershell
-.\WinForensicX.ps1 -Mode QuickScan
-```
-Performs rapid security checks (processes, network, logins, Defender status).
+📊 SIEM & Log Analysis
 
-#### 3. Deep Analysis
-```powershell
-.\WinForensicX.ps1 -Mode DeepAnalysis
-```
-Comprehensive forensic analysis across all modules.
+Live/Offline Modes: Analyze the current system or ingest .evtx files from a forensic image.
 
-#### 4. IOC Hunting
-```powershell
-.\WinForensicX.ps1 -IOCFile "C:\IOCs\threats.txt"
-```
-Hunt for specific indicators across the system.
+Event Audit: Dedicated modules for Process Creation (4688), PowerShell Activity (4104), and Logon Events (4624).
 
-### Example Workflow
+🛠️ Requirements & Setup
 
-**Investigating Suspicious Process:**
-```powershell
-# 1. Launch tool
+Requirements
+
+OS: Windows 10/11 or Windows Server 2016+
+
+Shell: PowerShell 5.1 or PowerShell Core 7.x
+
+Privileges: Administrator (Required for Security Log access and deep process memory analysis).
+
+Installation
+
+Clone the repository or download WinForensicX.ps1.
+
+Open a PowerShell terminal as Administrator.
+
+Set execution policy if necessary:
+
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+
+
+Run the script:
+
 .\WinForensicX.ps1
 
-# 2. Navigate to Process Management
-Main Menu → [1] Process Management
 
-# 3. List suspicious processes
-→ [2] List Suspicious Processes
+📖 Usage Notes
 
-# 4. Get details on flagged process
-→ [4] Get Process Details (PID)
+Upon launching, press N at any menu to view the internal documentation, system requirements, and the latest legal disclaimer.
 
-# 5. Kill if confirmed malicious
-→ [8] Kill Process
-```
+Key Navigation
 
-**Responding to Network Threat:**
-```powershell
-# 1. Launch tool
-.\WinForensicX.ps1
+[1-9]: Select modules.
 
-# 2. Navigate to Network Analysis
-Main Menu → [3] Network Analysis
+[0/Back]: Return to the previous menu.
 
-# 3. Scan for suspicious connections
-→ [8] Scan for Suspicious Connections
+[N]: View System Notes.
 
-# 4. Block malicious IP
-→ [11] Block IP Address
-```
+[Q]: Safely exit the application.
 
-### IOC File Format
+⚖️ Legal Disclaimer
 
-Create a text file with IOCs (one per line):
+WARNING: FOR AUTHORIZED USE ONLY.
 
-```
-# IPs
-192.168.1.100
-10.0.0.50
+This tool is provided for professional forensic investigation, security auditing, and educational purposes. Unauthorized use against systems without explicit, documented consent is illegal and may violate local and international laws. The author assumes no liability for any misuse, data loss, or damage caused by this software. Use at your own risk.
 
-# Domains
-malicious.com
-evil-server.net
+📝 License
 
-# Filenames
-mimikatz.exe
-ransomware.dll
+This project is licensed under the MIT License.
 
-# Hashes
-5d41402abc4b2a76b9719d911017c592
-```
-
-### Command Reference
-
-| Command | Description |
-|---------|-------------|
-| `.\WinForensicX.ps1` | Interactive mode |
-| `.\WinForensicX.ps1 -Mode QuickScan` | Quick security scan |
-| `.\WinForensicX.ps1 -Mode DeepAnalysis` | Comprehensive analysis |
-| `.\WinForensicX.ps1 -Hours 48` | Analyze last 48 hours |
-| `.\WinForensicX.ps1 -IOCFile <path>` | Hunt for IOCs |
-| `.\WinForensicX.ps1 -YaraPath <path>` | Scan with YARA rules |
-
-### Menu Quick Reference
-
-**Main Menu:**
-- `[1]` Process Management
-- `[2]` User Management
-- `[3]` Network Analysis
-- `[4]` Event Log Analysis
-- `[5]` System Analysis
-- `[6]` IOC Hunting
-- `[7]` Quick Scan
-- `[8]` Deep Analysis
-- `[9]` Generate Report
-
-## Key Features
-
-✅ **No Installation Required** - Pure PowerShell script  
-✅ **Interactive Menus** - User-friendly navigation  
-✅ **Real-time Monitoring** - Live process and network tracking  
-✅ **IOC Hunting** - Search for known threats  
-✅ **Automated Scanning** - Quick and deep scan modes  
-✅ **Report Generation** - Export findings to HTML  
-✅ **YARA Support** - Scan processes with custom rules  
-✅ **Color-coded Output** - Easy identification of threats  
-
-## Troubleshooting
-
-**Script won't run:**
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
-```
-
-**Access Denied errors:**
-```
-Run PowerShell as Administrator
-```
-
-**No event log data:**
-```powershell
-# Enable auditing
-auditpol /set /category:"Detailed Tracking" /success:enable
-auditpol /set /category:"Logon/Logoff" /success:enable /failure:enable
-```
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Disclaimer
-
-This tool is for legitimate security research, incident response, and system administration only. Users are responsible for compliance with applicable laws.
-
-
-<p align="center">Made for the InfoSec Community by Rahul <a href="https://github.com/w3bcooki3">@w3bcooki3</a></p>
+Developed by w3bcooki3 | Part of the WinForensicX Stability & Rule-Based Hunting Edition.
