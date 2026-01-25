@@ -48,7 +48,8 @@
    ```
 4. Run the script:PowerShell.\WinForensicX.ps1
 
-## 📖 Usage NotesUpon launching, press N at any menu to view the internal documentation, system requirements, and the latest legal disclaimer.
+## 📖 Usage Notes
+Upon launching, press N at any menu to view the internal documentation, system requirements, and the latest legal disclaimer.
 
 
 ## 📧 Contact
