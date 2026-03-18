@@ -4,7 +4,7 @@
     DFIR Swiss Knife - Digital Forensics & Incident Response Toolkit
     
 .DESCRIPTION
-    Enterprise-grade PowerShell toolkit for:
+    PowerShell toolkit for:
     - Digital Forensics & Incident Response (DFIR)
     - Threat Hunting (SIGMA / YARA / IOC)
     - APT Detection & TTPs (MITRE ATT&CK aligned)
@@ -13,10 +13,8 @@
     - Incident Commander Dashboards
 
 .NOTES
-    Author      : DFIR Swiss Knife
-    Version     : 3.0.0
+    Author      : w3bcooki3
     Requires    : PowerShell 5.1+ | Admin rights for full functionality
-    Platform    : Windows 10/11, Server 2016/2019/2022
 #>
 
 Set-StrictMode -Version Latest
@@ -38,7 +36,7 @@ function Show-Banner {
               ██╔═██╗ ██║╚██╗██║██║██╔══╝  ██╔══╝  
               ██║  ██╗██║ ╚████║██║██║     ███████╗
               ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝╚═╝     ╚══════╝
-    [DFIR Swiss Knife v3.0 | Threat Hunt | Forensics | IOC | APT]
+    [DFIR Swiss Knife v1 | w3bcooki3 
     ══════════════════════════════════════════════════════════════
 "@
     Write-Host $banner -ForegroundColor Cyan
