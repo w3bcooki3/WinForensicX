@@ -1,0 +1,140 @@
+{
+  "name": "AI-era software and activity",
+  "version": "2026.10",
+  "runtimeProcesses": [
+    "ollama.exe",
+    "ollama app.exe",
+    "lm studio.exe",
+    "lmstudio.exe",
+    "jan.exe",
+    "gpt4all.exe",
+    "koboldcpp.exe",
+    "llama-server.exe",
+    "llamafile.exe",
+    "localai.exe",
+    "text-generation-webui.exe",
+    "oobabooga.exe",
+    "comfyui.exe",
+    "stable-diffusion.exe",
+    "openwebui.exe",
+    "anythingllm.exe"
+  ],
+  "runtimePorts": [
+    11434,
+    1234,
+    8080,
+    5000,
+    7860,
+    8000,
+    3000
+  ],
+  "assistantProcesses": [
+    "claude.exe",
+    "chatgpt.exe",
+    "copilot.exe",
+    "cursor.exe",
+    "codeium.exe",
+    "windsurf.exe",
+    "warp.exe",
+    "continue.exe",
+    "cody.exe",
+    "tabnine.exe",
+    "aider.exe",
+    "goose.exe",
+    "perplexity.exe"
+  ],
+  "cliHints": [
+    "claude",
+    "openai",
+    "ollama",
+    "llm ",
+    "aider",
+    "goose",
+    "sgpt",
+    "shell-gpt",
+    "chatgpt",
+    "gh copilot",
+    "gemini ",
+    "llamafile",
+    "aichat"
+  ],
+  "agentHints": [
+    "autogpt",
+    "agentgpt",
+    "babyagi",
+    "crewai",
+    "langchain",
+    "autogen",
+    "open interpreter",
+    "interpreter --",
+    "gpt-engineer",
+    "smol developer",
+    "devika",
+    "openhands"
+  ],
+  "apiDomains": [
+    "api.openai.com",
+    "api.anthropic.com",
+    "generativelanguage.googleapis.com",
+    "api.cohere.ai",
+    "api.mistral.ai",
+    "api.groq.com",
+    "openrouter.ai",
+    "api.together.xyz",
+    "api.replicate.com",
+    "api.perplexity.ai",
+    "api-inference.huggingface.co",
+    "api.deepseek.com",
+    "api.x.ai",
+    "oai.azure.com",
+    "bedrock-runtime"
+  ],
+  "notes": "Local AI runtimes often expose an unauthenticated API on localhost (e.g. Ollama on 11434). On a shared or server system that is an exposure worth flagging. AI coding assistants and autonomous agents can run shell commands on the user's behalf, which matters when reconstructing who or what ran something.",
+  "rules": [
+    {
+      "id": "AI-OLLAMA-EXPOSED",
+      "title": "Local LLM API listening on all interfaces",
+      "technique": [
+        "T1133"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A local AI runtime (such as Ollama) is listening on 0.0.0.0 rather than localhost. Its API usually has no authentication, so anyone who can reach the port can use the model, read loaded context and run it at the host's expense.",
+      "recommendation": "Bind the runtime to 127.0.0.1 (e.g. OLLAMA_HOST=127.0.0.1) or put it behind an authenticated proxy, and restrict the port with the firewall."
+    },
+    {
+      "id": "AI-KEY-EXPOSED",
+      "title": "AI provider API key stored in clear text",
+      "technique": [
+        "T1552.001"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "An API key for an AI provider was found in a file, environment variable or history. These keys are billable and often grant broad access, so a leaked key can be abused immediately.",
+      "recommendation": "Revoke and rotate the key with the provider, remove it from the file/variable, and store it in a secret manager instead."
+    },
+    {
+      "id": "AI-AGENT-SHELL",
+      "title": "Autonomous AI agent able to run shell commands",
+      "technique": [
+        "T1059.001",
+        "T1204.004"
+      ],
+      "severity": "Low",
+      "confidence": "Low",
+      "description": "An AI agent framework or a coding assistant with command execution was present. This is legitimate, but it means some commands on the host may have been generated and run by an AI tool rather than typed by a person — relevant when attributing activity.",
+      "recommendation": "When reconstructing a timeline, consider the AI tool as a possible actor. Review its logs/history if available."
+    },
+    {
+      "id": "AI-PHISHING-ARTIFACT",
+      "title": "AI-generated lure or deepfake artifact present",
+      "technique": [
+        "T1204.002"
+      ],
+      "severity": "Low",
+      "confidence": "Low",
+      "description": "Filenames or tooling associated with AI-generated phishing content, voice cloning or face-swap deepfakes were found. Attackers increasingly use these to make lures and impersonation more convincing.",
+      "recommendation": "If this host is not expected to create such content, review how the files arrived and whether they were used against your users."
+    }
+  ]
+}

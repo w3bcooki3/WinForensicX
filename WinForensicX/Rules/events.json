@@ -1,0 +1,404 @@
+{
+  "name": "Windows event-log detections (Sigma-lite)",
+  "version": "2026.10",
+  "rules": [
+    {
+      "id": "EVT-4625-SPRAY",
+      "title": "Password spraying / brute force (many failed logons)",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4625
+      ],
+      "pattern": null,
+      "fields": [
+        "TargetUserName",
+        "IpAddress"
+      ],
+      "technique": [
+        "T1110",
+        "T1110.003"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A burst of failed logons. Many accounts from one source suggests spraying; one account many times suggests brute force.",
+      "recommendation": "Identify the source IP/host, block it, and confirm no success (4624) followed. Enforce lockout and MFA.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      },
+      "perEvent": false
+    },
+    {
+      "id": "EVT-4625-THEN-4624",
+      "title": "Successful logon after repeated failures (likely cracked)",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4624,
+        4625
+      ],
+      "pattern": null,
+      "fields": [
+        "TargetUserName",
+        "IpAddress"
+      ],
+      "technique": [
+        "T1110"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "An account that failed to log on many times then succeeded from the same source — the hallmark of a guessed or sprayed password.",
+      "recommendation": "Reset the account password, review what the session did, and check the source host.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      },
+      "perEvent": false
+    },
+    {
+      "id": "EVT-4672-SENSITIVE",
+      "title": "Sensitive privileges assigned at logon (admin-equivalent)",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4672
+      ],
+      "pattern": null,
+      "fields": [
+        "SubjectUserName"
+      ],
+      "technique": [
+        "T1078"
+      ],
+      "severity": "Low",
+      "confidence": "Low",
+      "description": "A logon was granted sensitive privileges (effectively admin). Normal for admins and services; useful as timeline context.",
+      "recommendation": "Correlate with the matching 4624 and confirm the account is meant to have these rights.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      },
+      "perEvent": false
+    },
+    {
+      "id": "EVT-1102-CLEARED",
+      "title": "Security event log cleared",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        1102
+      ],
+      "pattern": null,
+      "fields": [
+        "SubjectUserName"
+      ],
+      "technique": [
+        "T1070.001"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "The Security log was cleared. Attackers do this to destroy evidence; it is almost never part of normal operations.",
+      "recommendation": "Find who cleared it and when, and recover logs from your SIEM or forwarded copies.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-104-CLEARED",
+      "title": "System/application event log cleared",
+      "logs": [
+        "System"
+      ],
+      "eventIds": [
+        104
+      ],
+      "pattern": null,
+      "fields": [
+        "SubjectUserName"
+      ],
+      "technique": [
+        "T1070.001"
+      ],
+      "severity": "Medium",
+      "confidence": "High",
+      "description": "An event log was cleared.",
+      "recommendation": "Confirm whether this was a sanctioned maintenance action.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-7045-SERVICE",
+      "title": "New service installed",
+      "logs": [
+        "System",
+        "Security"
+      ],
+      "eventIds": [
+        7045,
+        4697
+      ],
+      "pattern": "(?i)powershell|cmd(?:\\.exe)?\\s*/c|mshta|rundll32|regsvr32|\\\\users\\\\|\\\\temp\\\\|\\\\programdata\\\\|\\\\appdata\\\\|%systemroot%\\\\[^\\\\]+\\.exe$|\\.ps1|-enc\\b|frombase64",
+      "fields": [
+        "ServiceName",
+        "ImagePath"
+      ],
+      "technique": [
+        "T1543.003"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A new Windows service was installed whose program looks like a script interpreter or sits in a user-writable path — common for persistence and lateral movement (PsExec-style).",
+      "recommendation": "Inspect the service's binary path and signature; remove it if not legitimate.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-4698-TASK",
+      "title": "Scheduled task created",
+      "logs": [
+        "Security",
+        "Microsoft-Windows-TaskScheduler/Operational"
+      ],
+      "eventIds": [
+        4698,
+        106
+      ],
+      "pattern": "(?i)powershell|pwsh|mshta|wscript|cscript|rundll32|regsvr32|certutil|bitsadmin|curl|\\\\users\\\\|\\\\temp\\\\|\\\\appdata\\\\|\\\\programdata\\\\|-enc\\b|frombase64|downloadstring",
+      "fields": [
+        "TaskName",
+        "Command"
+      ],
+      "technique": [
+        "T1053.005"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A scheduled task was created that runs a script host or a user-folder program.",
+      "recommendation": "Review the task action and trigger; remove it if unexpected.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-4688-LOLBIN",
+      "title": "Suspicious process creation (command-line rules)",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4688
+      ],
+      "pattern": "__lotl__",
+      "fields": [
+        "NewProcessName",
+        "CommandLine",
+        "ParentProcessName"
+      ],
+      "technique": [],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "Process-creation events are run through the full living-off-the-land rule set, so historical 4688 logs are analyzed the same way as live processes.",
+      "recommendation": "See the matched command-line rule for specifics.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-4104-SCRIPTBLOCK",
+      "title": "Suspicious PowerShell script block",
+      "logs": [
+        "Microsoft-Windows-PowerShell/Operational"
+      ],
+      "eventIds": [
+        4104
+      ],
+      "pattern": "__lotl__",
+      "fields": [
+        "ScriptBlockText"
+      ],
+      "technique": [],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "Recorded PowerShell script blocks are scanned with the command-line rules, catching encoded commands, download cradles, AMSI bypasses and reflective loading.",
+      "recommendation": "See the matched rule; recover the full script block for analysis.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-4104-SUSPICIOUS-CEARED",
+      "title": "PowerShell logging was reduced or disabled",
+      "logs": [
+        "Microsoft-Windows-PowerShell/Operational"
+      ],
+      "eventIds": [
+        4104
+      ],
+      "pattern": "(?i)set-psreadlineoption\\s+-historysaving\\s+disable|clear-history|remove-item[^\\n]*consolehost_history|group\\s*policy[^\\n]*scriptblocklogging[^\\n]*0|\\bEtwEventWriteFull\\b|wevtutil\\s+sl\\s+microsoft-windows-powershell",
+      "fields": [
+        "ScriptBlockText"
+      ],
+      "technique": [
+        "T1562.002"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A script tried to turn off PowerShell history or script-block logging — covering tracks.",
+      "recommendation": "Treat subsequent PowerShell activity as under-logged; pull any history that remains.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-4720-USER-CREATED",
+      "title": "New user account created",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4720
+      ],
+      "pattern": null,
+      "fields": [
+        "TargetUserName"
+      ],
+      "technique": [
+        "T1136.001"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A new account was created. Normal in managed environments; suspicious on a workstation or outside a change window.",
+      "recommendation": "Confirm the account is expected and who created it.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-4732-ADMIN-ADD",
+      "title": "Member added to a privileged local group",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4732
+      ],
+      "pattern": "(?i)S-1-5-32-544|S-1-5-32-555|administrators|remote desktop users",
+      "fields": [
+        "TargetUserName",
+        "MemberName",
+        "GroupName"
+      ],
+      "technique": [
+        "T1098"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "An account was added to local Administrators or Remote Desktop Users.",
+      "recommendation": "Verify authorization; remove and investigate if not.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-4728-DOMAIN-ADMIN",
+      "title": "Member added to a privileged domain group",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4728,
+        4756
+      ],
+      "pattern": "(?i)domain admins|enterprise admins|schema admins|administrators|account operators",
+      "fields": [
+        "TargetUserName",
+        "MemberName",
+        "GroupName"
+      ],
+      "technique": [
+        "T1098"
+      ],
+      "severity": "Critical",
+      "confidence": "Medium",
+      "description": "An account was added to a highly privileged domain group — a major escalation if unexpected.",
+      "recommendation": "Confirm with your change process immediately; this is a common post-compromise action.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-4698-DISABLE-DEFENDER",
+      "title": "Defender protection events",
+      "logs": [
+        "Microsoft-Windows-Windows Defender/Operational"
+      ],
+      "eventIds": [
+        5001,
+        5007,
+        1116,
+        1117
+      ],
+      "pattern": "(?i)disabled|turned off|exclusion|tamper",
+      "fields": [
+        "Message"
+      ],
+      "technique": [
+        "T1562.001"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "Microsoft Defender reported being disabled, modified or that it detected malware. Protection changes near other suspicious activity are a red flag.",
+      "recommendation": "Check what changed, re-enable protection, and review detections.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-RDP-EXTERNAL",
+      "title": "Interactive/RDP logon from an external address",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4624
+      ],
+      "pattern": null,
+      "fields": [
+        "LogonType",
+        "IpAddress",
+        "TargetUserName"
+      ],
+      "technique": [
+        "T1021.001",
+        "T1133"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "An interactive or remote-desktop logon came from a public IP address. Direct RDP from the internet is a common intrusion vector.",
+      "recommendation": "Confirm the source is expected; restrict RDP exposure and require MFA/VPN.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      },
+      "perEvent": false
+    }
+  ]
+}

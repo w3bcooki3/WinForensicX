@@ -1,0 +1,126 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WinForensicX 2.0.0 · Guide</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f6f7f9;--card:#ffffff;--card2:#fcfcfe;--ink:#0f1623;--ink2:#1f2a3a;--dim:#5b6676;--faint:#8a94a4;
+  --line:#e7eaef;--line2:#dfe3ea;--acc:#4f46e5;--acc2:#eef0fe;
+  --crit:#e11d48;--high:#ea580c;--med:#d97706;--low:#2563eb;--info:#64748b;--ok:#15a06b;
+  --sans:"Inter","Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SFMono-Regular","SF Mono",Menlo,Consolas,monospace;
+  --sh:0 1px 2px rgba(11,24,48,.04),0 8px 24px -14px rgba(11,24,48,.13);
+  --sh2:0 2px 4px rgba(11,24,48,.06),0 16px 38px -18px rgba(11,24,48,.2);
+  --r:14px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --bg:#0a0c10;--card:#12151d;--card2:#161a24;--ink:#e9edf3;--ink2:#ffffff;--dim:#95a0b0;--faint:#667183;
+  --line:#20262f;--line2:#2c3340;--acc:#7c83ff;--acc2:#1a1f38;
+  --crit:#ff4766;--high:#ff9340;--med:#ffd24a;--low:#5e8fff;--info:#7d8798;--ok:#2ee6a6;
+  --sh:0 1px 2px rgba(0,0,0,.3),0 10px 26px -16px rgba(0,0,0,.6);
+  --sh2:0 2px 6px rgba(0,0,0,.4),0 18px 40px -20px rgba(0,0,0,.7);
+}}
+:root[data-theme=dark]{
+  --bg:#0a0c10;--card:#12151d;--card2:#161a24;--ink:#e9edf3;--ink2:#ffffff;--dim:#95a0b0;--faint:#667183;
+  --line:#20262f;--line2:#2c3340;--acc:#7c83ff;--acc2:#1a1f38;
+  --crit:#ff4766;--high:#ff9340;--med:#ffd24a;--low:#5e8fff;--info:#7d8798;--ok:#2ee6a6;
+  --sh:0 1px 2px rgba(0,0,0,.3),0 10px 26px -16px rgba(0,0,0,.6);
+  --sh2:0 2px 6px rgba(0,0,0,.4),0 18px 40px -20px rgba(0,0,0,.7);
+}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;
+  letter-spacing:-.01em;-webkit-font-smoothing:antialiased}
+.mono{font-family:var(--mono)}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{font-weight:700;letter-spacing:-.02em}
+kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px solid var(--line2);
+  border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:var(--ink2)}
+::selection{background:var(--acc);color:#fff}
+.bg-Critical{background:var(--crit)}.bg-High{background:var(--high)}.bg-Medium{background:var(--med)}.bg-Low{background:var(--low)}.bg-Info{background:var(--info)}
+.fg-Critical{color:var(--crit)}.fg-High{color:var(--high)}.fg-Medium{color:var(--med)}.fg-Low{color:var(--low)}.fg-Info{color:var(--info)}
+/* top bar (shared) */
+.bar{display:flex;align-items:center;gap:13px;margin-bottom:24px}
+.bz{width:34px;height:34px;border-radius:10px;background:var(--acc);color:#fff;display:grid;place-items:center;
+  font-weight:800;box-shadow:0 6px 16px -6px var(--acc);flex:none}
+.bn{font-weight:750;font-size:16px;letter-spacing:-.02em}.bn span{color:var(--faint);font-weight:500;font-size:12.5px;margin-left:7px}
+.bar .sp{flex:1}
+.chip{font-size:13px;color:var(--ink2);background:var(--card);border:1px solid var(--line2);border-radius:9px;
+  padding:7px 12px;box-shadow:var(--sh);white-space:nowrap}
+.chip b{color:var(--acc)}
+.gbtn{font-size:13px;color:var(--dim);background:var(--card);border:1px solid var(--line2);border-radius:9px;
+  padding:7px 13px;cursor:pointer;box-shadow:var(--sh)}
+.gbtn:hover{color:var(--ink2);border-color:var(--acc)}
+.wrap{max-width:900px;margin:0 auto;padding:24px 22px 90px}
+.hero{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px 28px;box-shadow:var(--sh2);margin-bottom:24px}
+.hero .k{font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+.hero h1{font-size:26px;font-weight:800;letter-spacing:-.03em;color:var(--ink2)}
+.hero h1 small{font-family:var(--mono);font-size:12px;color:var(--faint);font-weight:400;margin-left:9px}
+.hero p{color:var(--dim);max-width:70ch;margin-top:11px;font-size:14.5px}
+.sec{display:flex;align-items:center;gap:12px;margin:28px 0 14px}
+.sec h2{font-size:14px;font-weight:750;color:var(--ink2)}
+.sec::after{content:"";flex:1;height:1px;background:var(--line)}
+.cmd{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 17px;margin-bottom:11px;box-shadow:var(--sh)}
+.cmd-h{display:flex;flex-wrap:wrap;gap:9px;align-items:baseline;margin-bottom:4px}
+.cmd-n{color:var(--acc);font-size:14.5px;font-weight:700}.cmd-s{color:var(--dim);font-size:13.5px}
+.params{color:var(--ink);font-size:12.5px;margin:9px 0 2px;padding:8px 11px;border-left:2px solid var(--line2);background:var(--card2);border-radius:7px}
+.ex{color:var(--ink2);font-size:12.5px;background:var(--card2);border:1px solid var(--line);border-radius:7px;padding:8px 11px;margin-top:7px;overflow-x:auto}
+.ex::before{content:"$ ";color:var(--ok)}
+ul.list{list-style:none}
+ul.list li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 13px;margin-bottom:8px;font-size:13.5px;color:var(--ink);box-shadow:var(--sh)}
+ul.list.mono-list li{font-family:var(--mono);font-size:12px}
+ul.list.warn li{border-left:3px solid var(--high)}
+ul.list.safe li{border-left:3px solid var(--ok)}
+.req{font-family:var(--mono);font-size:12.5px;color:var(--dim);border:1px dashed var(--line2);border-radius:12px;padding:11px 14px;background:var(--card)}
+.foot{margin-top:32px;border-top:1px solid var(--line);padding-top:16px;color:var(--faint);font-size:12.5px}
+</style></head><body>
+<div class="wrap">
+  <div class="bar"><div class="bz">W</div><div class="bn">WinForensicX<span>help &amp; how-to</span></div>
+    <div class="sp"></div><div class="chip" id="when"></div>
+    <button class="gbtn" id="themebtn" title="Toggle theme">Theme</button></div>
+
+  <div class="hero"><div class="k">Getting started</div>
+    <h1>WinForensicX <small>2.0.0 · read-only DFIR triage</small></h1>
+    <p>Read-only DFIR / incident-triage for Windows. Collect a host, analyze it against ATT&amp;CK-mapped rules, score the risk, and get a report you can act on.</p></div>
+
+  <div class="sec"><h2>Commands</h2></div><div class="cmd">
+  <div class="cmd-h"><span class="cmd-n mono">Invoke-WfxTriage</span><span class="cmd-s">Collect -&gt; analyze -&gt; score -&gt; report. The main command.</span></div>
+  <div class='params mono'>[-FileScan] [-ExposureScan]<br>-ComputerName &lt;hosts&gt; [-Credential &lt;cred&gt;]  (remote, WinRM)<br>-EvtxPath &lt;path&gt;  (offline event logs)<br>-InputPath &lt;case&gt;  (re-analyze saved evidence)</div><div class='ex mono'>Invoke-WfxTriage</div><div class='ex mono'>Invoke-WfxTriage -FileScan -ExposureScan</div><div class='ex mono'>Invoke-WfxTriage -ComputerName srv01,srv02 -Credential (Get-Credential)</div><div class='ex mono'>Invoke-WfxTriage -EvtxPath D:\evidence\Security.evtx</div><div class='ex mono'>Invoke-WfxTriage -InputPath C:\cases\WFX_host_20260101-000000Z</div>
+</div>
+<div class="cmd">
+  <div class="cmd-h"><span class="cmd-n mono">Invoke-WfxAnalyze</span><span class="cmd-s">Run all analyzers over a collected bundle (object, bundle.json, or case folder). OS-neutral.</span></div>
+  <div class='params mono'>-Bundle &lt;path|object&gt;</div><div class='ex mono'>Invoke-WfxAnalyze -Bundle .\WFX_host\raw\bundle.json</div>
+</div>
+<div class="cmd">
+  <div class="cmd-h"><span class="cmd-n mono">Start-WfxMonitor</span><span class="cmd-s">Live baseline, then alert on new suspicious processes / connections / beacons.</span></div>
+  <div class='params mono'>[-Interval &lt;sec&gt;] [-Duration &lt;sec&gt;] [-MinSeverity &lt;sev&gt;]</div><div class='ex mono'>Start-WfxMonitor -Interval 5 -Duration 300</div>
+</div>
+<div class="cmd">
+  <div class="cmd-h"><span class="cmd-n mono">Invoke-WfxHunt</span><span class="cmd-s">Sweep a host (or a saved bundle) for IOCs: hashes, IPs, domains, names, strings.</span></div>
+  <div class='params mono'>-Ioc &lt;list&gt; [-InputPath &lt;case&gt;] [-FileScan]</div><div class='ex mono'>Invoke-WfxHunt -Ioc &#39;evil.com&#39;,&#39;1.2.3.4&#39;,&#39;5d41402abc4b2a76b9719d911017c592&#39;</div>
+</div>
+<div class="cmd">
+  <div class="cmd-h"><span class="cmd-n mono">Save-WfxEvidence</span><span class="cmd-s">Collect a hashed, read-only evidence bundle now; analyze later with -InputPath.</span></div>
+  <div class='params mono'>[-FileScan] [-ExposureScan]</div><div class='ex mono'>Save-WfxEvidence -FileScan -ExposureScan</div>
+</div>
+<div class="cmd">
+  <div class="cmd-h"><span class="cmd-n mono">Show-WfxMenu</span><span class="cmd-s">Interactive menu over everything above.</span></div>
+  <div class='ex mono'>Show-WfxMenu</div>
+</div>
+<div class="cmd">
+  <div class="cmd-h"><span class="cmd-n mono">Show-WfxHelp</span><span class="cmd-s">This help. Add -Html to open the full guide in a browser.</span></div>
+  <div class='params mono'>[-Html]</div><div class='ex mono'>Show-WfxHelp</div><div class='ex mono'>Show-WfxHelp -Html</div>
+</div>
+  <div class="sec"><h2>What a run produces</h2></div><ul class="list mono-list"><li class='mono'>report.html   - self-contained triage report (open in any browser, offline)</li><li class='mono'>result.json   - findings + risk + ATT&amp;CK coverage + gaps (machine-readable)</li><li class='mono'>findings.csv  - flat triage view for a spreadsheet / SIEM import</li><li class='mono'>raw/bundle.json - the normalized collected data (re-analyzable with -InputPath)</li><li class='mono'>audit.log     - every step the tool took, with timings (JSON lines)</li><li class='mono'>manifest.json - SHA-256 of every output file, written last (chain of custody)</li></ul>
+  <div class="sec"><h2>Safety &amp; defensive posture</h2></div><ul class="list safe"><li>Strictly read-only: it observes, it does not change the host.</li><li>Credential exposure is AUDITED, never extracted: it reports THAT a secret is exposed with the value redacted to type + length.</li><li>No LSASS dumping, no SAM/NTDS hash parsing, no DPAPI/browser decryption, no exfiltration.</li><li>Command lines, event messages and file contents are secret-scrubbed at collection time, so the raw bundle is safe to keep and ship.</li></ul>
+  <div class="sec"><h2>Limitations</h2></div><ul class="list warn"><li>Findings are LEADS for an analyst, not verdicts. A finding means &quot;look here,&quot; not &quot;this host is compromised.&quot;</li><li>Read findings alongside the collection gaps: with no process auditing and no Sysmon, &quot;nothing found&quot; mostly means &quot;nothing could be seen&quot; - the report says so.</li><li>It is a TRIAGE tool, not a forensic imager. It does not acquire disk/memory images or carve deleted files.</li><li>Detections are heuristic: expect some false positives and false negatives. Tune with custom rule packs ($env:WFX_RULES) and allowlist by finding Id + Entity.</li><li>Administrator rights are recommended; without them some data is unavailable (recorded as gaps). Remote mode needs WinRM enabled on the target.</li><li>It will not extract, decrypt, or dump secrets - that is a deliberate boundary, not a missing feature.</li></ul>
+  <div class="sec"><h2>Requirements</h2></div><div class="req">Windows PowerShell 5.1 or PowerShell 7+. No external modules. Works on a standalone PC, a small business, or across a fleet.</div>
+  <div class="foot">WinForensicX 2.0.0 · generated 2026-10-15 20:40:32Z · self-contained and safe to share.</div>
+</div>
+<script>
+(function(){try{var s=localStorage.getItem('wfx-theme');if(s)document.documentElement.setAttribute('data-theme',s);}catch(e){}
+var t=document.getElementById('themebtn');if(t)t.onclick=function(){var c=document.documentElement.getAttribute('data-theme');
+var n=c==='light'?'dark':(c==='dark'?'light':(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark'));
+document.documentElement.setAttribute('data-theme',n);try{localStorage.setItem('wfx-theme',n);}catch(e){}};
+var w=document.getElementById('when');if(w)w.textContent=new Date().toLocaleString();})();
+</script>
+</body></html>
