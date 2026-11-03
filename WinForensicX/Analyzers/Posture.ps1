@@ -63,10 +63,10 @@ function Invoke-WfxPostureAnalyzer {
                             -Entity "posture:defender:procexcl:$ep" -HostName $HostName -Source 'posture' -Evidence ([ordered]@{ Process = $ep })))
             }
         }
-    } elseif ($def -and -not (Get-WfxValue $def 'Installed' $false) -and -not $hasThirdParty) {
+    } elseif (-not $hasThirdParty) {
         $findings.Add((New-WfxFinding -Id 'POSTURE-NO-AV' -Title 'No antivirus engine detected' `
                     -Severity 'Medium' -Confidence 'Low' -Category 'Posture' -Technique @('T1562.001') `
-                    -Description "Neither Microsoft Defender status nor a third-party AV could be read. The host may have no active AV, or status collection was blocked." `
+                    -Description "Neither Microsoft Defender status nor a registered third-party AV could be confirmed. The host may have no active AV, or status collection was blocked (see collection gaps)." `
                     -Recommendation "Confirm an AV product is installed, running and updating." `
                     -Entity 'posture:av:none' -HostName $HostName -Source 'posture' -Evidence ([ordered]@{ ThirdPartyAV = $thirdParty })))
     }
@@ -75,14 +75,16 @@ function Invoke-WfxPostureAnalyzer {
     $audit = Get-WfxValue $Posture 'Audit' $null
     if ($audit) {
         $sysmon = Get-WfxValue $audit 'SysmonInstalled' $false
-        if ((Get-WfxValue $audit 'ProcessCreation' $false) -eq $false -and -not $sysmon) {
+        # Only an explicit $false is "off"; $null means it could not be determined (recorded as a gap).
+        $pc = Get-WfxValue $audit 'ProcessCreation' $null
+        if ($null -ne $pc -and $pc -eq $false -and -not $sysmon) {
             $findings.Add((New-WfxFinding -Id 'POSTURE-NO-PROCESS-AUDIT' -Title 'Process-creation auditing is off (4688 / Sysmon absent)' `
                         -Severity 'Medium' -Confidence 'High' -Category 'Visibility' -Technique @('T1562.002') `
                         -Description "Neither Security 4688 process-creation auditing nor Sysmon is active. Most process-based detections in this tool and in any SIEM are blind on this host — absence of findings here does not mean absence of activity." `
                         -Recommendation "Enable 'Audit Process Creation' (Success) via GPO, or deploy Sysmon. Also enable command-line auditing." `
                         -Entity 'posture:audit:proc' -HostName $HostName -Source 'posture' -Evidence ([ordered]@{ ProcessCreationAudit = $false; Sysmon = $sysmon })))
         }
-        if ((Get-WfxValue $audit 'CommandLineInProcessCreation' $false) -eq $false -and -not $sysmon) {
+        if ((Get-WfxValue $audit 'CommandLineInProcessCreation' $false) -eq $false -and -not $sysmon -and $pc -ne $false) {
             $findings.Add((New-WfxFinding -Id 'POSTURE-NO-CMDLINE-AUDIT' -Title 'Command-line logging in 4688 is disabled' `
                         -Severity 'Low' -Confidence 'High' -Category 'Visibility' -Technique @('T1562.002') `
                         -Description "Process-creation events will not include command lines, so encoded/abusive command lines cannot be reviewed after the fact." `

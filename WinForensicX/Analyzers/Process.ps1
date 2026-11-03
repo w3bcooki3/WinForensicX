@@ -38,6 +38,7 @@ function Invoke-WfxProcessAnalyzer {
     $rmm = @($threats.rmmProcesses | ForEach-Object { $_.ToLowerInvariant() })
     $aiRuntime = @($ai.runtimeProcesses | ForEach-Object { $_.ToLowerInvariant() })
     $aiAssist = @($ai.assistantProcesses | ForEach-Object { $_.ToLowerInvariant() })
+    $agentHints = @($ai.agentHints | ForEach-Object { ([string]$_).ToLowerInvariant() } | Where-Object { $_ })
     $byPid = @{}
     foreach ($p in $procs) { if ($null -ne $p.Pid) { $byPid[[string]$p.Pid] = $p } }
 
@@ -47,6 +48,11 @@ function Invoke-WfxProcessAnalyzer {
         $path = [string](Get-WfxValue $p 'Path' '')
         $cmd = [string](Get-WfxValue $p 'CommandLine' '')
         $parent = (Get-WfxLeaf (Get-WfxValue $p 'ParentName' '')).ToLowerInvariant()
+        # PID reuse guard: if the recorded "parent" started AFTER this process, the real parent has exited and
+        # its PID was recycled — the name is unrelated and must not drive parent-based detections.
+        $ct = ConvertTo-WfxDateTime (Get-WfxValue $p 'CreateTime')
+        $pct = ConvertTo-WfxDateTime (Get-WfxValue $p 'ParentCreateTime')
+        if ($ct -and $pct -and $pct -gt $ct) { $parent = '' }
         $entity = "process:$(Get-WfxValue $p 'Pid' '?'):$name"
         $sig = [string](Get-WfxValue $p 'SignatureStatus' '')
         $pcmd = [string](Get-WfxValue $p 'ParentCommandLine' '')
@@ -57,6 +63,27 @@ function Invoke-WfxProcessAnalyzer {
                         -Category 'Process' -Technique $r.technique -Description $r.description -Recommendation $r.recommendation `
                         -Entity $entity -HostName $HostName -Time (Get-WfxValue $p 'CreateTime') -Source 'process' `
                         -Evidence ([ordered]@{ Pid = $p.Pid; Process = $name; Parent = $parent; CommandLine = (Protect-WfxText $cmd); Path = $path })))
+        }
+
+        # 1b. Encoded PowerShell: decode (text only — never executed) and run the rules over the decoded script.
+        if ($name -in @('powershell.exe', 'pwsh.exe', 'powershell_ise.exe') -or $cmd -match '(?i)\bp(?:ower)?sh') {
+            $decoded = Get-WfxEncodedCommandPayload $cmd
+            if ($decoded) {
+                $dshort = Protect-WfxText $(if ($decoded.Length -gt 2000) { $decoded.Substring(0, 2000) + ' …[truncated]' } else { $decoded })
+                foreach ($r in (Test-WfxCommandLine -CommandLine $decoded -Image 'powershell.exe')) {
+                    if ($r.id -eq 'LOTL-PS-ENCODED') { continue }
+                    $findings.Add((New-WfxFinding -Id $r.id -Title "$($r.title) (inside encoded command)" -Severity $r.severity -Confidence $r.confidence `
+                                -Category 'Process' -Technique $r.technique -Description $r.description -Recommendation $r.recommendation `
+                                -Entity "$entity`:decoded" -HostName $HostName -Time (Get-WfxValue $p 'CreateTime') -Source 'process' `
+                                -Evidence ([ordered]@{ Pid = $p.Pid; Process = $name; Parent = $parent; DecodedCommand = $dshort })))
+                }
+                $findings.Add((New-WfxFinding -Id 'PROC-ENCODED-DECODED' -Title "Decoded PowerShell payload ($name, pid $(Get-WfxValue $p 'Pid' '?'))" `
+                            -Severity 'Info' -Confidence 'High' -Category 'Process' -Technique @('T1027.010') `
+                            -Description 'The encoded command was decoded for review (decoding only; nothing was executed).' `
+                            -Recommendation 'Read the decoded script; correlate with 4104 script-block logs.' `
+                            -Entity "$entity`:payload" -HostName $HostName -Time (Get-WfxValue $p 'CreateTime') -Source 'process' `
+                            -Evidence ([ordered]@{ Pid = $p.Pid; DecodedCommand = $dshort })))
+            }
         }
 
         # 2. Masquerading: system-process name running from the wrong place
@@ -109,7 +136,7 @@ function Invoke-WfxProcessAnalyzer {
         # 6. Known offensive / hacking tools
         if ($offensive | Where-Object { $name -eq $_ -or ($_ -notmatch '\.' -and $name -like "*$_*") }) {
             $findings.Add((New-WfxFinding -Id 'PROC-OFFENSIVE-TOOL' -Title "Offensive security tool running: $name" `
-                        -Severity 'High' -Confidence 'Medium' -Category 'Process' -Technique @('T1003.001', 'T1558.003') `
+                        -Severity 'High' -Confidence 'Medium' -Category 'Process' -Technique @('T1588.002') `
                         -Description "A process matching a known credential-dumping, C2 or attack tool is running. $($threats.offensiveNote)" `
                         -Recommendation "Confirm whether an authorized test is in progress. If not, treat the host as compromised." `
                         -Entity $entity -HostName $HostName -Time (Get-WfxValue $p 'CreateTime') -Source 'process' `
@@ -134,6 +161,16 @@ function Invoke-WfxProcessAnalyzer {
                         -Recommendation "Confirm it is bound to localhost and not reachable from the network." `
                         -Entity $entity -HostName $HostName -Time (Get-WfxValue $p 'CreateTime') -Source 'process' `
                         -Evidence ([ordered]@{ Pid = $p.Pid; Process = $name; Path = $path })))
+        }
+        $cmdL = $cmd.ToLowerInvariant()
+        $agent = @($agentHints | Where-Object { $cmdL.Contains($_) }) | Select-Object -First 1
+        if ($agent) {
+            $findings.Add((New-WfxFinding -Id 'AI-AGENT-SHELL' -Title "Autonomous AI agent framework running ($agent)" `
+                        -Severity 'Low' -Confidence 'Low' -Category 'AI' -Technique @('T1059.001', 'T1204.004') `
+                        -Description "An AI agent framework able to run shell commands is active. Some commands on this host may have been generated and run by it rather than typed by a person." `
+                        -Recommendation "When reconstructing a timeline, consider the agent as a possible actor and review its logs." `
+                        -Entity "$entity`:agent" -HostName $HostName -Time (Get-WfxValue $p 'CreateTime') -Source 'process' `
+                        -Evidence ([ordered]@{ Pid = $p.Pid; Process = $name; Hint = $agent; CommandLine = (Protect-WfxText $cmd) })))
         }
         if ($aiAssist -contains $name) {
             $findings.Add((New-WfxFinding -Id 'AI-ASSISTANT-PRESENT' -Title "AI assistant / agent running: $name" `

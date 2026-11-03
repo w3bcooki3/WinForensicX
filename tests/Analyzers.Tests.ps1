@@ -1,4 +1,4 @@
-# Pester 4/5 compatible. Runs on any OS: analyzers are pure functions over normalized data.
+﻿# Pester 4/5 compatible. Runs on any OS: analyzers are pure functions over normalized data.
 $here = Split-Path -Parent $PSCommandPath
 $root = Split-Path -Parent $here
 foreach ($f in @(Get-ChildItem (Join-Path $root 'WinForensicX/Private') -Filter *.ps1) + @(Get-ChildItem (Join-Path $root 'WinForensicX/Analyzers') -Filter *.ps1)) { . $f.FullName }

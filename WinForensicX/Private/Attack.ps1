@@ -1,4 +1,4 @@
-# MITRE ATT&CK (Enterprise) techniques referenced by WinForensicX rules and analyzers.
+﻿# MITRE ATT&CK (Enterprise) techniques referenced by WinForensicX rules and analyzers.
 # Used to label findings, build the report's coverage view and validate rule packs.
 
 $script:WfxAttack = @{
@@ -26,7 +26,13 @@ $script:WfxAttack = @{
     'T1068'     = @('Exploitation for Privilege Escalation', 'Privilege Escalation')
     'T1069'     = @('Permission Groups Discovery', 'Discovery')
     'T1070.001' = @('Indicator Removal: Clear Windows Event Logs', 'Defense Evasion')
+    'T1070.003' = @('Indicator Removal: Clear Command History', 'Defense Evasion')
     'T1070.004' = @('Indicator Removal: File Deletion', 'Defense Evasion')
+    'T1127.001' = @('Trusted Developer Utilities Proxy Execution: MSBuild', 'Defense Evasion')
+    'T1220'     = @('XSL Script Processing', 'Defense Evasion')
+    'T1564.003' = @('Hide Artifacts: Hidden Window', 'Defense Evasion')
+    'T1588.002' = @('Obtain Capabilities: Tool', 'Resource Development')
+    'T1003.004' = @('OS Credential Dumping: LSA Secrets', 'Credential Access')
     'T1071.001' = @('Application Layer Protocol: Web Protocols', 'Command and Control')
     'T1071.004' = @('Application Layer Protocol: DNS', 'Command and Control')
     'T1078'     = @('Valid Accounts', 'Defense Evasion')

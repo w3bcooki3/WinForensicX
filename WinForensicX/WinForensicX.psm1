@@ -1,5 +1,7 @@
 ﻿# WinForensicX module loader. Dot-sources the layers in dependency order and exports the public commands.
-# Layer order matters: Private (core/helpers/rules) → Analyzers → Collectors → Public (orchestration).
+# Layer order matters: Private (core/helpers/rules) → Analyzers → Collectors → Report → Public (orchestration).
+# $ErrorActionPreference = 'Stop' is deliberate: every collector step runs inside Invoke-WfxStep, which turns
+# errors into recorded collection gaps — so nothing fails silently and nothing aborts the triage.
 $ErrorActionPreference = 'Stop'
 $script:WfxModuleRoot = $PSScriptRoot
 
@@ -11,5 +13,5 @@ foreach ($layer in 'Private', 'Analyzers', 'Collectors', 'Report', 'Public') {
     }
 }
 
-$script:WfxPublic = @('Invoke-WfxTriage', 'Invoke-WfxAnalyze', 'Start-WfxMonitor', 'Invoke-WfxHunt', 'Save-WfxEvidence', 'Show-WfxMenu', 'Show-WfxHelp')
+$script:WfxPublic = @('Invoke-WfxTriage', 'Invoke-WfxAnalyze', 'Start-WfxMonitor', 'Invoke-WfxHunt', 'Save-WfxEvidence', 'Show-WfxMenu', 'Show-WfxHelp', 'Get-WfxFileTriage', 'ConvertFrom-WfxEncodedCommand', 'Get-WfxTimeline', 'Export-WfxTimeline', 'Compare-WfxCase')
 Export-ModuleMember -Function $script:WfxPublic

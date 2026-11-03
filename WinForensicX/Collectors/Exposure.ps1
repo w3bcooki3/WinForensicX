@@ -37,8 +37,12 @@ function Test-WfxOtherUserReadable {
     try {
         $acl = Get-Acl -LiteralPath $Path -ErrorAction Stop
         foreach ($ace in $acl.Access) {
-            if ($ace.AccessControlType -ne 'Allow') { continue }
-            if ($ace.FileSystemRights -notmatch 'Read|FullControl|Modify') { continue }
+            if ([string]$ace.AccessControlType -ne 'Allow') { continue }
+            if ($ace.InheritanceFlags -ne 'None' -and $ace.PropagationFlags -eq 'InheritOnly') { continue }
+            # Check the actual right bits: ReadData (0x1), GENERIC_READ (0x80000000), GENERIC_ALL (0x10000000).
+            # (Matching the enum's text on "Read" wrongly counted ReadAttributes / ReadPermissions.)
+            $bits = [int64]([int]$ace.FileSystemRights) -band 0xFFFFFFFFL
+            if (-not (($bits -band 0x1) -or ($bits -band 0x80000000L) -or ($bits -band 0x10000000L))) { continue }
             $sid = ''
             try { $sid = ($ace.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier])).Value } catch { $sid = [string]$ace.IdentityReference }
             if ($sid -in $script:WfxOtherReadSids) { return $true }
@@ -100,8 +104,11 @@ function Get-WfxExposureData {
 
     # ── 1. GPP cPassword (presence only; never decrypted) ──
     Invoke-WfxStep 'expo:gpp' {
-        $gppRoots = @("$env:SystemRoot\SYSVOL", 'C:\ProgramData\Microsoft\Group Policy\History')
-        try { $dom = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).Domain; if ($dom -and $dom -ne 'WORKGROUP') { $gppRoots += "\\$dom\SYSVOL" } } catch {}
+        $gppRoots = @("$env:SystemRoot\SYSVOL", "$env:ProgramData\Microsoft\Group Policy\History")
+        # The domain SYSVOL share is remote (network traffic to a DC), so it is only searched with -ExposureScan.
+        if ($IncludeFileScan) {
+            try { $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue; if ($cs.PartOfDomain -and $cs.Domain) { $gppRoots += "\\$($cs.Domain)\SYSVOL" } } catch {}
+        }
         foreach ($root in $gppRoots) {
             if (-not (Test-Path -LiteralPath $root)) { continue }
             Get-ChildItem -LiteralPath $root -Recurse -File -Include 'Groups.xml', 'Services.xml', 'ScheduledTasks.xml', 'DataSources.xml', 'Printers.xml', 'Drives.xml' -ErrorAction SilentlyContinue |
@@ -131,7 +138,14 @@ function Get-WfxExposureData {
 
     # ── 3. Sensitive hives — existence + ACL only, contents NEVER read ──
     Invoke-WfxStep 'expo:hives' {
+        $ntds = Get-WfxRegValue 'HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters' 'DSA Database file'
         $hiveFiles = @(
+            # Live hives: present on every system — only reported if their ACL lets non-admins read them
+            # (CVE-2021-36934 "HiveNightmare" / SeriousSAM). Contents are never opened.
+            @{ P = "$env:SystemRoot\System32\config\SAM"; D = 'SAM hive'; Live = $true }
+            @{ P = "$env:SystemRoot\System32\config\SYSTEM"; D = 'SYSTEM hive'; Live = $true }
+            @{ P = "$env:SystemRoot\System32\config\SECURITY"; D = 'SECURITY hive'; Live = $true }
+            @{ P = "$env:SystemRoot\NTDS\ntds.dit"; D = 'Active Directory database (NTDS.dit)'; Live = $true }
             @{ P = "$env:SystemRoot\System32\config\RegBack\SAM"; D = 'SAM hive backup (RegBack)' }
             @{ P = "$env:SystemRoot\System32\config\RegBack\SYSTEM"; D = 'SYSTEM hive backup (RegBack)' }
             @{ P = "$env:SystemRoot\System32\config\RegBack\SECURITY"; D = 'SECURITY hive backup (RegBack)' }
@@ -139,14 +153,16 @@ function Get-WfxExposureData {
             @{ P = "$env:SystemRoot\repair\SYSTEM"; D = 'SYSTEM hive copy (repair)' }
             @{ P = "$env:SystemRoot\repair\SECURITY"; D = 'SECURITY hive copy (repair)' }
             @{ P = "$env:SystemDrive\Windows.old\Windows\System32\config\SAM"; D = 'SAM hive in Windows.old' }
-            @{ P = "$env:SystemDrive\NTDS\ntds.dit"; D = 'Active Directory database (NTDS.dit)' }
         )
+        if ($ntds -and $ntds -notlike "$env:SystemRoot\NTDS\*") { $hiveFiles += @{ P = $ntds; D = 'Active Directory database (NTDS.dit, custom path)'; Live = $true } }
         foreach ($h in $hiveFiles) {
             if (-not (Test-Path -LiteralPath $h.P)) { continue }
             $f = Get-Item -LiteralPath $h.P -ErrorAction SilentlyContinue
             if (-not $f -or $f.Length -eq 0) { continue }   # RegBack is often present but zero-length
             $readable = Test-WfxOtherUserReadable $h.P
+            if ($h.Live -and -not $readable) { continue }   # a live hive with correct ACLs is normal, not a finding
             & $add 'SensitiveHive' $h.P $h.D $readable $readable
+            $out[$out.Count - 1] | Add-Member -NotePropertyName Live -NotePropertyValue ([bool]$h.Live) -Force
         }
     } | Out-Null
 
@@ -172,8 +188,7 @@ function Get-WfxExposureData {
             @{ R = '.npmrc'; D = 'npm auth token' }
             @{ R = '.pypirc'; D = 'PyPI upload credentials' }
         )
-        Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-            $userHome = $_.FullName
+        foreach ($userHome in (Get-WfxUserProfilePath)) {
             foreach ($c in $rel) {
                 $p = Join-Path $userHome $c.R
                 if (-not (Test-Path -LiteralPath $p)) { continue }
@@ -195,9 +210,9 @@ function Get-WfxExposureData {
 
     # ── 7. Unencrypted SSH private keys (header inspected for cipher only; key bytes never emitted) ──
     Invoke-WfxStep 'expo:sshkeys' {
-        Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-            $sshDir = Join-Path $_.FullName '.ssh'
-            if (-not (Test-Path -LiteralPath $sshDir)) { return }
+        foreach ($prof in (Get-WfxUserProfilePath)) {
+            $sshDir = Join-Path $prof '.ssh'
+            if (-not (Test-Path -LiteralPath $sshDir)) { continue }
             Get-ChildItem -LiteralPath $sshDir -File -ErrorAction SilentlyContinue |
                 Where-Object { $_.Name -match '^(id_(rsa|dsa|ecdsa|ed25519)|.*\.(pem|key|ppk))$' -and $_.Name -notmatch '\.pub$' } |
                 ForEach-Object {
@@ -235,9 +250,9 @@ function Get-WfxExposureData {
                     $type = $known[0].Type
                     $red = "$type`: $($known[0].Redacted)"
                     if ($type -in $script:WfxAiKeyTypes) { & $add 'AiKey' "env:$scope`:$name" "$type in `$env:$name" $false $false @($red) }
-                    else { & $add 'SecretInEnv' "env:$scope" $name $false $false @("$name ($scope): $($known[0].Redacted)") }
-                } elseif ($name -match $nameRx -and $val -notmatch '(?i)^(?:\*+|changeme|your[_-]?\w+|%[^%]+%|<[^>]+>|true|false|\d{1,4})$') {
-                    & $add 'SecretInEnv' "env:$scope" $name $false $false @("$name ($scope): $(Format-WfxSecret $val)")
+                    else { & $add 'SecretInEnv' "env:$scope`:$name" $name $false $false @("$name ($scope): $($known[0].Redacted)") }
+                } elseif ($name -match $nameRx -and $name -notmatch '(?i)^(?:PSModulePath|KEYBOARD\w*)$' -and $val -notmatch '(?i)^(?:\*+|changeme|your[_-]?\w+|%[^%]+%|<[^>]+>|true|false|\d{1,4})$' -and $val -notmatch '^[A-Za-z]:\\') {
+                    & $add 'SecretInEnv' "env:$scope`:$name" $name $false $false @("$name ($scope): $(Format-WfxSecret $val)")
                 }
             }
         }
@@ -246,9 +261,9 @@ function Get-WfxExposureData {
     # ── 9. Secrets in PowerShell / shell history (redacted immediately) ──
     Invoke-WfxStep 'expo:history' {
         $histFiles = New-Object System.Collections.Generic.List[string]
-        Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-            $histFiles.Add((Join-Path $_.FullName 'AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt'))
-            $histFiles.Add((Join-Path $_.FullName '.bash_history'))
+        foreach ($prof in (Get-WfxUserProfilePath)) {
+            $histFiles.Add((Join-Path $prof 'AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt'))
+            $histFiles.Add((Join-Path $prof '.bash_history'))
         }
         foreach ($hf in $histFiles) {
             if (-not (Test-Path -LiteralPath $hf)) { continue }
@@ -264,9 +279,9 @@ function Get-WfxExposureData {
         Invoke-WfxStep 'expo:configfiles' {
             $names = @('.env', '.env.local', 'web.config', 'appsettings.json', 'appsettings.Development.json', 'secrets.json', 'config.json', 'settings.py', 'application.properties', 'credentials.json', '.env.production')
             $scanned = 0
-            Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-                if ($scanned -ge 400) { return }
-                Get-ChildItem -LiteralPath $_.FullName -Recurse -File -Depth 4 -Include $names -ErrorAction SilentlyContinue |
+            foreach ($prof in (Get-WfxUserProfilePath)) {
+                if ($scanned -ge 400) { break }
+                Get-ChildItem -LiteralPath $prof -Recurse -File -Depth 4 -Include $names -ErrorAction SilentlyContinue |
                     Where-Object { $_.Length -le 262144 } | Select-Object -First 100 | ForEach-Object {
                         if ($scanned -ge 400) { return }
                         $scanned++

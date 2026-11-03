@@ -40,8 +40,17 @@ function Invoke-WfxExposureAnalyzer {
             }
             'SensitiveHive' {
                 $acc = [bool](Get-WfxValue $x 'Accessible' $false)
+                if (-not $acc) {
+                    # A stray copy (RegBack / repair / Windows.old) with correct ACLs: worth knowing, not an exposure.
+                    $findings.Add((New-WfxFinding -Id 'EXPO-HIVE-COPY' -Title "Stray copy of $detail present (ACL restricted)" `
+                                -Severity 'Info' -Confidence 'High' -Category 'Exposure' -Technique @('T1003.002') `
+                                -Description "A backup copy of a credential-bearing hive exists ($detail). Its permissions are restricted to administrators, so this is not an exposure — but it is an extra copy an admin-level attacker could take." `
+                                -Recommendation "If the copy is not needed (e.g. old Windows.old), remove it with Disk Cleanup." `
+                                -Entity $entity -HostName $HostName -Source 'exposure' -Evidence ([ordered]@{ Path = $path; Accessible = $false })))
+                    break
+                }
                 $findings.Add((New-WfxFinding -Id 'EXPO-HIVE-ACCESS' -Title "$detail readable by non-administrators" `
-                            -Severity 'High' -Confidence 'Medium' -Category 'Exposure' -Technique @('T1003.002') `
+                            -Severity $(if (Get-WfxValue $x 'Live' $false) { 'Critical' } else { 'High' }) -Confidence 'High' -Category 'Exposure' -Technique @('T1003.002') `
                             -Description "A registry hive or database that stores password material ($detail) is accessible to accounts that should not be able to read it. An attacker could copy it and recover hashes offline." `
                             -Recommendation "Restore correct ACLs (only SYSTEM/Administrators). If the file is a stray backup, remove it. Review how it became readable." `
                             -Entity $entity -HostName $HostName -Source 'exposure' -Evidence ([ordered]@{ Path = $path; Accessible = $acc })))

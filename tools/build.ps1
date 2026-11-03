@@ -1,4 +1,4 @@
-<#
+﻿<#
     Builds the single-file distributable: dist/WinForensicX.ps1
     - Concatenates Private → Analyzers → Collectors → Report → Public (same order as the module loader).
     - Embeds every Rules/*.json pack as a here-string so the single file needs no external assets.
@@ -32,6 +32,7 @@ Add-Line "    Load the functions into a session:        . .\WinForensicX.ps1   (
 Add-Line ""
 Add-Line "    Defensive tool: credential exposure is audited and REDACTED (type + length only)."
 Add-Line "    It never extracts, decrypts or dumps secrets, hashes, memory or credential stores."
+Add-Line "    Verify this file against the SHA-256 published with the release before running it."
 Add-Line "#>"
 Add-Line "param([switch]`$RunTriage, [switch]`$Menu, [switch]`$Help, [string]`$OutputPath = '', [switch]`$NoAuto)"
 Add-Line ""
@@ -64,6 +65,7 @@ Add-Line ''
 # ── Entry point ──
 Add-Line "# ===== entry point ====="
 Add-Line '$script:WfxSingleFile = $true'
+Add-Line '$script:WfxSingleFilePath = $PSCommandPath'
 Add-Line 'if (-not $NoAuto) {'
 Add-Line '    if ($Help) { Show-WfxHelp -Html }'
 Add-Line '    elseif ($RunTriage) { Invoke-WfxTriage -OutputPath $OutputPath }'

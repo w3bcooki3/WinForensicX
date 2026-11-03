@@ -18,7 +18,7 @@
     param(
         [string]$OutputPath = '',
         [string]$CaseName = '',
-        [int]$Hours = 72,
+        [ValidateRange(1, 8760)][int]$Hours = 72,
         [switch]$FileScan,
         [switch]$ExposureScan,
         [switch]$Quiet
@@ -27,7 +27,7 @@
     $script:WfxQuiet = [bool]$Quiet
     Write-WfxBanner
     $hn = [Environment]::MachineName
-    $case = New-WfxCase -OutputPath $OutputPath -Name ($(if ($CaseName) { $CaseName } else { 'evidence' })) -HostName $hn
+    $case = New-WfxCase -OutputPath $OutputPath -Name ($(if ($CaseName) { $CaseName } else { 'evidence' })) -HostName $hn -Mode 'evidence' -Parameters @{ Hours = $Hours; FileScan = [bool]$FileScan; ExposureScan = [bool]$ExposureScan }
     if (-not $case.Admin) { Write-WfxConsole 'Running without administrator rights — some data will be limited (recorded as gaps).' -Kind Warn }
     Write-WfxSection 'Collecting evidence'
     $bundle = Get-WfxCollectionBundle -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan
@@ -37,16 +37,19 @@
     $h = $bundle.Host
     $txt = @(
         "WinForensicX evidence — $hn",
-        "Collected (UTC): $($bundle.Collected)",
+        "Collection started (UTC): $($bundle.Started)",
+        "Collection finished (UTC): $($bundle.Collected)",
+        "Host time zone: $(Get-WfxValue $h 'TimeZone' '')  (all timestamps in the bundle are UTC)",
         "OS: $(Get-WfxValue $h 'Os' '')",
         "Operator: $(Get-WfxValue $h 'Operator' '')  Admin: $(Get-WfxValue $h 'Admin' '')",
         "Processes: $(@($bundle.Process).Count)  Connections: $(@($bundle.Network).Count)  Autostarts: $(@($bundle.Persistence).Count)  Events: $(@($bundle.Events).Count)",
         "Collection gaps: $(@($bundle.Gaps).Count)"
     ) -join "`r`n"
     [IO.File]::WriteAllText((Join-Path $raw 'host-summary.txt'), $txt, (New-Object Text.UTF8Encoding($false)))
-    Complete-WfxCase
+    $mp = Complete-WfxCase
     Write-WfxSection 'Done'
     Write-WfxConsole ("Evidence bundle written and hashed: {0}" -f $case.Path) -Kind Info
+    Write-WfxConsole ("Manifest SHA-256 (record this out-of-band): {0}" -f (Get-FileHash -LiteralPath $mp -Algorithm SHA256).Hash.ToLowerInvariant()) -Kind Dim
     Write-WfxConsole ("Re-analyze later with:  Invoke-WfxTriage -InputPath '{0}'" -f $case.Path) -Kind Dim
     return $case.Path
 }

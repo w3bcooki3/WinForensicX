@@ -19,6 +19,10 @@
         hostName  = [string](Get-WfxValue $Result 'HostName' '')
         host      = (Get-WfxValue $Result 'Host' $null)
         risk      = (Get-WfxValue $Result 'Risk' $null)
+        posture   = (Get-WfxValue $Result 'Posture' $null)
+        collected = (ConvertTo-WfxUtcString (Get-WfxValue $Result 'Collected' ''))
+        case      = (Get-WfxValue $Result 'Case' $null)
+        suppressed = @(Get-WfxValue $Result 'Suppressed' @())
         summary   = (Get-WfxValue $Result 'Summary' $null)
         findings  = @(Get-WfxValue $Result 'Findings' @())
         coverage  = @(Get-WfxValue $Result 'AttackCoverage' @())
@@ -33,10 +37,12 @@
     $bs = [string][char]0x5C
     $json = $json.Replace('&', "${bs}u0026").Replace('<', "${bs}u003c").Replace('>', "${bs}u003e").Replace([string][char]0x2028, "${bs}u2028").Replace([string][char]0x2029, "${bs}u2029")
 
+    # Placeholders are filled template-first and data LAST, so nothing inside collected data can ever be
+    # mistaken for (or replace) a template placeholder.
     $html = $script:WfxReportTemplate
+    $html = $html.Replace('__WFX_HOST__', [System.Net.WebUtility]::HtmlEncode($data.hostName))
     $html = $html.Replace('/*__WFX_THEME__*/', (Get-WfxThemeCss))
     $html = $html.Replace('/*__WFX_DATA__*/', $json)
-    $html = $html.Replace('__WFX_HOST__', [System.Net.WebUtility]::HtmlEncode($data.hostName))
 
     [IO.File]::WriteAllText($Path, $html, (New-Object Text.UTF8Encoding($false)))
     return $Path
@@ -156,8 +162,9 @@ $script:WfxReportTemplate = @'
       <div class="rwrap"><svg viewBox="0 0 168 168" width="168" height="168">
         <circle cx="84" cy="84" r="72" fill="none" stroke="var(--line)" stroke-width="14"></circle>
         <circle id="ring" cx="84" cy="84" r="72" fill="none" stroke-width="14" stroke-linecap="round" transform="rotate(-90 84 84)"></circle>
-      </svg><div class="c"><b id="rn">0</b><small>RISK / 100</small></div></div>
+      </svg><div class="c"><b id="rn">0</b><small>COMPROMISE RISK</small></div></div>
       <div class="rlvl" id="lvl">&mdash;</div>
+      <div id="pos" style="font-size:12px;color:var(--faint);text-align:center"></div>
     </div>
     <div class="hd">
       <div class="k">Executive summary</div>
@@ -193,8 +200,14 @@ $script:WfxReportTemplate = @'
   <div class="sec" id="limits"><h2>Limitations &amp; how to read this</h2></div>
   <div class="cards" id="limwrap"></div>
 
-  <div class="sec" id="gaps"><h2>Collection gaps</h2></div>
+  <div class="sec" id="gaps"><h2>Collection &amp; analysis gaps</h2></div>
   <div id="gapwrap"></div>
+
+  <div class="sec" id="supp"><h2>Suppressed by allowlist</h2></div>
+  <div id="suppwrap"></div>
+
+  <div class="sec" id="custody"><h2>Case &amp; chain of custody</h2></div>
+  <div id="custwrap"></div>
 
   <div class="foot" id="foot"></div>
 </div>
@@ -208,7 +221,10 @@ $script:WfxReportTemplate = @'
   var SEV=['Critical','High','Medium','Low','Info'], RK={Critical:0,High:1,Medium:2,Low:3,Info:4};
   var el=function(id){return document.getElementById(id);};
   var esc=function(s){var d=document.createElement('div');d.textContent=(s==null?'':String(s));return d.innerHTML;};
-  var au=function(id){return 'https://attack.mitre.org/techniques/'+String(id).replace('.','/')+'/';};
+  // ATT&CK links are only built from well-formed ids; anything else is shown as plain text.
+  var TID=/^T\d{4}(?:\.\d{3})?$/;
+  var au=function(id){id=String(id);return TID.test(id)?'https://attack.mitre.org/techniques/'+id.replace('.','/')+'/':'';};
+  var tlink=function(id,inner){var u=au(id);return u?'<a href="'+esc(u)+'" target="_blank" rel="noopener noreferrer">'+inner+'</a>':'<span>'+inner+'</span>';};
   var why=function(f){var d=(f.Description||'').trim();if(d.length>135)d=d.slice(0,132).replace(/\s+\S*$/,'')+'…';return d;};
   var F=(D.findings||[]).slice();
   var COL={Critical:'var(--crit)',High:'var(--high)',Medium:'var(--med)',Low:'var(--low)',Info:'var(--info)'};
@@ -229,7 +245,10 @@ $script:WfxReportTemplate = @'
   var lvl=el('lvl');lvl.textContent=risk.Level;lvl.style.color=vc;lvl.style.background='color-mix(in srgb,'+vc+' 15%,transparent)';
   var ch=F.filter(function(f){return f.Severity==='Critical'||f.Severity==='High';}).length;
   el('verdict').textContent=(risk.Level==='Critical'||risk.Level==='High')?'Immediate investigation recommended':(risk.Level==='Elevated'?'Review advised':'No urgent action — monitor');
-  el('blurb').textContent='Host '+(D.hostName||'this host')+' scored '+risk.Score+'/100 with '+ch+' high-severity indicator'+(ch===1?'':'s')+' across credential exposure, process tradecraft, network C2 and security posture. Findings are leads for an analyst — confirm before acting, and read them alongside the visibility gaps below.';
+  var pos=D.posture||{Score:0,Level:'Low'};
+  var cats={};F.forEach(function(f){cats[f.Category]=1;});
+  el('pos').textContent='Hardening / visibility gaps: '+pos.Score+'/100 ('+pos.Level+')';
+  el('blurb').textContent='Compromise risk '+risk.Score+'/100 ('+risk.Level+'), with '+ch+' critical/high finding'+(ch===1?'':'s')+(Object.keys(cats).length?' in: '+Object.keys(cats).sort().join(', '):'')+'. Hardening/visibility gaps score '+pos.Score+'/100 separately. Findings are leads for an analyst — confirm before acting, and read them alongside the collection gaps below.';
   var byScore=F.slice().sort(function(a,b){return RK[a.Severity]-RK[b.Severity]||b.Score-a.Score;});
   el('actions').innerHTML=byScore.slice(0,3).map(function(f){return '<div class="it"><span class="dot" style="background:'+COL[f.Severity]+'"></span><div><b>'+esc(f.Title)+'</b><span>'+esc((f.Recommendation||'').split('. ')[0].replace(/\.$/,''))+'.</span></div></div>';}).join('')||'<div class="empty">No priority actions.</div>';
 
@@ -256,13 +275,13 @@ $script:WfxReportTemplate = @'
       rows+='<tr><td class="k">'+esc(k)+'</td><td class="v">'+v+'</td></tr>';});
     return '<table class="kv">'+rows+'</table>';}
   function card(f){
-    var tech=(f.Technique||[]).map(function(t){return '<a href="'+au(t)+'" target="_blank" rel="noopener">'+esc(t)+'</a>';}).join('');
+    var tech=(f.Technique||[]).map(function(t){return tlink(t,esc(t));}).join('');
     var occ=(f.Occurrences&&f.Occurrences>1)?('  ×'+f.Occurrences):'';
     var d=document.createElement('div');d.className='f';
-    d.innerHTML='<div class="fhead"><div class="pill bg-'+f.Severity+'">'+f.Severity.toUpperCase()+'</div>'+
+    d.innerHTML='<div class="fhead"><div class="pill bg-'+esc(f.Severity)+'">'+esc(String(f.Severity).toUpperCase())+'</div>'+
       '<div class="mid"><div class="ti">'+esc(f.Title)+'</div><div class="wy">'+esc(why(f))+'</div>'+
         '<div class="tags"><span class="cat">'+esc(f.Category)+'</span>'+tech+'</div></div>'+
-      '<div class="rt"><div class="sc fg-'+f.Severity+'">'+f.Score+occ+'</div><div class="id">'+esc(f.Id)+'</div></div></div>'+
+      '<div class="rt"><div class="sc fg-'+esc(f.Severity)+'">'+esc(f.Score)+esc(occ)+'</div><div class="id">'+esc(f.Id)+'</div></div></div>'+
       '<div class="fbody"><p>'+esc(f.Description)+'</p>'+
         (f.Entity?'<div class="ent">entity: '+esc(f.Entity)+(f.Host?'  ·  host: '+esc(f.Host):'')+(f.Time?'  ·  '+esc(new Date(f.Time).toLocaleString()):'')+'</div>':'')+
         evidence(f.Evidence)+
@@ -299,7 +318,7 @@ $script:WfxReportTemplate = @'
   // ATT&CK
   var bt={};(D.coverage||[]).forEach(function(t){var k=t.Tactic||'Other';(bt[k]=bt[k]||[]).push(t);});
   var tk=Object.keys(bt).sort(),mx=el('matrix');
-  mx.innerHTML=tk.length?tk.map(function(k){return '<div class="at"><h4>'+esc(k)+'</h4>'+bt[k].map(function(t){return '<a href="'+au(t.Id)+'" target="_blank" rel="noopener"><b>'+esc(t.Id)+'</b> '+esc(t.Name||'')+'</a>';}).join('')+'</div>';}).join(''):'<div class="empty">No techniques observed.</div>';
+  mx.innerHTML=tk.length?tk.map(function(k){return '<div class="at"><h4>'+esc(k)+'</h4>'+bt[k].map(function(t){return tlink(t.Id,'<b>'+esc(t.Id)+'</b> '+esc(t.Name||''));}).join('')+'</div>';}).join(''):'<div class="empty">No techniques observed.</div>';
 
   // timeline
   var timed=F.filter(function(f){return f.Time;}).sort(function(a,b){return new Date(a.Time)-new Date(b.Time);});
@@ -311,6 +330,15 @@ $script:WfxReportTemplate = @'
   // gaps
   var g=D.gaps||[];
   el('gapwrap').innerHTML=g.length?g.map(function(x){return '<div class="gap"><b>'+esc(x.Source)+'</b> &mdash; '+esc(x.Reason)+(x.Fix?'<div class="fix">fix: '+esc(x.Fix)+'</div>':'')+'</div>';}).join(''):'<div class="note"><span class="n">ok</span><div>No collection gaps recorded — the triage ran with the visibility it attempted.</div></div>';
+
+  var sp=D.suppressed||[];
+  el('suppwrap').innerHTML=sp.length?'<table class="kv">'+sp.map(function(x){return '<tr><td class="k">'+esc(x.Severity)+' · '+esc(x.Id)+'</td><td class="v">'+esc(x.Title)+'<br><span style="color:var(--dim)">reason: '+esc(x.Reason||'(none given)')+' · rule: '+esc(x.Rule)+'</span></td></tr>';}).join('')+'</table>':'<div class="note"><span class="n">—</span><div>Nothing was suppressed.</div></div>';
+  var cs=D.case||{}, hs=D.host||{};
+  var crow=function(k,v){return (v===undefined||v===null||v==='')?'':'<tr><td class="k">'+esc(k)+'</td><td class="v">'+esc(typeof v==='object'?JSON.stringify(v):v)+'</td></tr>';};
+  el('custwrap').innerHTML='<table class="kv">'+crow('Case id',cs.Id)+crow('Mode',cs.Mode)+crow('Collected (UTC)',D.collected)+crow('Case started (UTC)',cs.Started)+crow('Report generated (UTC)',D.generated)+
+    crow('Operator',(cs.Operator||'')+(cs.OperatorHost?' @ '+cs.OperatorHost:''))+crow('Elevated',cs.Admin)+crow('PowerShell',cs.PowerShell)+crow('Tool',D.tool)+
+    crow('Host OS',hs.Os)+crow('Host time zone',hs.TimeZone)+crow('Parameters',cs.Parameters)+crow('Sources',(cs.Sources||[]).map(function(s){return s.role+': '+s.path+' sha256='+s.sha256;}).join(' | '))+
+    crow('Output on evidence system drive',cs.OutputOnSystemDrive)+'</table><div class="note"><span class="n">i</span><div>Every output file is hashed in manifest.json, written last. Record the manifest\'s own SHA-256 (printed at the end of the run) in your case notes to make the set tamper-evident. All times are UTC unless shown in your browser\'s local time.</div></div>';
 
   el('foot').innerHTML=esc(D.tool)+' · generated '+new Date(D.generated).toLocaleString()+' · read-only, self-contained. Risk = 1 − Π(1 − wᵢ/40): many low-confidence leads cannot sum to a critical. Keys: <kbd>/</kbd> search · <kbd>1</kbd>–<kbd>5</kbd> filter · <kbd>e</kbd>/<kbd>c</kbd> expand · <kbd>t</kbd> theme.';
 })();

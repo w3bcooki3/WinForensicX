@@ -1,54 +1,82 @@
-function Invoke-WfxAnalyze {
+﻿function Invoke-WfxAnalyze {
     <#
     .SYNOPSIS
         Runs every analyzer over a collection bundle and returns a scored result. Pure and OS-neutral:
         it works on any machine, so an analyst can re-analyze evidence collected elsewhere.
+    .DESCRIPTION
+        Each analyzer is isolated: if one fails (e.g. a rule pack is missing or a record is malformed) the
+        failure is recorded as an analysis gap and the remaining analyzers still run.
+        Two scores are produced:
+          • Risk    — evidence of compromise / attacker activity (what an incident responder acts on first).
+          • Posture — hardening and visibility gaps (what an administrator should fix).
     .PARAMETER Bundle
         A bundle object from Get-WfxCollectionBundle, OR a path to a bundle JSON file (raw/bundle.json),
         OR a directory that contains one.
     .PARAMETER HostName
         Override the host label (defaults to the bundle's HostName).
+    .PARAMETER AllowlistPath
+        JSON allowlist of known-good findings to suppress (see Read-WfxAllowlist). Defaults to $env:WFX_ALLOWLIST.
     .OUTPUTS
-        [pscustomobject] with Findings, Risk, Summary, AttackCoverage, Gaps, Host, HostName, Analyzed.
+        [pscustomobject] winforensicx.result/2
     .EXAMPLE
         Invoke-WfxAnalyze -Bundle 'D:\cases\WFX_host_20260101\raw\bundle.json'
     #>
     [CmdletBinding()]
-    param([Parameter(Mandatory, ValueFromPipeline)]$Bundle, [string]$HostName = '')
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]$Bundle,
+        [string]$HostName = '',
+        [string]$AllowlistPath = $env:WFX_ALLOWLIST
+    )
 
     process {
-        # Accept an object, a JSON file, or a case directory.
-        if ($Bundle -is [string]) {
-            $p = $Bundle
-            if (Test-Path -LiteralPath $p -PathType Container) {
-                $cand = @(Join-Path $p 'bundle.json'), (Join-Path $p 'raw\bundle.json'), (Join-Path $p 'raw/bundle.json')
-                $p = @($cand | Where-Object { Test-Path -LiteralPath $_ }) | Select-Object -First 1
-                if (-not $p) { throw "No bundle.json found under '$Bundle'." }
-            }
-            if (-not (Test-Path -LiteralPath $p)) { throw "Bundle path not found: $Bundle" }
-            $Bundle = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json
-        }
+        if ($Bundle -is [string]) { $Bundle = Read-WfxBundle -Path $Bundle }
         if (-not $HostName) { $HostName = [string](Get-WfxValue $Bundle 'HostName' ([Environment]::MachineName)) }
+        $gaps = New-Object System.Collections.Generic.List[object]
+        foreach ($g in @(Get-WfxValue $Bundle 'Gaps' @())) { if ($g) { $gaps.Add($g) } }
 
         $all = New-Object System.Collections.Generic.List[object]
-        $add = { param($set) foreach ($f in @($set | Where-Object { $_ })) { $all.Add($f) } }
-
-        & $add (Invoke-WfxProcessAnalyzer    -Process     @(Get-WfxValue $Bundle 'Process' @())     -HostName $HostName)
-        & $add (Invoke-WfxNetworkAnalyzer    -Connection  @(Get-WfxValue $Bundle 'Network' @())     -HostName $HostName)
-        & $add (Invoke-WfxDnsAnalyzer        -DnsEntry    @(Get-WfxValue $Bundle 'Dns' @())         -HostName $HostName)
-        & $add (Invoke-WfxPersistenceAnalyzer -Autostart  @(Get-WfxValue $Bundle 'Persistence' @()) -HostName $HostName)
-        & $add (Invoke-WfxEventAnalyzer      -Event       @(Get-WfxValue $Bundle 'Events' @())      -HostName $HostName)
-        & $add (Invoke-WfxFileAnalyzer       -File        @(Get-WfxValue $Bundle 'Files' @())       -HostName $HostName)
-        & $add (Invoke-WfxExposureAnalyzer   -Exposure    @(Get-WfxValue $Bundle 'Exposure' @())    -HostName $HostName)
-        & $add (Invoke-WfxPostureAnalyzer    -Posture     (Get-WfxValue $Bundle 'Security' $null)   -HostName $HostName)
-
-        $ransom = Get-WfxValue $Bundle 'Ransom' $null
-        if ($ransom) {
-            & $add (Invoke-WfxRansomwareAnalyzer -Note @(Get-WfxValue $ransom 'Note' @()) -RecentFile @(Get-WfxValue $ransom 'RecentFile' @()) -HostName $HostName)
+        $run = {
+            param([string]$Name, [scriptblock]$Body)
+            try { foreach ($f in @(& $Body | ForEach-Object { $_ } | Where-Object { $_ })) { $all.Add($f) } }
+            catch { $gaps.Add([pscustomobject]@{ Source = "analyzer:$Name"; Reason = $_.Exception.Message; Fix = 'Restore the missing/invalid rule pack or report the malformed record.' }) }
         }
 
-        $findings = Merge-WfxFinding -Finding $all.ToArray()
-        $risk = Get-WfxRiskScore -Finding $findings
+        $events = @(Get-WfxValue $Bundle 'Events' @())
+        # DNS evidence: the DNS cache plus Sysmon 22 (DNS query) events, when present.
+        $dns = @(Get-WfxValue $Bundle 'Dns' @()) + @($events | Where-Object { [int](Get-WfxValue $_ 'Id' 0) -eq 22 -and [string](Get-WfxValue $_ 'Log' '') -match 'Sysmon' } | ForEach-Object {
+                $q = [string](Get-WfxValue (Get-WfxValue $_ 'Fields' @{}) 'QueryName' '')
+                if ($q) { [pscustomobject]@{ Name = $q; Type = 'Sysmon22'; Data = '' } } })
+        $dnsMap = Get-WfxDnsAddressMap -DnsEntry $dns
+
+        & $run 'process'     { Invoke-WfxProcessAnalyzer     -Process    @(Get-WfxValue $Bundle 'Process' @())     -HostName $HostName }
+        & $run 'network'     { Invoke-WfxNetworkAnalyzer     -Connection @(Get-WfxValue $Bundle 'Network' @())     -HostName $HostName -DnsMap $dnsMap }
+        & $run 'dns'         { Invoke-WfxDnsAnalyzer         -DnsEntry   $dns                                      -HostName $HostName }
+        & $run 'persistence' { Invoke-WfxPersistenceAnalyzer -Autostart  @(Get-WfxValue $Bundle 'Persistence' @()) -HostName $HostName }
+        & $run 'events'      { Invoke-WfxEventAnalyzer       -Event      $events                                   -HostName $HostName }
+        & $run 'files'       { Invoke-WfxFileAnalyzer        -File       @(Get-WfxValue $Bundle 'Files' @())       -HostName $HostName }
+        & $run 'exposure'    { Invoke-WfxExposureAnalyzer    -Exposure   @(Get-WfxValue $Bundle 'Exposure' @())    -HostName $HostName }
+        & $run 'posture'     { Invoke-WfxPostureAnalyzer     -Posture    (Get-WfxValue $Bundle 'Security' $null)   -HostName $HostName }
+        $ransom = Get-WfxValue $Bundle 'Ransom' $null
+        if ($ransom) {
+            & $run 'ransomware' { Invoke-WfxRansomwareAnalyzer -Note @(Get-WfxValue $ransom 'Note' @()) -RecentFile @(Get-WfxValue $ransom 'RecentFile' @()) -HostName $HostName }
+        }
+
+        # Gaps raised while loading rules / analyzing (custom-pack parse errors, rejected rules) belong to this result.
+        foreach ($g in @(Get-WfxGap)) { if ($g -and -not ($gaps | Where-Object { $_.Source -eq $g.Source -and $_.Reason -eq $g.Reason })) { $gaps.Add($g) } }
+
+        $merged = Merge-WfxFinding -Finding $all.ToArray()
+        $allow = @()
+        if ($AllowlistPath) {
+            try { $allow = Read-WfxAllowlist -Path $AllowlistPath }
+            catch { $gaps.Add([pscustomobject]@{ Source = 'allowlist'; Reason = $_.Exception.Message; Fix = 'Fix the allowlist path / JSON.' }) }
+        }
+        $split = Split-WfxAllowlisted -Finding $merged -Allowlist $allow
+        $findings = @($split.Kept)
+
+        $compromise = @($findings | Where-Object { -not (Test-WfxPostureFinding $_) })
+        $postureF = @($findings | Where-Object { Test-WfxPostureFinding $_ })
+        $risk = Get-WfxRiskScore -Finding $compromise
+        $posture = Get-WfxRiskScore -Finding $postureF
         $summary = Get-WfxSeveritySummary -Finding $findings
 
         # ATT&CK coverage: distinct techniques observed, resolved to tactic/name.
@@ -56,17 +84,57 @@ function Invoke-WfxAnalyze {
         $coverage = foreach ($t in $techIds) { Get-WfxAttackTechnique $t }
 
         [pscustomobject]@{
-            Schema         = 'winforensicx.result/1'
+            Schema         = 'winforensicx.result/2'
             HostName       = $HostName
-            Analyzed       = (Get-Date).ToUniversalTime().ToString('o')
+            Analyzed       = (Get-WfxUtcNow)
+            Collected      = (ConvertTo-WfxUtcString (Get-WfxValue $Bundle 'Collected' ''))
             ToolVersion    = $script:WfxVersion
             Host           = (Get-WfxValue $Bundle 'Host' $null)
             Risk           = $risk
+            Posture        = $posture
             Summary        = $summary
             Findings       = @($findings)
+            Suppressed     = @($split.Suppressed)
             AttackCoverage = @($coverage)
-            Gaps           = @(Get-WfxValue $Bundle 'Gaps' @())
+            Gaps           = @($gaps.ToArray())
             Meta           = (Get-WfxValue $Bundle 'Meta' $null)
         }
     }
+}
+
+function Read-WfxBundle {
+    <# Loads a bundle from a bundle.json path or a case folder (looks for bundle.json and raw/bundle.json). #>
+    param([Parameter(Mandatory)][string]$Path)
+    $p = Resolve-WfxBundlePath -Path $Path
+    Get-Content -LiteralPath $p -Raw -Encoding UTF8 | ConvertFrom-Json
+}
+
+function Resolve-WfxBundlePath {
+    param([Parameter(Mandatory)][string]$Path)
+    if (Test-Path -LiteralPath $Path -PathType Container) {
+        $cand = @((Join-Path $Path 'bundle.json'), (Join-Path (Join-Path $Path 'raw') 'bundle.json'))
+        $p = @($cand | Where-Object { Test-Path -LiteralPath $_ }) | Select-Object -First 1
+        if (-not $p) { throw "No bundle.json found under '$Path'." }
+        return (Resolve-Path -LiteralPath $p).Path
+    }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Bundle path not found: $Path" }
+    return (Resolve-Path -LiteralPath $Path).Path
+}
+
+function Get-WfxDnsAddressMap {
+    <# IP -> resolved names, built from DNS-cache A/AAAA records. Used to name connection endpoints offline,
+       so the tool never has to send its own reverse-DNS queries from the host under investigation. #>
+    param([object[]]$DnsEntry)
+    $map = @{}
+    foreach ($d in @($DnsEntry | Where-Object { $_ })) {
+        $data = [string](Get-WfxValue $d 'Data' '')
+        $name = [string](Get-WfxValue $d 'Name' '')
+        if (-not $data -or -not $name) { continue }
+        $ip = $null
+        if ([System.Net.IPAddress]::TryParse($data, [ref]$ip)) {
+            if (-not $map.ContainsKey($data)) { $map[$data] = New-Object System.Collections.Generic.List[string] }
+            if (-not $map[$data].Contains($name.ToLowerInvariant())) { $map[$data].Add($name.ToLowerInvariant()) }
+        }
+    }
+    $map
 }

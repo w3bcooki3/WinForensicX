@@ -8,8 +8,24 @@ inside an investigation and on sensitive hosts.
 
 WinForensicX **observes**. It enumerates processes, connections, DNS cache, autostart locations, event
 logs, files in a bounded set of high-signal locations, and security configuration. It does not install
-anything, does not modify system state, and does not alter the artifacts it reads. The one thing it
-writes is its own **case folder** (outputs, audit log, SHA-256 manifest) in a location you choose.
+anything, does not change system settings, and never executes, opens with a handler, or loads anything it
+finds (file triage and the decoder work on bytes/text only). It writes only its own **case folder**
+(outputs, audit log, SHA-256 manifest) in a location you choose. Prefer `-OutputPath` on external media:
+by default the case goes to the Desktop of the host being examined, which writes to the evidence volume.
+
+Side effects you should know about, as for any live-response tool:
+- Reading files (hashing, entropy, web-shell scanning) can update NTFS **last-access** timestamps on volumes
+  where that is enabled.
+- Running PowerShell itself creates artifacts: process creation, Prefetch, and, if script-block logging is
+  on, 4104 events containing this tool's code.
+
+## Network behaviour
+
+The tool sends **no network traffic of its own** during local triage. It performs no reverse-DNS lookups,
+fetches no updates, and makes no telemetry or download calls. Exceptions, both explicit:
+- `-ComputerName` uses the WinRM session you ask for. Only the collection code (Private + Collectors) is sent,
+  and its SHA-256 is recorded in the case audit log and manifest.
+- `-ExposureScan` on a domain member reads the domain `SYSVOL` share for GPP passwords.
 
 ## Credential & secret exposure: audit, never extract
 
@@ -61,3 +77,16 @@ content can never break out of its data block into executable markup.
 If you find a way to make WinForensicX leak a secret value, execute untrusted input, modify the host, or
 hang on crafted data, please open a private report to the maintainers rather than a public issue, with a
 minimal reproduction. Redaction leaks and read-only violations are treated as the highest priority.
+
+## Integrity of the tool itself
+
+- Every case manifest records the SHA-256 of the code and rule packs that produced it (`toolIntegrity`).
+- Built-in and custom rule packs are validated when loaded: invalid ids, severities or ATT&CK ids are
+  rejected and reported as gaps, and every regex runs with a 250 ms timeout. Built-in regexes over collected
+  data also use timeouts, and redaction fails closed (content is withheld if it can't be scrubbed in time).
+- The HTML report escapes all data and builds ATT&CK links only from well-formed technique ids.
+- Rule-pack self-test samples are short, **non-functional** fragments that use reserved `example.invalid`
+  hosts. The repository contains no working payloads, exploits or malware samples.
+- No obfuscation is used anywhere in the code. Because the rule packs necessarily describe attacker
+  techniques, some antivirus engines may flag them. Verify the release hash and report false positives to
+  the vendor. Never disable protection to run the tool.

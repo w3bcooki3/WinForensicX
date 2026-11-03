@@ -1,4 +1,4 @@
-# Shared "Beacon" design system for the HTML report and guide, so they look like one product.
+﻿# Shared "Beacon" design system for the HTML report and guide, so they look like one product.
 # Decision-first, high-readability: light by default, full dark theme, system fonts (self-contained/offline).
 
 function Get-WfxThemeCss {

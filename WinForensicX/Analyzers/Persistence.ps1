@@ -17,16 +17,18 @@ function Invoke-WfxPersistenceAnalyzer {
         $name = [string](Get-WfxValue $a 'Name' '')
         $cmd = [string](Get-WfxValue $a 'Command' '')
         $path = [string](Get-WfxValue $a 'Path' '')
-        if (-not $path -and $cmd) { $path = Get-WfxImagePath $cmd }
+        if (-not $path -and $cmd -and $kind -ne 'RunMRU') { $path = Get-WfxImagePath $cmd }
         $loc = [string](Get-WfxValue $a 'Location' '')
         $sig = [string](Get-WfxValue $a 'SignatureStatus' '')
         $entity = "autostart:$kind`:$name"
-        $userWritable = (Test-WfxUserWritablePath $path) -or (Test-WfxUserWritablePath $cmd)
+        $userWritable = (Test-WfxUserWritablePath $path)
+        $trusted = Test-WfxTrustedSignature $sig
+        $where = if ($kind -eq 'RunMRU') { 'typed into the Run dialog' } else { "in $kind persistence" }
 
         # Command-line rules apply to the autostart command too (encoded PS, proxy exec, etc.)
         foreach ($r in (Test-WfxCommandLine -CommandLine $cmd -Image $path)) {
-            $findings.Add((New-WfxFinding -Id $r.id -Title "$($r.title) (in $kind persistence)" -Severity $r.severity -Confidence $r.confidence `
-                        -Category 'Persistence' -Technique $r.technique -Description $r.description -Recommendation $r.recommendation `
+            $findings.Add((New-WfxFinding -Id $r.id -Title "$($r.title) ($where)" -Severity $r.severity -Confidence $r.confidence `
+                        -Category $(if ($kind -eq 'RunMRU') { 'Execution' } else { 'Persistence' }) -Technique $r.technique -Description $r.description -Recommendation $r.recommendation `
                         -Entity $entity -HostName $HostName -Source 'persistence' `
                         -Evidence ([ordered]@{ Kind = $kind; Name = $name; Location = $loc; Command = (Protect-WfxText $cmd) })))
         }
@@ -43,7 +45,7 @@ function Invoke-WfxPersistenceAnalyzer {
         }
         if ($highSignal.ContainsKey($kind)) {
             $info = $highSignal[$kind]
-            $sev = if ($userWritable -or ($sig -and $sig -notin @('Valid', 'Signed', 'Trusted', ''))) { 'High' } else { 'Medium' }
+            $sev = if (($userWritable -and -not $trusted) -or ($sig -and -not $trusted)) { 'High' } else { 'Medium' }
             $findings.Add((New-WfxFinding -Id "PERSIST-$($kind.ToUpper())" -Title "$kind persistence: $name" -Severity $sev -Confidence 'Medium' `
                         -Category 'Persistence' -Technique @($info[0]) -Description $info[1] `
                         -Recommendation "Confirm this entry is expected; capture and analyze the referenced code before removing it." `
@@ -52,11 +54,16 @@ function Invoke-WfxPersistenceAnalyzer {
         }
 
         # Run keys / startup / services / tasks pointing at user-writable or unsigned binaries.
-        if ($kind -in @('RunKey', 'Startup', 'Service', 'ScheduledTask') -and ($userWritable -or ($sig -and $sig -notin @('Valid', 'Signed', 'Trusted', '')))) {
+        # Validly-signed programs installed per-user (OneDrive, Teams, …) are normal; they are kept as low-weight
+        # context because signed binaries in user folders are also used for DLL side-loading.
+        $unsigned = [bool]($sig -and -not $trusted)
+        if ($kind -in @('RunKey', 'Startup', 'Service', 'ScheduledTask') -and ($userWritable -or $unsigned)) {
             $tech = switch ($kind) { 'RunKey' { 'T1547.001' } 'Startup' { 'T1547.001' } 'Service' { 'T1543.003' } 'ScheduledTask' { 'T1053.005' } }
-            $findings.Add((New-WfxFinding -Id "PERSIST-$($kind.ToUpper())-SUSPECT" -Title "$kind autostart from an untrusted location: $name" `
-                        -Severity 'Medium' -Confidence 'Medium' -Category 'Persistence' -Technique @($tech) `
-                        -Description "A $kind autostart entry runs a program that is unsigned or located in a user-writable folder — a common way malware survives reboot." `
+            $signedOk = $trusted -and $userWritable
+            $findings.Add((New-WfxFinding -Id $(if ($signedOk) { "PERSIST-$($kind.ToUpper())-USERPATH-SIGNED" } else { "PERSIST-$($kind.ToUpper())-SUSPECT" }) `
+                        -Title $(if ($signedOk) { "$kind autostart runs a signed program from a user folder: $name" } else { "$kind autostart from an untrusted location: $name" }) `
+                        -Severity $(if ($signedOk) { 'Info' } else { 'Medium' }) -Confidence $(if ($signedOk) { 'Low' } else { 'Medium' }) -Category 'Persistence' -Technique @($tech) `
+                        -Description $(if ($signedOk) { "A $kind entry starts a validly signed program from a user-writable folder. Usually a per-user install; listed for completeness (signed programs in user folders can be abused for DLL side-loading)." } else { "A $kind autostart entry runs a program that is unsigned or located in a user-writable folder — a common way malware survives reboot." }) `
                         -Recommendation "Verify the program's publisher and purpose; remove if not legitimate." `
                         -Entity $entity -HostName $HostName -Source 'persistence' `
                         -Evidence ([ordered]@{ Kind = $kind; Name = $name; Location = $loc; Path = $path; Signature = $sig; Command = (Protect-WfxText $cmd) })))

@@ -35,12 +35,13 @@ function Invoke-WfxFileAnalyzer {
         # 1. Web shells
         if ($content -and ($inWeb -or $ext -in @('.php', '.asp', '.aspx', '.ashx', '.asmx', '.jsp', '.jspx', '.phtml', '.php5', '.cfm'))) {
             foreach ($sig in $script:WfxWebShellSigs) {
-                $m = [regex]::Match($content, $sig.Rx)
-                if ($m.Success) {
+                $m = @(Get-WfxRxMatches $sig.Rx $content) | Select-Object -First 1
+                if ($m) {
                     $line = ($content.Substring(0, $m.Index) -split "`n").Count
                     $snippet = Protect-WfxText ($content.Substring([Math]::Max(0, $m.Index - 10), [Math]::Min(90, $content.Length - [Math]::Max(0, $m.Index - 10))))
+                    $nameOnly = $sig.Id -eq 'webshell-named'
                     $findings.Add((New-WfxFinding -Id 'FILE-WEBSHELL' -Title "Possible web shell in $(Get-WfxLeaf $path)" `
-                                -Severity 'Critical' -Confidence 'Medium' -Category 'File' -Technique @('T1505.003', 'T1190') `
+                                -Severity $(if ($nameOnly) { 'High' } else { 'Critical' }) -Confidence $(if ($nameOnly) { 'Low' } else { 'Medium' }) -Category 'File' -Technique @('T1505.003', 'T1190') `
                                 -Description "A file served by a web application contains code that runs commands or executes request input ($($sig.Desc)). Web shells give attackers remote control of a server." `
                                 -Recommendation "Isolate the web server, preserve the file, and review web access logs for requests to it. Determine how it was written (upload flaw, vulnerable app)." `
                                 -Entity $entity -HostName $HostName -Time (Get-WfxValue $rec 'LastWrite') -Source 'file' `
@@ -67,7 +68,7 @@ function Invoke-WfxFileAnalyzer {
                         -Description "An executable or script carrying a Mark-of-the-Web (downloaded from the internet) sits in a user-writable folder." `
                         -Recommendation "Hash it and check reputation; confirm the user intended to download and run it." `
                         -Entity $entity -HostName $HostName -Time (Get-WfxValue $rec 'LastWrite') -Source 'file' `
-                        -Evidence ([ordered]@{ Path = $path; Zone = $zone; SHA256 = (Get-WfxValue $rec 'SHA256'); LastWrite = (Get-WfxValue $rec 'LastWrite') })))
+                        -Evidence ([ordered]@{ Path = $path; Zone = $zone; HostUrl = (Get-WfxValue $rec 'HostUrl' ''); ReferrerUrl = (Get-WfxValue $rec 'ReferrerUrl' ''); SHA256 = (Get-WfxValue $rec 'SHA256'); LastWrite = (Get-WfxValue $rec 'LastWrite') })))
         }
 
         # 4. High-entropy executable in a user folder (packed/encrypted payload)
@@ -93,32 +94,40 @@ function Invoke-WfxRansomwareAnalyzer {
     #>
     param([object[]]$Note = @(), [object[]]$RecentFile = @(), [string]$HostName = '')
     $findings = New-Object System.Collections.Generic.List[object]
-    $noteRx = '(?i)(your files (?:have been|are) (?:encrypted|locked)|all your (?:files|data|documents)|decrypt(?:ion)?\s+(?:key|tool|service|id)|bitcoin|\.onion|recover (?:your )?files|how_to_(?:decrypt|recover)|readme.*decrypt|pay(?:ment)? .*(?:ransom|decrypt)|contact us.*(?:tox|telegram|protonmail|session id))'
+    # Bounded gaps (.{0,200}) instead of .* keep this linear on hostile input; it also runs with a timeout.
+    $noteRx = '(?i)(your files (?:have been|are) (?:encrypted|locked)|all your (?:files|data|documents)|decrypt(?:ion)?\s+(?:key|tool|service|id)|bitcoin|\.onion\b|recover (?:your )?files|how_to_(?:decrypt|recover)|readme.{0,200}decrypt|pay(?:ment)? .{0,200}(?:ransom|decrypt)|contact us.{0,200}(?:tox|telegram|protonmail|session id))'
     foreach ($n in @($Note | Where-Object { $_ })) {
         $c = [string](Get-WfxValue $n 'Content' '')
-        $hits = ([regex]::Matches($c, $noteRx)).Count
-        if ($hits -ge 2) {
+        $hits = @(Get-WfxRxMatches $noteRx $c).Count
+        $copies = [int](Get-WfxValue $n 'Copies' 1)
+        if ($hits -ge 2 -or ($hits -ge 1 -and $copies -ge 5)) {
             $findings.Add((New-WfxFinding -Id 'RANSOM-NOTE' -Title "Possible ransom note: $(Get-WfxLeaf ([string](Get-WfxValue $n 'Path' '')))" `
                         -Severity 'Critical' -Confidence 'Medium' -Category 'Ransomware' -Technique @('T1486') `
                         -Description "A file reads like a ransomware ransom note (encryption claim, payment/decryption instructions)." `
                         -Recommendation "Isolate the host from the network immediately. Preserve evidence, identify the family, and check backups and other hosts." `
                         -Entity "file:$([string](Get-WfxValue $n 'Path' ''))" -HostName $HostName -Source 'file' `
-                        -Evidence ([ordered]@{ Path = (Get-WfxValue $n 'Path'); Markers = $hits })))
+                        -Evidence ([ordered]@{ Path = (Get-WfxValue $n 'Path'); Markers = $hits; CopiesOfSameName = $copies })))
         }
     }
     $recent = @($RecentFile | Where-Object { $_ })
     $encLike = @($recent | Where-Object {
             $e = ([string](Get-WfxValue $_ 'Extension' '')).ToLowerInvariant()
-            $e -match '^\.(?:encrypt(?:ed)?|locked|crypt(?:ed)?|enc|crypto|[a-z0-9]{5,8})$' -and $e -notmatch '^\.(?:exe|dll|docx|xlsx|pptx|jpeg|config|manifest)$' -and ([double](Get-WfxValue $_ 'Entropy' 0) -ge 7.4)
+            $e -match '^\.(?:encrypt(?:ed)?|locked|crypt(?:ed)?|enc|crypto|[a-z0-9]{5,12})$' -and
+            $e -notmatch '^\.(?:exe|dll|docx|xlsx|pptx|jpeg|config|manifest|nupkg|vsix|woff2|blob|cache|crdownload|partial|msix|appx|appxbundle|msixbundle|tgz|gzip|bzip2|lzma|webm|webp|heic|avif|opus|flac|ldb|sqlite|sqlite3|blockmap|pack|odex|asar|tflite|onnx|safetensors|parquet|zstd|bundle|backup)$' -and
+            ([double](Get-WfxValue $_ 'Entropy' 0) -ge 7.4)
         })
-    if ($encLike.Count -ge 25) {
-        $exts = @($encLike | ForEach-Object { ([string](Get-WfxValue $_ 'Extension' '')).ToLowerInvariant() } | Group-Object | Sort-Object Count -Descending | Select-Object -First 1)
+    # A real encryption burst shows ONE unusual extension dominating, spread over many folders.
+    $top = @($encLike | ForEach-Object { ([string](Get-WfxValue $_ 'Extension' '')).ToLowerInvariant() } | Group-Object | Sort-Object Count -Descending | Select-Object -First 1)
+    $topFiles = if ($top.Count) { @($encLike | Where-Object { ([string](Get-WfxValue $_ 'Extension' '')).ToLowerInvariant() -eq $top[0].Name }) } else { @() }
+    $dirs = @($topFiles | ForEach-Object { $d = [string](Get-WfxValue $_ 'Directory' ''); if (-not $d) { $d = Split-Path -Parent ([string](Get-WfxValue $_ 'Path' '')) }; $d } | Sort-Object -Unique)
+    if ($topFiles.Count -ge 25 -and $dirs.Count -ge 3 -and ($topFiles.Count / [double]$encLike.Count) -ge 0.6) {
+        $exts = $top
         $findings.Add((New-WfxFinding -Id 'RANSOM-MASS-ENCRYPT' -Title "Mass creation of encrypted-looking files ($($encLike.Count))" `
                     -Severity 'Critical' -Confidence 'Medium' -Category 'Ransomware' -Technique @('T1486') `
                     -Description "A large number of recently written files have random (high-entropy) content and uniform unusual extensions — consistent with active ransomware encryption." `
                     -Recommendation "Isolate the host now and stop the responsible process. Preserve a sample and the ransom note before any remediation." `
                     -Entity 'ransom:mass-encrypt' -HostName $HostName -Source 'file' `
-                    -Evidence ([ordered]@{ Files = $encLike.Count; TopExtension = ($exts.Name); Sample = (@($encLike | Select-Object -First 5 | ForEach-Object { Get-WfxValue $_ 'Path' })) })))
+                    -Evidence ([ordered]@{ Files = $topFiles.Count; Folders = $dirs.Count; TopExtension = ($exts.Name); Sample = (@($encLike | Select-Object -First 5 | ForEach-Object { Get-WfxValue $_ 'Path' })) })))
     }
     return , (Merge-WfxFinding -Finding $findings.ToArray())
 }

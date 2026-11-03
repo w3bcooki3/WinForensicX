@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WinForensicX 2.0.0 · Guide</title>
+<title>WinForensicX 2.1.0 · Guide</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -79,12 +79,12 @@ ul.list.safe li{border-left:3px solid var(--ok)}
     <button class="gbtn" id="themebtn" title="Toggle theme">Theme</button></div>
 
   <div class="hero"><div class="k">Getting started</div>
-    <h1>WinForensicX <small>2.0.0 · read-only DFIR triage</small></h1>
+    <h1>WinForensicX <small>2.1.0 · read-only DFIR triage</small></h1>
     <p>Read-only DFIR / incident-triage for Windows. Collect a host, analyze it against ATT&amp;CK-mapped rules, score the risk, and get a report you can act on.</p></div>
 
   <div class="sec"><h2>Commands</h2></div><div class="cmd">
   <div class="cmd-h"><span class="cmd-n mono">Invoke-WfxTriage</span><span class="cmd-s">Collect -&gt; analyze -&gt; score -&gt; report. The main command.</span></div>
-  <div class='params mono'>[-FileScan] [-ExposureScan]<br>-ComputerName &lt;hosts&gt; [-Credential &lt;cred&gt;]  (remote, WinRM)<br>-EvtxPath &lt;path&gt;  (offline event logs)<br>-InputPath &lt;case&gt;  (re-analyze saved evidence)</div><div class='ex mono'>Invoke-WfxTriage</div><div class='ex mono'>Invoke-WfxTriage -FileScan -ExposureScan</div><div class='ex mono'>Invoke-WfxTriage -ComputerName srv01,srv02 -Credential (Get-Credential)</div><div class='ex mono'>Invoke-WfxTriage -EvtxPath D:\evidence\Security.evtx</div><div class='ex mono'>Invoke-WfxTriage -InputPath C:\cases\WFX_host_20260101-000000Z</div>
+  <div class='params mono'>[-FileScan] [-ExposureScan] [-OutputPath &lt;external media&gt;] [-AllowlistPath &lt;json&gt;]<br>-ComputerName &lt;hosts&gt; [-Credential &lt;cred&gt;]  (remote, WinRM)<br>-EvtxPath &lt;path&gt;  (offline event logs only; nothing collected locally)<br>-InputPath &lt;case&gt;  (re-analyze saved evidence)</div><div class='ex mono'>Invoke-WfxTriage</div><div class='ex mono'>Invoke-WfxTriage -FileScan -ExposureScan</div><div class='ex mono'>Invoke-WfxTriage -ComputerName srv01,srv02 -Credential (Get-Credential)</div><div class='ex mono'>Invoke-WfxTriage -EvtxPath D:\evidence\Security.evtx</div><div class='ex mono'>Invoke-WfxTriage -InputPath C:\cases\WFX_host_20260101-000000Z</div>
 </div>
 <div class="cmd">
   <div class="cmd-h"><span class="cmd-n mono">Invoke-WfxAnalyze</span><span class="cmd-s">Run all analyzers over a collected bundle (object, bundle.json, or case folder). OS-neutral.</span></div>
@@ -95,8 +95,24 @@ ul.list.safe li{border-left:3px solid var(--ok)}
   <div class='params mono'>[-Interval &lt;sec&gt;] [-Duration &lt;sec&gt;] [-MinSeverity &lt;sev&gt;]</div><div class='ex mono'>Start-WfxMonitor -Interval 5 -Duration 300</div>
 </div>
 <div class="cmd">
-  <div class="cmd-h"><span class="cmd-n mono">Invoke-WfxHunt</span><span class="cmd-s">Sweep a host (or a saved bundle) for IOCs: hashes, IPs, domains, names, strings.</span></div>
-  <div class='params mono'>-Ioc &lt;list&gt; [-InputPath &lt;case&gt;] [-FileScan]</div><div class='ex mono'>Invoke-WfxHunt -Ioc &#39;evil.com&#39;,&#39;1.2.3.4&#39;,&#39;5d41402abc4b2a76b9719d911017c592&#39;</div>
+  <div class="cmd-h"><span class="cmd-n mono">Invoke-WfxHunt</span><span class="cmd-s">Sweep a host or saved bundle for IOCs (MD5/SHA-1/SHA-256, exact IPs, domains+subdomains, strings), incl. event logs.</span></div>
+  <div class='params mono'>-Ioc &lt;list&gt; | -IocFile &lt;txt&gt; [-InputPath &lt;case&gt;] [-FileScan] [-HashProcesses]</div><div class='ex mono'>Invoke-WfxHunt -Ioc &#39;evil.example&#39;,&#39;203.0.113.7&#39; -FileScan</div><div class='ex mono'>Invoke-WfxHunt -IocFile .\iocs.txt -InputPath .\WFX_host_case</div>
+</div>
+<div class="cmd">
+  <div class="cmd-h"><span class="cmd-n mono">Get-WfxFileTriage</span><span class="cmd-s">What is this file? Hashes, true type vs extension, entropy, MOTW download URL, ADS, signature, PE facts, strings + IOCs. Never executes.</span></div>
+  <div class='params mono'>-Path &lt;files&gt; [-Strings] [-MaxReadMB &lt;n&gt;]</div><div class='ex mono'>Get-WfxFileTriage .\sample.bin -Strings | Format-List</div><div class='ex mono'>Get-ChildItem .\Downloads -File | Get-WfxFileTriage | Where-Object ExtensionMismatch</div>
+</div>
+<div class="cmd">
+  <div class="cmd-h"><span class="cmd-n mono">ConvertFrom-WfxEncodedCommand</span><span class="cmd-s">Decode -EncodedCommand / Base64 / gzip / nested FromBase64String payloads (decode only).</span></div>
+  <div class='params mono'>&lt;command line or base64&gt;</div><div class='ex mono'>ConvertFrom-WfxEncodedCommand &#39;powershell -enc VwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIAAnAGgAaQAnAA==&#39;</div>
+</div>
+<div class="cmd">
+  <div class="cmd-h"><span class="cmd-n mono">Export-WfxTimeline</span><span class="cmd-s">UTC super-timeline of a case (processes, connections, events, files, findings) to CSV/JSON.</span></div>
+  <div class='params mono'>-InputPath &lt;case&gt; [-Format Csv|Json] [-From &lt;utc&gt;] [-To &lt;utc&gt;]</div><div class='ex mono'>Export-WfxTimeline -InputPath .\WFX_host_case</div>
+</div>
+<div class="cmd">
+  <div class="cmd-h"><span class="cmd-n mono">Compare-WfxCase</span><span class="cmd-s">Diff two cases: new processes, autostarts, services, listeners, DNS, exposure, findings.</span></div>
+  <div class='params mono'>-Baseline &lt;case&gt; -Current &lt;case&gt; [-OutputPath &lt;csv|json&gt;]</div><div class='ex mono'>Compare-WfxCase -Baseline .\golden -Current .	oday</div>
 </div>
 <div class="cmd">
   <div class="cmd-h"><span class="cmd-n mono">Save-WfxEvidence</span><span class="cmd-s">Collect a hashed, read-only evidence bundle now; analyze later with -InputPath.</span></div>
@@ -110,11 +126,11 @@ ul.list.safe li{border-left:3px solid var(--ok)}
   <div class="cmd-h"><span class="cmd-n mono">Show-WfxHelp</span><span class="cmd-s">This help. Add -Html to open the full guide in a browser.</span></div>
   <div class='params mono'>[-Html]</div><div class='ex mono'>Show-WfxHelp</div><div class='ex mono'>Show-WfxHelp -Html</div>
 </div>
-  <div class="sec"><h2>What a run produces</h2></div><ul class="list mono-list"><li class='mono'>report.html   - self-contained triage report (open in any browser, offline)</li><li class='mono'>result.json   - findings + risk + ATT&amp;CK coverage + gaps (machine-readable)</li><li class='mono'>findings.csv  - flat triage view for a spreadsheet / SIEM import</li><li class='mono'>raw/bundle.json - the normalized collected data (re-analyzable with -InputPath)</li><li class='mono'>audit.log     - every step the tool took, with timings (JSON lines)</li><li class='mono'>manifest.json - SHA-256 of every output file, written last (chain of custody)</li></ul>
-  <div class="sec"><h2>Safety &amp; defensive posture</h2></div><ul class="list safe"><li>Strictly read-only: it observes, it does not change the host.</li><li>Credential exposure is AUDITED, never extracted: it reports THAT a secret is exposed with the value redacted to type + length.</li><li>No LSASS dumping, no SAM/NTDS hash parsing, no DPAPI/browser decryption, no exfiltration.</li><li>Command lines, event messages and file contents are secret-scrubbed at collection time, so the raw bundle is safe to keep and ship.</li></ul>
-  <div class="sec"><h2>Limitations</h2></div><ul class="list warn"><li>Findings are LEADS for an analyst, not verdicts. A finding means &quot;look here,&quot; not &quot;this host is compromised.&quot;</li><li>Read findings alongside the collection gaps: with no process auditing and no Sysmon, &quot;nothing found&quot; mostly means &quot;nothing could be seen&quot; - the report says so.</li><li>It is a TRIAGE tool, not a forensic imager. It does not acquire disk/memory images or carve deleted files.</li><li>Detections are heuristic: expect some false positives and false negatives. Tune with custom rule packs ($env:WFX_RULES) and allowlist by finding Id + Entity.</li><li>Administrator rights are recommended; without them some data is unavailable (recorded as gaps). Remote mode needs WinRM enabled on the target.</li><li>It will not extract, decrypt, or dump secrets - that is a deliberate boundary, not a missing feature.</li></ul>
-  <div class="sec"><h2>Requirements</h2></div><div class="req">Windows PowerShell 5.1 or PowerShell 7+. No external modules. Works on a standalone PC, a small business, or across a fleet.</div>
-  <div class="foot">WinForensicX 2.0.0 · generated 2026-10-15 20:40:32Z · self-contained and safe to share.</div>
+  <div class="sec"><h2>What a run produces</h2></div><ul class="list mono-list"><li class='mono'>report.html   - self-contained triage report (open in any browser, offline)</li><li class='mono'>result.json   - findings + risk + ATT&amp;CK coverage + gaps (machine-readable)</li><li class='mono'>findings.csv  - flat triage view for a spreadsheet / SIEM import</li><li class='mono'>raw/bundle.json - the normalized collected data (re-analyzable with -InputPath)</li><li class='mono'>audit.log     - every step the tool took, with timings (JSON lines)</li><li class='mono'>manifest.json - SHA-256 of every output + tool/rule hashes + parameters, written last; the case is then closed</li><li class='mono'>hunt.json / hunt.csv - IOC hits (Invoke-WfxHunt)</li></ul>
+  <div class="sec"><h2>Safety &amp; defensive posture</h2></div><ul class="list safe"><li>Read-only: it changes no settings and executes nothing it finds. It sends no network traffic of its own (remote mode uses WinRM you initiate; -ExposureScan reads the domain SYSVOL share).</li><li>Its only writes are its own case folder (default Desktop\WinForensicX) — use -OutputPath on external media for evidence work. Reading files can update NTFS last-access times.</li><li>Credential exposure is AUDITED, never extracted: it reports THAT a secret is exposed with the value redacted to type + length.</li><li>No LSASS dumping, no SAM/NTDS hash parsing, no DPAPI/browser decryption, no exfiltration.</li><li>Command lines, event messages and file contents are secret-scrubbed at collection time, so the raw bundle is safe to keep and ship.</li></ul>
+  <div class="sec"><h2>Limitations</h2></div><ul class="list warn"><li>Findings are LEADS for an analyst, not verdicts. A finding means &quot;look here,&quot; not &quot;this host is compromised.&quot;</li><li>Read findings alongside the collection gaps: with no process auditing and no Sysmon, &quot;nothing found&quot; mostly means &quot;nothing could be seen&quot; - the report says so.</li><li>It is a TRIAGE tool, not a forensic imager. It does not acquire disk/memory images or carve deleted files.</li><li>Detections are heuristic: expect some false positives and false negatives. Tune with custom rule packs ($env:WFX_RULES) and an allowlist (-AllowlistPath / $env:WFX_ALLOWLIST).</li><li>Two scores: Compromise risk (evidence of attacker activity) and Posture (hardening/visibility gaps). A clean but un-hardened host scores low risk, high posture.</li><li>Only loaded user registry hives (logged-on users) are inspected; event collection is capped per query and caps are reported as gaps.</li><li>Administrator rights are recommended; without them some data is unavailable (recorded as gaps). Remote mode needs WinRM enabled on the target.</li><li>It will not extract, decrypt, or dump secrets - that is a deliberate boundary, not a missing feature.</li><li>The manifest is not signed: record its SHA-256 (printed at the end of each run) out-of-band to make the case tamper-evident.</li></ul>
+  <div class="sec"><h2>Requirements</h2></div><div class="req">Windows PowerShell 5.1 or PowerShell 7+. No external modules. Live collection needs Windows; analysis, re-analysis, hunting in saved cases, timelines, diffs and file triage also run on Linux/macOS (PowerShell 7).</div>
+  <div class="foot">WinForensicX 2.1.0 · generated 2026-11-03 17:23:11Z · self-contained and safe to share.</div>
 </div>
 <script>
 (function(){try{var s=localStorage.getItem('wfx-theme');if(s)document.documentElement.setAttribute('data-theme',s);}catch(e){}

@@ -2,13 +2,19 @@
 # Compatible with Windows PowerShell 5.1 and PowerShell 7+. Analysis helpers here are
 # platform-neutral so analyzers can run (and be tested) on any OS.
 
-$script:WfxVersion = '2.0.0'
+$script:WfxVersion = '2.1.0'
 $script:WfxSeverities = @('Info', 'Low', 'Medium', 'High', 'Critical')
 $script:WfxSeverityWeight = @{ Info = 0; Low = 2; Medium = 5; High = 10; Critical = 20 }
 $script:WfxConfidenceFactor = @{ Low = 0.5; Medium = 0.8; High = 1.0 }
+# Categories that describe hardening / visibility rather than evidence of compromise. They are scored
+# separately (Posture score) so a well-run but un-hardened host is not reported as "compromised".
+$script:WfxPostureCategories = @('Posture', 'Visibility')
 $script:WfxCase = $null
 $script:WfxGaps = New-Object System.Collections.Generic.List[object]
 $script:WfxQuiet = $false
+# Every built-in regex that runs over collected (potentially attacker-controlled) text uses this timeout.
+$script:WfxRegexTimeout = [TimeSpan]::FromMilliseconds(250)
+$script:WfxRxCache = @{}
 
 # ───────────────────────────── platform ─────────────────────────────
 function Test-WfxWindows {
@@ -23,6 +29,60 @@ function Test-WfxAdmin {
         return ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     } catch { return $false }
 }
+
+# ───────────────────────────── safe regex ─────────────────────────────
+function Get-WfxRx {
+    <# Returns a cached Regex with the global match timeout. Use for every pattern applied to collected data. #>
+    param([Parameter(Mandatory)][string]$Pattern, [System.Text.RegularExpressions.RegexOptions]$Options = 'None')
+    $key = "$([int]$Options)|$Pattern"
+    if (-not $script:WfxRxCache.ContainsKey($key)) {
+        $script:WfxRxCache[$key] = New-Object System.Text.RegularExpressions.Regex($Pattern, $Options, $script:WfxRegexTimeout)
+    }
+    $script:WfxRxCache[$key]
+}
+
+function Get-WfxRxMatches {
+    <# All matches of a pattern; on a regex timeout returns what was found so far (never hangs). #>
+    param([string]$Pattern, [AllowEmptyString()][string]$Text)
+    # Emits Match objects to the pipeline (wrap the call in @() to count them).
+    $list = New-Object System.Collections.Generic.List[object]
+    if ([string]::IsNullOrEmpty($Text)) { return }
+    try { foreach ($m in (Get-WfxRx $Pattern).Matches($Text)) { $list.Add($m) } }
+    catch [System.Text.RegularExpressions.RegexMatchTimeoutException] { Write-Verbose "regex timeout: $Pattern" }
+    $list.ToArray()
+}
+
+function Test-WfxRxMatch {
+    param([string]$Pattern, [AllowEmptyString()][string]$Text)
+    if ([string]::IsNullOrEmpty($Text)) { return $false }
+    try { return (Get-WfxRx $Pattern).IsMatch($Text) } catch [System.Text.RegularExpressions.RegexMatchTimeoutException] { return $false }
+}
+
+# ───────────────────────────── time ─────────────────────────────
+function ConvertTo-WfxDateTime {
+    <# Parses a DateTime / ISO-8601 string / legacy "/Date(ms)/" value into a UTC DateTime. $null if unparseable. #>
+    param($Value)
+    if ($null -eq $Value -or "$Value" -eq '') { return $null }
+    if ($Value -is [datetime]) { return $Value.ToUniversalTime() }
+    if ($Value -is [System.DateTimeOffset]) { return $Value.UtcDateTime }
+    $s = [string]$Value
+    $m = [regex]::Match($s, '^/?\\?/?Date\((-?\d+)')
+    if ($m.Success) { return [DateTime]::new(1970, 1, 1, 0, 0, 0, [DateTimeKind]::Utc).AddMilliseconds([double]$m.Groups[1].Value) }
+    $dto = [System.DateTimeOffset]::MinValue
+    if ([System.DateTimeOffset]::TryParse($s, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$dto)) { return $dto.UtcDateTime }
+    return $null
+}
+
+function ConvertTo-WfxUtcString {
+    <# Normalizes any timestamp to an ISO-8601 UTC string ("...Z"). Collectors store ONLY this form, so bundles
+       are identical across PowerShell 5.1 / 7 and re-analysis never shifts a timeline by a timezone. #>
+    param($Value)
+    $d = ConvertTo-WfxDateTime $Value
+    if ($null -eq $d) { return $(if ($null -eq $Value) { '' } else { [string]$Value }) }
+    return $d.ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-WfxUtcNow { (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture) }
 
 # ───────────────────────────── console ─────────────────────────────
 function Write-WfxConsole {
@@ -45,19 +105,21 @@ function Write-WfxSection {
 
 # ───────────────────────────── audit log & gaps ─────────────────────────────
 function Write-WfxLog {
-    <# Appends one JSON line to the case audit log: what the tool did, when, and with what result. #>
+    <# Appends one JSON line to the OPEN case's audit log. Once a case is completed (manifest written) it is
+       closed and nothing is ever appended again — so a later command can never invalidate its manifest. #>
     param([string]$Event, [hashtable]$Data = @{})
-    if (-not $script:WfxCase -or -not $script:WfxCase.Path) { return }
-    $entry = [ordered]@{ time = (Get-Date).ToUniversalTime().ToString('o'); event = $Event }
+    $case = $script:WfxCase
+    if (-not $case -or -not $case.Path -or $case.Closed) { return }
+    $entry = [ordered]@{ time = (Get-WfxUtcNow); event = $Event }
     foreach ($k in $Data.Keys) { $entry[$k] = $Data[$k] }
     try {
         $line = ($entry | ConvertTo-Json -Compress -Depth 5)
-        Add-Content -LiteralPath (Join-Path $script:WfxCase.Path 'audit.log') -Value $line -Encoding UTF8
+        Add-Content -LiteralPath (Join-Path $case.Path 'audit.log') -Value $line -Encoding UTF8
     } catch { Write-Verbose "audit log write failed: $_" }
 }
 
 function Add-WfxGap {
-    <# Records something the tool could not collect (missing privilege, disabled log, error) — shown in the report so absence of findings is never mistaken for absence of evidence. #>
+    <# Records something the tool could not collect or analyze — shown in the report so absence of findings is never mistaken for absence of evidence. #>
     param([string]$Source, [string]$Reason, [string]$Fix = '')
     $script:WfxGaps.Add([pscustomobject]@{ Source = $Source; Reason = $Reason; Fix = $Fix })
     Write-WfxLog -Event 'gap' -Data @{ source = $Source; reason = $Reason }
@@ -88,6 +150,8 @@ function New-WfxFinding {
     .SYNOPSIS Creates a normalized finding. Every analyzer returns these.
     .PARAMETER Id         Stable rule identifier (e.g. LOTL-CERTUTIL-DOWNLOAD). Used for dedupe, tuning and allowlists.
     .PARAMETER Entity     What the finding is about, in a stable form ("process:4412:powershell.exe", "file:C:\x.ps1").
+    .PARAMETER Technique  ATT&CK ids. Anything that is not a well-formed id (T1234 / T1234.567) is dropped, so a
+                          malformed or malicious custom rule pack can't inject markup into reports.
     #>
     param(
         [Parameter(Mandatory)][string]$Id,
@@ -106,7 +170,7 @@ function New-WfxFinding {
     )
     $weight = $script:WfxSeverityWeight[$Severity] * $script:WfxConfidenceFactor[$Confidence]
     $t = $null
-    if ($Time) { try { $t = ([datetime]$Time).ToUniversalTime().ToString('o') } catch { $t = [string]$Time } }
+    if ($Time) { $t = ConvertTo-WfxUtcString $Time }
     [pscustomobject]@{
         PSTypeName     = 'WinForensicX.Finding'
         Id             = $Id
@@ -115,7 +179,7 @@ function New-WfxFinding {
         Confidence     = $Confidence
         Score          = [Math]::Round($weight, 1)
         Category       = $Category
-        Technique      = @($Technique | Where-Object { $_ })
+        Technique      = @($Technique | Where-Object { $_ -and ([string]$_ -match '^T\d{4}(?:\.\d{3})?$') })
         Description    = $Description
         Entity         = $Entity
         Evidence       = $Evidence
@@ -127,7 +191,7 @@ function New-WfxFinding {
 }
 
 function Merge-WfxFinding {
-    <# Dedupes findings by Id + Entity (keeps the highest-scoring one and counts repeats) and sorts by severity. #>
+    <# Dedupes findings by Host + Id + Entity (keeps the highest-scoring one and counts repeats) and sorts by severity. #>
     param([object[]]$Finding)
     $byKey = [ordered]@{}
     foreach ($f in @($Finding | Where-Object { $_ })) {
@@ -137,7 +201,7 @@ function Merge-WfxFinding {
             $prev | Add-Member -NotePropertyName Occurrences -NotePropertyValue ([int]$prev.Occurrences + 1) -Force
             if ($f.Score -gt $prev.Score) { $f | Add-Member -NotePropertyName Occurrences -NotePropertyValue $prev.Occurrences -Force; $byKey[$key] = $f }
         } else {
-            $f | Add-Member -NotePropertyName Occurrences -NotePropertyValue 1 -Force
+            if (-not $f.PSObject.Properties['Occurrences']) { $f | Add-Member -NotePropertyName Occurrences -NotePropertyValue 1 -Force }
             $byKey[$key] = $f
         }
     }
@@ -147,8 +211,10 @@ function Merge-WfxFinding {
 
 function Get-WfxRiskScore {
     <#
-    .SYNOPSIS Host risk 0–100. Combines findings as independent evidence: risk = 1 - Π(1 - wᵢ/40).
+    .SYNOPSIS Score 0–100 over a set of findings. Combines them as independent evidence: risk = 1 - Π(1 - wᵢ/40).
     One high-confidence Critical ≈ 50, two ≈ 75; many Lows can't add up to a Critical.
+    Invoke-WfxAnalyze calls this twice: once over compromise indicators (Risk) and once over
+    hardening/visibility findings (Posture).
     #>
     param([object[]]$Finding)
     $p = 1.0
@@ -161,6 +227,8 @@ function Get-WfxRiskScore {
     [pscustomobject]@{ Score = $score; Level = $level }
 }
 
+function Test-WfxPostureFinding { param($Finding) return ($script:WfxPostureCategories -contains [string]$Finding.Category) }
+
 function Get-WfxSeveritySummary {
     param([object[]]$Finding)
     $o = [ordered]@{}
@@ -168,15 +236,60 @@ function Get-WfxSeveritySummary {
     [pscustomobject]$o
 }
 
+# ───────────────────────────── allowlist ─────────────────────────────
+function Read-WfxAllowlist {
+    <#
+    .SYNOPSIS Loads an allowlist (JSON array) of known-good findings to suppress.
+    Each entry: { "Id": "PERSIST-*", "Entity": "autostart:RunKey:OneDrive", "Host": "*", "Reason": "corporate standard" }.
+    Id/Entity/Host accept -like wildcards; Id is required; a Reason is strongly recommended (it is shown in the report).
+    #>
+    param([string]$Path)
+    if (-not $Path) { return , @() }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Allowlist not found: $Path" }
+    $raw = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+    $entries = foreach ($e in @($raw)) {
+        $id = [string](Get-WfxValue $e 'Id' '')
+        if (-not $id) { continue }
+        [pscustomobject]@{ Id = $id; Entity = [string](Get-WfxValue $e 'Entity' '*'); Host = [string](Get-WfxValue $e 'Host' '*'); Reason = [string](Get-WfxValue $e 'Reason' '') }
+    }
+    , @($entries)
+}
+
+function Split-WfxAllowlisted {
+    <# Splits findings into Kept and Suppressed according to the allowlist. Suppressed findings are never
+       silently dropped — they are reported separately with the matching reason. #>
+    param([object[]]$Finding, [object[]]$Allowlist)
+    $kept = New-Object System.Collections.Generic.List[object]
+    $supp = New-Object System.Collections.Generic.List[object]
+    foreach ($f in @($Finding | Where-Object { $_ })) {
+        $hit = $null
+        foreach ($a in @($Allowlist)) {
+            if ($f.Id -like $a.Id -and [string]$f.Entity -like $a.Entity -and [string]$f.Host -like $a.Host) { $hit = $a; break }
+        }
+        if ($hit) {
+            $supp.Add([pscustomobject]@{ Id = $f.Id; Title = $f.Title; Severity = $f.Severity; Entity = $f.Entity; Host = $f.Host; Reason = $hit.Reason; Rule = "$($hit.Id) / $($hit.Entity)" })
+        } else { $kept.Add($f) }
+    }
+    [pscustomobject]@{ Kept = $kept.ToArray(); Suppressed = $supp.ToArray() }
+}
+
 # ───────────────────────────── text & entropy ─────────────────────────────
 function Get-WfxEntropy {
     <# Shannon entropy (bits per symbol) of a string or byte array. #>
     param([Parameter(Mandatory)][AllowEmptyString()]$InputObject)
     if ($null -eq $InputObject) { return 0.0 }
-    $counts = @{}
     $n = 0
-    if ($InputObject -is [byte[]]) { foreach ($b in $InputObject) { $counts[$b] = 1 + [int]$counts[$b]; $n++ } }
-    else { foreach ($c in ([string]$InputObject).ToCharArray()) { $counts[$c] = 1 + [int]$counts[$c]; $n++ } }
+    if ($InputObject -is [byte[]]) {
+        $counts = New-Object 'int[]' 256
+        foreach ($b in $InputObject) { $counts[$b]++ }
+        $n = $InputObject.Length
+        if ($n -eq 0) { return 0.0 }
+        $h = 0.0
+        foreach ($v in $counts) { if ($v) { $p = $v / $n; $h -= $p * [Math]::Log($p, 2) } }
+        return [Math]::Round($h, 3)
+    }
+    $counts = @{}
+    foreach ($c in ([string]$InputObject).ToCharArray()) { $counts[$c] = 1 + [int]$counts[$c]; $n++ }
     if ($n -eq 0) { return 0.0 }
     $h = 0.0
     foreach ($v in $counts.Values) { $p = $v / $n; $h -= $p * [Math]::Log($p, 2) }
@@ -184,7 +297,7 @@ function Get-WfxEntropy {
 }
 
 function Format-WfxSecret {
-    <# Shows only enough of a secret to identify it: first 4 characters + length. Never the value. #>
+    <# Shows only enough of a secret to identify it: at most 4 leading characters + length. Never the value. #>
     param([AllowEmptyString()][string]$Value)
     if ([string]::IsNullOrEmpty($Value)) { return '' }
     $keep = [Math]::Min(4, [Math]::Floor($Value.Length / 4))
@@ -203,6 +316,9 @@ $script:WfxSecretPatterns = @(
     @{ Name = 'AWS access key id'; Pattern = '(?:AKIA|ASIA)[0-9A-Z]{16}' }
     @{ Name = 'GitHub token'; Pattern = 'gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,}' }
     @{ Name = 'Slack token'; Pattern = 'xox[abprs]-[A-Za-z0-9\-]{10,}' }
+    @{ Name = 'Stripe secret key'; Pattern = '[rs]k_live_[A-Za-z0-9]{20,}' }
+    @{ Name = 'Azure storage key'; Pattern = 'AccountKey=[A-Za-z0-9+/=]{60,}' }
+    @{ Name = 'JSON Web Token'; Pattern = 'eyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}' }
     @{ Name = 'Private key block'; Pattern = '-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----' }
 )
 
@@ -215,7 +331,7 @@ function Find-WfxSecret {
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $seen = @{}
         foreach ($p in $script:WfxSecretPatterns) {
-            foreach ($m in [regex]::Matches($lines[$i], $p.Pattern)) {
+            foreach ($m in (Get-WfxRxMatches $p.Pattern $lines[$i])) {
                 if ($seen.ContainsKey($m.Index)) { continue }   # one label per match position
                 $seen[$m.Index] = $true
                 $out.Add([pscustomobject]@{ Type = $p.Name; Line = $i + 1; Redacted = (Format-WfxSecret $m.Value) })
@@ -225,23 +341,75 @@ function Find-WfxSecret {
     , $out.ToArray()
 }
 
+$script:WfxRedactRules = @(
+    # key=value / "key value" credentials. The key name may be embedded in a larger identifier
+    # (aws_secret_access_key, db-password, MYSQL_PWD), so allow an identifier prefix/suffix.
+    , @('(?i)([A-Za-z0-9_.\-]{0,40}(?:password|passwd|pwd|secret|api[_-]?key|apikey|client[_-]?secret|access[_-]?key|token)[A-Za-z0-9_.\-]{0,20})(\s*[:=]\s*|\s+)("[^"]*"|''[^'']*''|[^\s;,&]+)', '$1$2***')
+    # mysql/openssl-style concatenated password flag: -pSecret  (but not a lone -p)
+    , @('(?i)(\s-p)(?!assword\b)([^\s]{2,})', '$1***')
+    , @('(?i)(-(?:Password|Pass|Secret|Token|Key)\s+)("[^"]*"|''[^'']*''|\S+)', '$1***')
+    , @('(?i)(/p(?:ass(?:word)?)?:)(\S+)', '$1***')
+    , @('(?i)(\bnet1?(?:\.exe)?\s+user\s+[^\s/]+\s+)([^\s/][^\s]*)', '$1***')
+    , @('(?i)(\bschtasks[^\n]*\s/rp\s+)(\S+)', '$1***')
+    , @('(?i)(https?://[^:/\s]+:)([^@\s]+)(@)', '$1***$3')
+)
+
 function Protect-WfxText {
-    <# Redacts secrets and key=value credentials in free text before it is displayed or written to a report. #>
+    <# Redacts secrets and key=value credentials in free text before it is stored, displayed or reported.
+       FAIL-CLOSED: if any redaction regex times out on hostile input, the text is withheld entirely. #>
     param([AllowEmptyString()][string]$Text)
     if ([string]::IsNullOrEmpty($Text)) { return $Text }
     $t = $Text
-    foreach ($p in $script:WfxSecretPatterns) { $t = [regex]::Replace($t, $p.Pattern, { param($m) Format-WfxSecret $m.Value }) }
-    # key=value / "key value" credentials. The key name may be embedded in a larger identifier
-    # (aws_secret_access_key, db-password, MYSQL_PWD), so allow an identifier prefix/suffix.
-    $t = [regex]::Replace($t, '(?i)([A-Za-z0-9_.\-]{0,40}(?:password|passwd|pwd|secret|api[_-]?key|apikey|client[_-]?secret|access[_-]?key|token)[A-Za-z0-9_.\-]{0,20})(\s*[:=]\s*|\s+)("[^"]*"|''[^'']*''|[^\s;,&]+)', '$1$2***')
-    # mysql/openssl-style concatenated password flag: -pSecret  (but not a lone -p)
-    $t = [regex]::Replace($t, '(?i)(\s-p)(?!assword\b)([^\s]{2,})', '$1***')
-    $t = [regex]::Replace($t, '(?i)(-(?:Password|Pass|Secret|Token|Key)\s+)("[^"]*"|''[^'']*''|\S+)', '$1***')
-    $t = [regex]::Replace($t, '(?i)(/p(?:ass(?:word)?)?:)(\S+)', '$1***')
-    $t = [regex]::Replace($t, '(?i)(\bnet1?\s+user\s+[^\s/]+\s+)([^\s/][^\s]*)', '$1***')
-    $t = [regex]::Replace($t, '(?i)(\bschtasks[^\n]*\s/rp\s+)(\S+)', '$1***')
-    $t = [regex]::Replace($t, '(?i)(https?://[^:/\s]+:)([^@\s]+)(@)', '$1***$3')
+    try {
+        foreach ($p in $script:WfxSecretPatterns) { $t = (Get-WfxRx $p.Pattern).Replace($t, [System.Text.RegularExpressions.MatchEvaluator] { param($m) Format-WfxSecret $m.Value }) }
+        foreach ($r in $script:WfxRedactRules) { $t = (Get-WfxRx $r[0]).Replace($t, $r[1]) }
+    } catch [System.Text.RegularExpressions.RegexMatchTimeoutException] {
+        return "[content withheld: redaction timed out on $($Text.Length) chars]"
+    }
     return $t
+}
+
+# ───────────────────────────── encoded commands ─────────────────────────────
+function ConvertFrom-WfxBase64Text {
+    <# Decodes base64 to text WITHOUT executing anything. Tries UTF-16LE (PowerShell -EncodedCommand), then
+       gzip/deflate-wrapped payloads, then UTF-8. Returns $null if it isn't sensibly decodable. #>
+    param([string]$Base64, [int]$MaxBytes = 1048576)
+    if ([string]::IsNullOrWhiteSpace($Base64)) { return $null }
+    $b = ($Base64 -replace '\s', '').Trim('"', "'")
+    if ($b.Length -lt 8 -or $b.Length -gt ($MaxBytes * 2)) { return $null }
+    $b = $b.PadRight($b.Length + ((4 - $b.Length % 4) % 4), '=')
+    try { $bytes = [Convert]::FromBase64String($b) } catch { return $null }
+    $printable = { param($s) if (-not $s) { return 0 }; @($s.ToCharArray() | Where-Object { [int]$_ -ge 32 -or $_ -in "`r", "`n", "`t" }).Count / [double]$s.Length }
+    # gzip (1f 8b) or raw deflate commonly wrapped inside "FromBase64String | GzipStream" stagers
+    if ($bytes.Length -gt 2 -and $bytes[0] -eq 0x1f -and $bytes[1] -eq 0x8b) {
+        try {
+            $ms = New-Object IO.MemoryStream(, $bytes)
+            $gz = New-Object IO.Compression.GzipStream($ms, [IO.Compression.CompressionMode]::Decompress)
+            $sr = New-Object IO.StreamReader($gz)
+            $buf = New-Object char[] $MaxBytes; $n = $sr.Read($buf, 0, $MaxBytes); $sr.Dispose()
+            return ('[gzip] ' + (New-Object string($buf, 0, $n)))
+        } catch {}
+    }
+    # UTF-16LE of ASCII text has a 0x00 in (almost) every odd byte — that is the -EncodedCommand case.
+    $zeroOdd = 0; for ($i = 1; $i -lt $bytes.Length; $i += 2) { if ($bytes[$i] -eq 0) { $zeroOdd++ } }
+    $u16ok = $bytes.Length -ge 4 -and ($bytes.Length % 2) -eq 0
+    if ($u16ok -and $zeroOdd -ge ($bytes.Length / 2) * 0.6) {
+        $u16 = [Text.Encoding]::Unicode.GetString($bytes)
+        if ((& $printable $u16) -ge 0.95) { return $u16 }
+    }
+    $u8 = [Text.Encoding]::UTF8.GetString($bytes)
+    if ((& $printable $u8) -ge 0.95) { return $u8 }
+    if ($u16ok) { $u16 = [Text.Encoding]::Unicode.GetString($bytes); if ((& $printable $u16) -ge 0.95) { return $u16 } }
+    return $null
+}
+
+function Get-WfxEncodedCommandPayload {
+    <# Extracts and decodes the -EncodedCommand / -enc / -e argument of a PowerShell command line. Text only. #>
+    param([AllowEmptyString()][string]$CommandLine)
+    if ([string]::IsNullOrWhiteSpace($CommandLine)) { return $null }
+    $m = [regex]::Match($CommandLine, '(?i)(?:^|\s)[-/](?:e|ec|en|enc|enco|encod|encode|encoded|encodedc|encodedco|encodedcom|encodedcomm|encodedcomma|encodedcomman|encodedcommand)\s+["'']?([A-Za-z0-9+/=]{8,})')
+    if (-not $m.Success) { return $null }
+    ConvertFrom-WfxBase64Text $m.Groups[1].Value
 }
 
 # ───────────────────────────── paths & command lines ─────────────────────────────
@@ -250,6 +418,8 @@ function Get-WfxImagePath {
     param([AllowEmptyString()][string]$CommandLine)
     if ([string]::IsNullOrWhiteSpace($CommandLine)) { return '' }
     $c = [Environment]::ExpandEnvironmentVariables($CommandLine.Trim())
+    $c = $c -replace '^\\\?\?\\', ''
+    if ($env:SystemRoot) { $c = $c -replace '^(?i)\\SystemRoot\\', "$env:SystemRoot\" }
     if ($c.StartsWith('"')) {
         $end = $c.IndexOf('"', 1)
         if ($end -gt 1) { return $c.Substring(1, $end - 1) }
@@ -270,14 +440,28 @@ function Test-WfxUserWritablePath {
     param([AllowEmptyString()][string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
     $p = $Path.ToLowerInvariant() -replace '/', '\'
+    if (Test-WfxTrustedVendorPath $p) { return $false }
     return [bool]($p -match '\\appdata\\|\\temp\\|\\tmp\\|\\downloads\\|\\desktop\\|\\documents\\|\\users\\public\\|\\programdata\\|\\windows\\temp\\|\\windows\\tasks\\|\\windows\\tracing\\|\\perflogs\\|\\\$recycle\.bin\\|\\recycler\\|\\inetpub\\temp|\\windows\\debug\\|\\spool\\drivers\\color\\|\\music\\|\\videos\\|\\pictures\\' -or
         $p -match '^[a-z]:\\[^\\]+\.(exe|dll|ps1|bat|vbs|js|hta)$')
+}
+
+function Test-WfxTrustedVendorPath {
+    <# Admin-only-writable vendor locations that happen to sit under ProgramData (Defender's platform folder,
+       Windows Defender ATP). These are ACL-protected, so treating them as user-writable only creates noise. #>
+    param([AllowEmptyString()][string]$Path)
+    if (-not $Path) { return $false }
+    return [bool]($Path -match '(?i)\\programdata\\microsoft\\(?:windows defender(?: advanced threat protection)?|defender)\\(?:platform|scans)?\\?')
 }
 
 function Test-WfxSystemPath {
     param([AllowEmptyString()][string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
-    return [bool]($Path -match '(?i)^[a-z]:\\windows\\(system32|syswow64|winsxs)\\')
+    return [bool]($Path -match '(?i)^(?:[a-z]:)?\\windows\\(system32|syswow64|winsxs)\\' -or $Path -match '(?i)^\\systemroot\\system32\\')
+}
+
+function Test-WfxTrustedSignature {
+    param([AllowEmptyString()][string]$Status)
+    return ($Status -in @('Valid', 'Signed', 'Trusted'))
 }
 
 function Test-WfxPrivateIp {
@@ -301,7 +485,7 @@ function Get-WfxValue {
     <# Reads a property that may not exist without tripping strict mode. #>
     param($Object, [string]$Name, $Default = $null)
     if ($null -eq $Object) { return $Default }
-    if ($Object -is [hashtable] -or $Object -is [System.Collections.Specialized.OrderedDictionary]) {
+    if ($Object -is [System.Collections.IDictionary]) {
         if ($Object.Contains($Name)) { return $Object[$Name] } else { return $Default }
     }
     $p = $Object.PSObject.Properties[$Name]
@@ -309,36 +493,85 @@ function Get-WfxValue {
     return $Default
 }
 
-# ───────────────────────────── case management ─────────────────────────────
-function New-WfxCase {
-    <# Creates the case folder (outputs, raw evidence, audit log) and records who ran what, where, when. #>
-    param([string]$OutputPath = '', [string]$Name = '', [string]$HostName = '')
-    if (-not $HostName) { $HostName = [Environment]::MachineName }
-    if (-not $OutputPath) {
-        $base = if (Test-WfxWindows) { Join-Path ([Environment]::GetFolderPath('Desktop')) 'WinForensicX' } else { Join-Path $HOME 'WinForensicX' }
-        if (-not $base -or $base -eq 'WinForensicX') { $base = Join-Path (Get-Location) 'WinForensicX' }
-        $OutputPath = $base
+# ───────────────────────────── tool integrity ─────────────────────────────
+function Get-WfxToolIntegrity {
+    <# SHA-256 of every file the tool loaded (module files or the single-file build) plus any custom rule
+       packs, so a manifest records exactly which code and which rules produced a case. #>
+    $files = New-Object System.Collections.Generic.List[string]
+    if ($script:WfxSingleFilePath -and (Test-Path -LiteralPath $script:WfxSingleFilePath)) { $files.Add($script:WfxSingleFilePath) }
+    elseif ($script:WfxModuleRoot -and (Test-Path -LiteralPath $script:WfxModuleRoot)) {
+        Get-ChildItem -LiteralPath $script:WfxModuleRoot -Recurse -File -Include *.ps1, *.psm1, *.psd1, *.json -ErrorAction SilentlyContinue |
+            Sort-Object FullName | ForEach-Object { $files.Add($_.FullName) }
     }
+    foreach ($src in @($script:WfxRuleSources)) { if ($src -and -not $files.Contains($src)) { $files.Add($src) } }
+    $entries = foreach ($f in $files) {
+        try { [ordered]@{ file = (Get-WfxLeaf $f); path = $f; sha256 = (Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLowerInvariant() } } catch {}
+    }
+    $joined = (@($entries) | ForEach-Object { "$($_.path)|$($_.sha256)" }) -join "`n"
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $combined = -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($joined)) | ForEach-Object { $_.ToString('x2') })
+    [ordered]@{ version = $script:WfxVersion; combinedSha256 = $combined; files = @($entries) }
+}
+
+# ───────────────────────────── case management ─────────────────────────────
+function Get-WfxDefaultOutputRoot {
+    if (Test-WfxWindows) {
+        $d = [Environment]::GetFolderPath('Desktop')
+        if ($d) { return (Join-Path $d 'WinForensicX') }
+    }
+    if ($HOME) { return (Join-Path $HOME 'WinForensicX') }
+    return (Join-Path (Get-Location) 'WinForensicX')
+}
+
+function New-WfxCase {
+    <# Creates the case folder (outputs, raw evidence, audit log) and records who ran what, where, when, how. #>
+    param([string]$OutputPath = '', [string]$Name = '', [string]$HostName = '', [string]$Mode = 'local', [hashtable]$Parameters = @{})
+    if ($script:WfxCase -and -not $script:WfxCase.Closed) { Write-Verbose "Closing previous unfinished case $($script:WfxCase.Path)"; $script:WfxCase.Closed = $true }
+    if (-not $HostName) { $HostName = [Environment]::MachineName }
+    if (-not $OutputPath) { $OutputPath = Get-WfxDefaultOutputRoot }
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss') + 'Z'
     $safeHost = $HostName -replace '[^A-Za-z0-9._-]', '_'
     $folder = if ($Name) { ($Name -replace '[^A-Za-z0-9._-]', '_') + "_$safeHost`_$stamp" } else { "WFX_$safeHost`_$stamp" }
     $path = Join-Path $OutputPath $folder
+    $n = 1; while (Test-Path -LiteralPath $path) { $path = Join-Path $OutputPath "$folder-$n"; $n++ }
     New-Item -ItemType Directory -Path (Join-Path $path 'raw') -Force | Out-Null
+    $full = (Resolve-Path -LiteralPath $path).Path
+    $onSystem = $false
+    if ((Test-WfxWindows) -and $env:SystemDrive -and $full.StartsWith($env:SystemDrive, [StringComparison]::OrdinalIgnoreCase) -and $Mode -in @('local', 'evidence', 'monitor')) { $onSystem = $true }
     $script:WfxCase = [pscustomobject]@{
-        Id          = [guid]::NewGuid().ToString()
-        Name        = $Name
-        Path        = (Resolve-Path $path).Path
-        Host        = $HostName
-        StartedUtc  = (Get-Date).ToUniversalTime().ToString('o')
-        Operator    = [Environment]::UserName
+        Id           = [guid]::NewGuid().ToString()
+        Name         = $Name
+        Path         = $full
+        Host         = $HostName
+        Mode         = $Mode
+        StartedUtc   = Get-WfxUtcNow
+        Operator     = [Environment]::UserName
         OperatorHost = [Environment]::MachineName
-        Admin       = (Test-WfxAdmin)
-        PSVersion   = $PSVersionTable.PSVersion.ToString()
-        ToolVersion = $script:WfxVersion
+        Admin        = (Test-WfxAdmin)
+        PSVersion    = $PSVersionTable.PSVersion.ToString()
+        PSEdition    = [string]$PSVersionTable.PSEdition
+        ToolVersion  = $script:WfxVersion
+        Parameters   = $Parameters
+        OutputOnSystemDrive = $onSystem
+        Sources      = @()
+        Closed       = $false
     }
     Clear-WfxGap
-    Write-WfxLog -Event 'case-start' -Data @{ case = $script:WfxCase.Id; host = $HostName; operator = $script:WfxCase.Operator; admin = $script:WfxCase.Admin; ps = $script:WfxCase.PSVersion; tool = $script:WfxVersion }
+    Write-WfxLog -Event 'case-start' -Data @{ case = $script:WfxCase.Id; host = $HostName; mode = $Mode; operator = $script:WfxCase.Operator; admin = $script:WfxCase.Admin; ps = $script:WfxCase.PSVersion; tool = $script:WfxVersion; parameters = $Parameters }
+    if ($onSystem) {
+        Write-WfxConsole 'Note: the case is being written to the system drive of the host under investigation. For evidence work prefer -OutputPath on external/network media.' -Kind Warn
+        Write-WfxLog -Event 'warning' -Data @{ message = 'output written to the evidence host system drive' }
+    }
     return $script:WfxCase
+}
+
+function Add-WfxCaseSource {
+    <# Records an input the case was derived from (e.g. the source bundle of a re-analysis) with its SHA-256. #>
+    param([string]$Path, [string]$Role = 'input')
+    if (-not $script:WfxCase -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    $h = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    $script:WfxCase.Sources = @($script:WfxCase.Sources) + [pscustomobject]@{ role = $Role; path = $Path; sha256 = $h }
+    Write-WfxLog -Event 'source' -Data @{ role = $Role; path = $Path; sha256 = $h }
 }
 
 function Save-WfxJson {
@@ -348,10 +581,12 @@ function Save-WfxJson {
 }
 
 function Complete-WfxCase {
-    <# Writes manifest.json with SHA-256 of every output file (chain of custody) and closes the audit log. #>
-    if (-not $script:WfxCase) { return }
-    Write-WfxLog -Event 'case-end' -Data @{ case = $script:WfxCase.Id }
-    $root = $script:WfxCase.Path
+    <# Writes manifest.json — SHA-256 of every output, the tool/rule hashes, parameters and sources — then
+       CLOSES the case so nothing can be appended afterwards. Returns the manifest path. #>
+    $case = $script:WfxCase
+    if (-not $case -or $case.Closed) { return }
+    Write-WfxLog -Event 'case-end' -Data @{ case = $case.Id }
+    $root = $case.Path
     $files = Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object { $_.Name -ne 'manifest.json' } | Sort-Object FullName
     $entries = foreach ($f in $files) {
         [ordered]@{
@@ -361,9 +596,27 @@ function Complete-WfxCase {
         }
     }
     $manifest = [ordered]@{
-        case = $script:WfxCase.Id; host = $script:WfxCase.Host; tool = "WinForensicX $script:WfxVersion"
-        operator = $script:WfxCase.Operator; started = $script:WfxCase.StartedUtc; completed = (Get-Date).ToUniversalTime().ToString('o')
-        files = @($entries)
+        schema       = 'winforensicx.manifest/2'
+        case         = $case.Id
+        name         = $case.Name
+        host         = $case.Host
+        mode         = $case.Mode
+        tool         = "WinForensicX $script:WfxVersion"
+        toolIntegrity = (Get-WfxToolIntegrity)
+        operator     = $case.Operator
+        operatorHost = $case.OperatorHost
+        admin        = $case.Admin
+        powershell   = "$($case.PSVersion) $($case.PSEdition)"
+        parameters   = $case.Parameters
+        sources      = @($case.Sources)
+        started      = $case.StartedUtc
+        completed    = (Get-WfxUtcNow)
+        files        = @($entries)
+        note         = 'Hashes prove these files are unchanged relative to this manifest. The manifest itself is not signed: record its SHA-256 out-of-band (ticket, evidence log) or sign it to make it tamper-evident.'
     }
-    Save-WfxJson -InputObject $manifest -Path (Join-Path $root 'manifest.json')
+    $mp = Join-Path $root 'manifest.json'
+    Save-WfxJson -InputObject $manifest -Path $mp -Depth 8
+    $case.Closed = $true
+    $script:WfxCase = $null
+    return $mp
 }

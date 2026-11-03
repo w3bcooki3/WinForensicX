@@ -1,6 +1,6 @@
 {
   "name": "Windows event-log detections (Sigma-lite)",
-  "version": "2026.10",
+  "version": "2026.11",
   "rules": [
     {
       "id": "EVT-4625-SPRAY",
@@ -11,7 +11,6 @@
       "eventIds": [
         4625
       ],
-      "pattern": null,
       "fields": [
         "TargetUserName",
         "IpAddress"
@@ -40,7 +39,6 @@
         4624,
         4625
       ],
-      "pattern": null,
       "fields": [
         "TargetUserName",
         "IpAddress"
@@ -59,32 +57,6 @@
       "perEvent": false
     },
     {
-      "id": "EVT-4672-SENSITIVE",
-      "title": "Sensitive privileges assigned at logon (admin-equivalent)",
-      "logs": [
-        "Security"
-      ],
-      "eventIds": [
-        4672
-      ],
-      "pattern": null,
-      "fields": [
-        "SubjectUserName"
-      ],
-      "technique": [
-        "T1078"
-      ],
-      "severity": "Low",
-      "confidence": "Low",
-      "description": "A logon was granted sensitive privileges (effectively admin). Normal for admins and services; useful as timeline context.",
-      "recommendation": "Correlate with the matching 4624 and confirm the account is meant to have these rights.",
-      "tests": {
-        "match": [],
-        "nomatch": []
-      },
-      "perEvent": false
-    },
-    {
       "id": "EVT-1102-CLEARED",
       "title": "Security event log cleared",
       "logs": [
@@ -93,7 +65,6 @@
       "eventIds": [
         1102
       ],
-      "pattern": null,
       "fields": [
         "SubjectUserName"
       ],
@@ -118,7 +89,6 @@
       "eventIds": [
         104
       ],
-      "pattern": null,
       "fields": [
         "SubjectUserName"
       ],
@@ -239,7 +209,7 @@
       }
     },
     {
-      "id": "EVT-4104-SUSPICIOUS-CEARED",
+      "id": "EVT-4104-HISTORY-TAMPER",
       "title": "PowerShell logging was reduced or disabled",
       "logs": [
         "Microsoft-Windows-PowerShell/Operational"
@@ -272,7 +242,6 @@
       "eventIds": [
         4720
       ],
-      "pattern": null,
       "fields": [
         "TargetUserName"
       ],
@@ -344,16 +313,14 @@
       }
     },
     {
-      "id": "EVT-4698-DISABLE-DEFENDER",
-      "title": "Defender protection events",
+      "id": "EVT-DEFENDER-CONFIG-CHANGE",
+      "title": "Microsoft Defender protection disabled or configuration changed",
       "logs": [
         "Microsoft-Windows-Windows Defender/Operational"
       ],
       "eventIds": [
         5001,
-        5007,
-        1116,
-        1117
+        5007
       ],
       "pattern": "(?i)disabled|turned off|exclusion|tamper",
       "fields": [
@@ -380,7 +347,6 @@
       "eventIds": [
         4624
       ],
-      "pattern": null,
       "fields": [
         "LogonType",
         "IpAddress",
@@ -399,6 +365,164 @@
         "nomatch": []
       },
       "perEvent": false
+    },
+    {
+      "id": "EVT-DEFENDER-DETECTION",
+      "title": "Microsoft Defender detected malware",
+      "logs": [
+        "Microsoft-Windows-Windows Defender/Operational"
+      ],
+      "eventIds": [
+        1116,
+        1117
+      ],
+      "fields": [
+        "Threat Name",
+        "Path",
+        "Process Name",
+        "Detection User"
+      ],
+      "technique": [],
+      "severity": "High",
+      "confidence": "High",
+      "description": "Microsoft Defender reported a malware detection (1116) or an action taken on one (1117). The file was seen on this host; the action may or may not have succeeded.",
+      "recommendation": "Check the action result (1117 / Protection history), find how the file arrived (parent process, browser download, email) and whether it ran.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-SYSMON-1-LOLBIN",
+      "title": "Command-line tradecraft in Sysmon process creation",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        1
+      ],
+      "pattern": "__lotl__",
+      "fields": [
+        "Image",
+        "CommandLine",
+        "ParentImage"
+      ],
+      "technique": [],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "Runs the command-line rule pack over Sysmon Event 1 (process creation).",
+      "recommendation": "See the matched rule.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-SYSMON-8-LSASS-THREAD",
+      "title": "Remote thread created in LSASS (Sysmon 8)",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        8
+      ],
+      "pattern": "(?i)\\\\lsass\\.exe\\b",
+      "fields": [
+        "TargetImage",
+        "SourceImage"
+      ],
+      "technique": [
+        "T1055",
+        "T1003.001"
+      ],
+      "severity": "Critical",
+      "confidence": "Medium",
+      "description": "A process created a thread inside LSASS — a code-injection technique used to steal credentials.",
+      "recommendation": "Identify the source process, preserve it, and treat credentials on this host as exposed.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-SYSMON-10-LSASS-ACCESS",
+      "title": "Suspicious handle opened to LSASS (Sysmon 10)",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        10
+      ],
+      "pattern": "(?i)\\\\lsass\\.exe\\s+\\S.*\\s0x(?:1010|1410|1438|143a|1fffff|1f3fff|1f1fff|40)\\b",
+      "exclude": "(?i)\\\\(?:MsMpEng|MsSense|SenseIR|csrss|wininit|svchost|lsm|wmiprvse|vmtoolsd|taskmgr|procexp64|procexp|MRT|smartscreen)\\.exe",
+      "fields": [
+        "TargetImage",
+        "SourceImage",
+        "GrantedAccess"
+      ],
+      "technique": [
+        "T1003.001"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A non-system process opened LSASS with memory-read access rights typical of credential-dumping tools.",
+      "recommendation": "Identify the source process and whether a dump file was written.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-SYSMON-13-RUNKEY",
+      "title": "Run key set (Sysmon 13)",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        13
+      ],
+      "pattern": "(?i)\\\\currentversion\\\\run(?:once)?\\\\",
+      "fields": [
+        "TargetObject",
+        "Details",
+        "Image"
+      ],
+      "technique": [
+        "T1547.001"
+      ],
+      "severity": "Low",
+      "confidence": "Low",
+      "description": "A Run/RunOnce autostart value was written. Many installers do this; review the program it points at.",
+      "recommendation": "Check the value data and the writing process.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
+    },
+    {
+      "id": "EVT-4740-LOCKOUT",
+      "title": "Account locked out",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4740
+      ],
+      "fields": [
+        "TargetUserName",
+        "TargetDomainName"
+      ],
+      "technique": [
+        "T1110"
+      ],
+      "severity": "Low",
+      "confidence": "Medium",
+      "description": "An account was locked out after repeated failed logons — context for password guessing.",
+      "recommendation": "Correlate with 4625 failures and their source.",
+      "tests": {
+        "match": [],
+        "nomatch": []
+      }
     }
   ]
 }

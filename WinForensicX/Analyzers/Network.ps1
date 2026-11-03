@@ -1,10 +1,10 @@
-# Network and DNS analyzers. Pure functions over normalized data.
+﻿# Network and DNS analyzers. Pure functions over normalized data.
 #   Connection: Protocol, LocalAddress, LocalPort, RemoteAddress, RemotePort, State, Pid, Process
 #   DnsEntry:   Name, Type, Data, (optional) Count
 #   Beacon samples: { Remote, Times[] } (connection timestamps to one destination)
 
 function Invoke-WfxNetworkAnalyzer {
-    param([object[]]$Connection, [string]$HostName = '')
+    param([object[]]$Connection, [string]$HostName = '', [hashtable]$DnsMap = @{})
     $findings = New-Object System.Collections.Generic.List[object]
     $conns = @($Connection | Where-Object { $_ })
     if ($conns.Count -eq 0) { return , $findings.ToArray() }
@@ -14,24 +14,32 @@ function Invoke-WfxNetworkAnalyzer {
     $tunnelHosts = @($dns.tunnelDomains)
     $aiPorts = @($ai.runtimePorts)
 
-    # Listeners on all interfaces (0.0.0.0 / ::) for non-standard ports.
-    $commonListen = @(80, 443, 135, 139, 445, 3389, 5985, 5986, 53, 88, 389, 636, 464, 3268, 3269, 25, 110, 143, 993, 995, 1433, 3306, 5432, 22)
+    # Listeners on all interfaces (0.0.0.0 / ::) for non-standard ports. Default Windows listeners are a
+    # baseline, not a finding: well-known service ports, and the RPC dynamic range (49152-65535) when owned by
+    # core Windows processes (lsass, wininit, services, spoolsv, svchost, System).
+    $commonListen = @(80, 443, 135, 139, 445, 3389, 5985, 5986, 47001, 53, 88, 389, 636, 464, 3268, 3269, 25, 110, 143, 993, 995, 1433, 3306, 5432, 22,
+        5040, 7680, 5357, 5358, 2869, 1801, 2103, 2105, 2107, 9389, 5722, 593, 6602)
+    $coreProcs = @('system', 'svchost', 'lsass', 'wininit', 'services', 'spoolsv', 'svchost.exe', 'lsass.exe', 'wininit.exe', 'services.exe', 'spoolsv.exe', 'dns', 'dns.exe', 'ismserv', 'ntfrs', 'dfsrs', 'dfsrs.exe')
+    $seenListen = @{}
     foreach ($c in $conns) {
         $state = [string](Get-WfxValue $c 'State' '')
         $laddr = [string](Get-WfxValue $c 'LocalAddress' '')
         $lport = [int](Get-WfxValue $c 'LocalPort' 0)
         $proc = [string](Get-WfxValue $c 'Process' '')
         $pid2 = Get-WfxValue $c 'Pid' '?'
-        if ($state -match 'Listen' -and ($laddr -eq '0.0.0.0' -or $laddr -eq '::' -or $laddr -eq '[::]' -or $laddr -eq '*')) {
-            if ($commonListen -notcontains $lport) {
+        if ($state -match '^Listen' -and ($laddr -eq '0.0.0.0' -or $laddr -eq '::' -or $laddr -eq '[::]' -or $laddr -eq '*')) {
+            $isCoreDynamic = ($lport -ge 49152 -and $coreProcs -contains $proc.ToLowerInvariant())
+            $lk = "${lport}|$pid2"   # one finding per port+process, not one per address family
+            if ($commonListen -notcontains $lport -and -not $isCoreDynamic -and -not $seenListen.ContainsKey($lk)) {
+                $seenListen[$lk] = $true
                 $isAi = $aiPorts -contains $lport
                 $findings.Add((New-WfxFinding -Id ($(if ($isAi) { 'AI-OLLAMA-EXPOSED' } else { 'NET-LISTENER-EXPOSED' })) `
                             -Title ($(if ($isAi) { "Local AI runtime API exposed on all interfaces (port $lport)" } else { "Process listening on all interfaces on non-standard port $lport" })) `
-                            -Severity 'Medium' -Confidence ($(if ($isAi) { 'Medium' } else { 'Low' })) -Category 'Network' `
+                            -Severity ($(if ($isAi) { 'Medium' } else { 'Low' })) -Confidence ($(if ($isAi) { 'Medium' } else { 'Low' })) -Category 'Network' `
                             -Technique @('T1133') `
                             -Description ($(if ($isAi) { "A local AI model runtime is listening on 0.0.0.0:$lport. Its API is usually unauthenticated, so anyone who can reach the port can use the model and run it at this host's expense." } else { "A process is listening for connections from any network on an unusual port. Confirm it is an expected service and not a backdoor or exposed dev server." })) `
                             -Recommendation ($(if ($isAi) { "Bind the runtime to 127.0.0.1 and restrict the port with the firewall." } else { "Identify the process and confirm the service is intended to be network-reachable." })) `
-                            -Entity "listen:${laddr}:$lport" -HostName $HostName -Source 'network' `
+                            -Entity "listen:${lport}:$proc" -HostName $HostName -Source 'network' `
                             -Evidence ([ordered]@{ Pid = $pid2; Process = $proc; Local = "${laddr}:$lport"; Protocol = (Get-WfxValue $c 'Protocol' 'TCP') })))
             }
         }
@@ -41,7 +49,9 @@ function Invoke-WfxNetworkAnalyzer {
         $rport = [int](Get-WfxValue $c 'RemotePort' 0)
         if ($state -match 'Establish' -and $raddr -and -not (Test-WfxPrivateIp $raddr)) {
             $rhost = [string](Get-WfxValue $c 'RemoteHost' '')
-            $tun = $tunnelHosts | Where-Object { $rhost -and $rhost.ToLowerInvariant().EndsWith($_) }
+            if (-not $rhost -and $DnsMap.ContainsKey($raddr)) { $rhost = (@($DnsMap[$raddr]) -join ',') }
+            $rnames = @($rhost -split ',' | Where-Object { $_ } | ForEach-Object { $_.Trim().TrimEnd('.').ToLowerInvariant() })
+            $tun = @($tunnelHosts | Where-Object { $t = $_.TrimStart('.').ToLowerInvariant(); @($rnames | Where-Object { $_ -eq $t -or $_.EndsWith(".$t") }).Count }) | Select-Object -First 1
             if ($tun) {
                 $findings.Add((New-WfxFinding -Id 'NET-TUNNEL-SERVICE' -Title "Connection to a tunneling service ($tun)" `
                             -Severity 'High' -Confidence 'Medium' -Category 'Network' -Technique @('T1572', 'T1090') `
@@ -60,7 +70,7 @@ function Invoke-WfxNetworkAnalyzer {
             }
             # A non-browser process talking to an AI provider API (billable key use / possible agent exfil path).
             $rhostL = $rhost.ToLowerInvariant()
-            if ($rhost -and ($ai.apiDomains | Where-Object { $rhostL -like "*$_*" })) {
+            if ($rhost -and ($ai.apiDomains | Where-Object { $d = $_.ToLowerInvariant(); @($rnames | Where-Object { $_ -eq $d -or $_.EndsWith(".$d") }).Count })) {
                 $leaf = (Get-WfxLeaf $proc).ToLowerInvariant()
                 if ($leaf -and $leaf -notin @('chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe', 'opera.exe')) {
                     $findings.Add((New-WfxFinding -Id 'AI-API-NONBROWSER' -Title "Non-browser process contacting an AI provider API: $leaf" `
@@ -97,7 +107,7 @@ function Invoke-WfxDnsAnalyzer {
                         -Recommendation "Check the domain's reputation and which process resolved it." `
                         -Entity "dns:$fqdn" -HostName $HostName -Source 'dns' -Evidence ([ordered]@{ Name = $fqdn; TLD = $tld })))
         }
-        if ($dns.tunnelDomains | Where-Object { $fqdn.EndsWith($_) }) {
+        if ($dns.tunnelDomains | Where-Object { $t = $_.TrimStart('.').ToLowerInvariant(); $fqdn -eq $t -or $fqdn.EndsWith(".$t") }) {
             $findings.Add((New-WfxFinding -Id 'DNS-TUNNEL-SERVICE' -Title "Lookup of a tunneling service: $fqdn" `
                         -Severity 'Medium' -Confidence 'Medium' -Category 'DNS' -Technique @('T1572') `
                         -Description "A tunneling/relay service domain was resolved. $($dns.tunnelNote)" `

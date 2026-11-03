@@ -1,0 +1,20 @@
+[
+  {
+    "Id": "PERSIST-RUNKEY-USERPATH-SIGNED",
+    "Entity": "autostart:RunKey:OneDrive",
+    "Host": "*",
+    "Reason": "Microsoft OneDrive per-user install"
+  },
+  {
+    "Id": "NET-LISTENER-EXPOSED",
+    "Entity": "listen:8080:java*",
+    "Host": "BUILD-*",
+    "Reason": "Build servers run Jenkins on 8080 (CHG-1042)"
+  },
+  {
+    "Id": "PROC-RMM-TOOL",
+    "Entity": "process:*:teamviewer.exe",
+    "Host": "HELPDESK-*",
+    "Reason": "Sanctioned remote support on helpdesk machines"
+  }
+]

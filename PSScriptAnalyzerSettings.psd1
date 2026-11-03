@@ -1,4 +1,4 @@
-@{
+﻿@{
     # WinForensicX lint policy. Rules excluded below are deliberate design choices, each justified here
     # so a reviewer can see the reasoning rather than guess. Everything else is enforced.
     Severity     = @('Error', 'Warning')

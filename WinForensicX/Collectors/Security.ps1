@@ -18,6 +18,8 @@ function Get-WfxSecurityData {
         try { $st = Get-MpComputerStatus -ErrorAction Stop } catch {}
         try { $pf = Get-MpPreference -ErrorAction Stop } catch {}
         if (-not $st -and -not $pf) { throw 'Defender cmdlets unavailable' }
+        $exReadable = [bool]$pf -and -not (@($pf.ExclusionPath) -match '^N/A')
+        if ($pf -and -not $exReadable) { Add-WfxGap -Source 'posture:defender:exclusions' -Reason 'Defender exclusions are only visible to administrators.' -Fix 'Run elevated.' }
         $sigAge = $null
         if ($st -and $st.AntivirusSignatureLastUpdated) { try { $sigAge = [int]((Get-Date) - $st.AntivirusSignatureLastUpdated).TotalDays } catch {} }
         [pscustomobject]@{
@@ -28,9 +30,12 @@ function Get-WfxSecurityData {
             BehaviorMonitorEnabled    = if ($st) { [bool]$st.BehaviorMonitorEnabled } else { $null }
             SignatureAgeDays          = $sigAge
             EngineVersion             = if ($st) { [string]$st.AMEngineVersion } else { '' }
-            ExclusionPath             = if ($pf) { @($pf.ExclusionPath | Where-Object { $_ }) } else { @() }
-            ExclusionProcess          = if ($pf) { @($pf.ExclusionProcess | Where-Object { $_ }) } else { @() }
-            ExclusionExtension        = if ($pf) { @($pf.ExclusionExtension | Where-Object { $_ }) } else { @() }
+            # Non-admins get the placeholder "N/A: Must be an administrator to view exclusions" — that is
+            # "unknown", not "no exclusions".
+            ExclusionsReadable        = $exReadable
+            ExclusionPath             = if ($pf -and $exReadable) { @($pf.ExclusionPath | Where-Object { $_ }) } else { @() }
+            ExclusionProcess          = if ($pf -and $exReadable) { @($pf.ExclusionProcess | Where-Object { $_ }) } else { @() }
+            ExclusionExtension        = if ($pf -and $exReadable) { @($pf.ExclusionExtension | Where-Object { $_ }) } else { @() }
             DisableRealtimeMonitoring = if ($pf) { [bool]$pf.DisableRealtimeMonitoring } else { $null }
         }
     } $null
@@ -51,18 +56,30 @@ function Get-WfxSecurityData {
 
     # ── Audit / logging visibility ──
     $audit = Invoke-WfxStep 'posture:audit' {
-        $procAudit = $false
+        # Tri-state: $true / $false / $null (unknown). auditpol needs admin and prints localized text, so a
+        # failure or unrecognised output must be "unknown", never "auditing is off".
+        $procAudit = $null
         try {
-            $ap = auditpol /get /subcategory:"Process Creation" 2>$null
-            if ($ap -match '(?i)Process Creation\s+(Success|Success and Failure)') { $procAudit = $true }
+            # Subcategory GUID for "Process Creation" (language-independent).
+            $ap = @(auditpol /get /subcategory:'{0CCE922B-69AE-11D9-BED3-505054503030}' /r 2>$null)
+            if ($LASTEXITCODE -eq 0 -and $ap.Count -ge 2) {
+                $row = ($ap | Where-Object { $_ -match '0CCE922B' } | Select-Object -First 1)
+                if ($row -match '(?i),\s*(?:Success|Failure|Success and Failure)\s*,') { $procAudit = $true }
+                elseif ($row -match '(?i),\s*No Auditing\s*,') { $procAudit = $false }
+            }
         } catch {}
+        if ($null -eq $procAudit) { Add-WfxGap -Source 'posture:audit:process-creation' -Reason 'Could not determine whether process-creation auditing is enabled (needs admin; output may be localized).' -Fix 'Run elevated, or check: auditpol /get /subcategory:"Process Creation"' }
+        $sysmonSvc = [bool]((Get-Service -Name 'Sysmon', 'Sysmon64' -ErrorAction SilentlyContinue) | Where-Object { $_.Status -eq 'Running' })
+        # The service binary can be renamed; the driver key and the event channel are more stable indicators.
+        $sysmonDrv = Test-Path 'HKLM:\SYSTEM\CurrentControlSet\Services\SysmonDrv'
+        $sysmonLog = $false; try { $sysmonLog = [bool](Get-WinEvent -ListLog 'Microsoft-Windows-Sysmon/Operational' -ErrorAction Stop).IsEnabled } catch {}
         [pscustomobject]@{
             ProcessCreation             = $procAudit
             CommandLineInProcessCreation = ((Get-WfxRegValue 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System\Audit' 'ProcessCreationIncludeCmdLine_Enabled') -eq 1)
             ScriptBlockLogging          = ((Get-WfxRegValue 'HKLM:\Software\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging' 'EnableScriptBlockLogging') -eq 1)
             ModuleLogging               = ((Get-WfxRegValue 'HKLM:\Software\Policies\Microsoft\Windows\PowerShell\ModuleLogging' 'EnableModuleLogging') -eq 1)
             Transcription               = ((Get-WfxRegValue 'HKLM:\Software\Policies\Microsoft\Windows\PowerShell\Transcription' 'EnableTranscripting') -eq 1)
-            SysmonInstalled             = [bool]((Get-Service -Name 'Sysmon', 'Sysmon64' -ErrorAction SilentlyContinue) | Where-Object { $_.Status -eq 'Running' })
+            SysmonInstalled             = ($sysmonSvc -or ($sysmonDrv -and $sysmonLog))
         }
     } $null
 
@@ -80,6 +97,10 @@ function Get-WfxSecurityData {
     $rdp = Invoke-WfxStep 'posture:rdp' {
         $deny = Get-WfxRegValue 'HKLM:\System\CurrentControlSet\Control\Terminal Server' 'fDenyTSConnections'
         $nla = Get-WfxRegValue 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' 'UserAuthentication'
+        $nlaPolicy = Get-WfxRegValue 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' 'UserAuthentication'
+        $denyPolicy = Get-WfxRegValue 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' 'fDenyTSConnections'
+        if ($null -ne $denyPolicy) { $deny = $denyPolicy }
+        if ($null -ne $nlaPolicy) { $nla = $nlaPolicy }
         [pscustomobject]@{ Enabled = ($deny -eq 0); NlaEnabled = ($nla -eq 1) }
     } $null
 

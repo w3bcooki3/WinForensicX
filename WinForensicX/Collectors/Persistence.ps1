@@ -1,6 +1,8 @@
 ﻿# Persistence collector — enumerates autostart locations into normalized records.
 # Covers Run keys, Startup folders, scheduled tasks, WMI subscriptions, Winlogon, AppInit,
-# Image File Execution Options, LSA packages, and BootExecute. Services/drivers come from System.ps1.
+# Image File Execution Options, LSA packages, BootExecute and (as evidence, not persistence) the Run-dialog
+# history (RunMRU) where ClickFix lures leave the pasted command. Services/drivers come from System.ps1.
+# Only LOADED user hives are visible (logged-on users); unloaded NTUSER.DAT files are a recorded limitation.
 
 function Get-WfxPersistenceData {
     if (-not (Test-WfxWindows)) { return @() }
@@ -8,7 +10,7 @@ function Get-WfxPersistenceData {
 
     $add = {
         param($Kind, $Name, $Command, $Location, $User = '')
-        $path = Get-WfxImagePath $Command
+        $path = if ($Kind -eq 'RunMRU') { '' } else { Get-WfxImagePath $Command }
         # Store a secret-scrubbed command (a task action or WMI script text can embed credentials); the
         # image path above is taken from the raw value first so analysis is unaffected.
         $out.Add([pscustomobject]@{ Kind = $Kind; Name = $Name; Command = (Protect-WfxText ([string]$Command)); Path = $path; Location = $Location
@@ -31,7 +33,19 @@ function Get-WfxPersistenceData {
             if (-not (Test-Path $rp)) { continue }
             $k = Get-Item $rp -ErrorAction SilentlyContinue
             foreach ($v in $k.GetValueNames()) {
-                & $add 'RunKey' $v ($k.GetValue($v)) $rp
+                & $add 'RunKey' $(if ($v) { $v } else { '(Default)' }) ($k.GetValue($v)) $rp
+            }
+        }
+    }
+
+    # ── Run-dialog history (ClickFix / fake-CAPTCHA lures land here) ──
+    Invoke-WfxStep 'persist:runmru' {
+        foreach ($u in (Get-WfxUserHives)) {
+            $mru = "$u\Software\Microsoft\Windows\CurrentVersion\Explorer\RunMRU"
+            if (-not (Test-Path $mru)) { continue }
+            $k = Get-Item $mru -ErrorAction SilentlyContinue
+            foreach ($v in @($k.GetValueNames() | Where-Object { $_ -match '^[a-z]$' })) {
+                & $add 'RunMRU' "RunMRU:$v" (([string]$k.GetValue($v)) -replace '\\1$', '') $mru
             }
         }
     }
@@ -39,12 +53,10 @@ function Get-WfxPersistenceData {
     # ── Startup folders ──
     Invoke-WfxStep 'persist:startup' {
         $folders = @("$env:ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp")
-        Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-            $folders += "$($_.FullName)\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup"
-        }
+        foreach ($prof in (Get-WfxUserProfilePath)) { $folders += "$prof\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup" }
         foreach ($f in $folders) {
             if (-not (Test-Path $f)) { continue }
-            Get-ChildItem $f -File -ErrorAction SilentlyContinue | ForEach-Object { & $add 'Startup' $_.Name $_.FullName $f }
+            Get-ChildItem -LiteralPath $f -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'desktop.ini' } | ForEach-Object { & $add 'Startup' $_.Name $_.FullName $f }
         }
     }
 
@@ -55,6 +67,7 @@ function Get-WfxPersistenceData {
             foreach ($a in @($t.Actions)) {
                 $cmd = ''
                 if ($a.Execute) { $cmd = $a.Execute; if ($a.Arguments) { $cmd += ' ' + $a.Arguments } }
+                elseif ($a.PSObject.Properties['ClassId'] -and $a.ClassId) { $cmd = "COM-handler $($a.ClassId) $($a.Data)" }
                 if (-not $cmd) { continue }
                 & $add 'ScheduledTask' ($t.TaskPath + $t.TaskName) $cmd ('Task:' + $t.State) ($t.Principal.UserId)
             }
@@ -73,7 +86,7 @@ function Get-WfxPersistenceData {
         }
     }
 
-    # ── Winlogon (Shell / Userinit / Notify) ──
+    # ── Winlogon (Shell / Userinit / Taskman / VmApplet) ──
     Invoke-WfxStep 'persist:winlogon' {
         $wl = 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon'
         if (Test-Path $wl) {
@@ -134,11 +147,13 @@ function Get-WfxPersistenceData {
 
 function Get-WfxUserHives {
     <# Returns registry paths for all loaded user hives (Registry::HKEY_USERS\<sid>). #>
-    $hives = @('HKCU:')
+    # HKCU is the same hive as HKEY_USERS\<current SID>; listing both duplicated every per-user entry.
+    $hives = @()
     try {
-        Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^S-1-5-21-' -and $_.PSChildName -notmatch '_Classes$' } | ForEach-Object {
+        Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^S-1-5-21-|^S-1-12-1-' -and $_.PSChildName -notmatch '_Classes$' } | ForEach-Object {
             $hives += "Registry::HKEY_USERS\$($_.PSChildName)"
         }
     } catch {}
+    if (-not $hives.Count) { $hives = @('HKCU:') }
     $hives
 }
