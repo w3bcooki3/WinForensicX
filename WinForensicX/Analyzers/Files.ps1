@@ -99,7 +99,7 @@ function Invoke-WfxRansomwareAnalyzer {
     foreach ($n in @($Note | Where-Object { $_ })) {
         $c = [string](Get-WfxValue $n 'Content' '')
         $hits = @(Get-WfxRxMatches $noteRx $c).Count
-        $copies = [int](Get-WfxValue $n 'Copies' 1)
+        $copies = (ConvertTo-WfxInt (Get-WfxValue $n 'Copies' 1))
         if ($hits -ge 2 -or ($hits -ge 1 -and $copies -ge 5)) {
             $findings.Add((New-WfxFinding -Id 'RANSOM-NOTE' -Title "Possible ransom note: $(Get-WfxLeaf ([string](Get-WfxValue $n 'Path' '')))" `
                         -Severity 'Critical' -Confidence 'Medium' -Category 'Ransomware' -Technique @('T1486') `

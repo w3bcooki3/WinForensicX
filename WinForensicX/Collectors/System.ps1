@@ -20,7 +20,7 @@ function Get-WfxUserProfilePath {
         $root = Join-Path $env:SystemDrive 'Users'
         Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notin @('Public', 'Default', 'Default User', 'All Users') } | ForEach-Object { $paths.Add($_.FullName) }
     }
-    , $paths.ToArray()
+    $paths.ToArray()
 }
 
 function Get-WfxHostInfo {
@@ -71,6 +71,9 @@ function Get-WfxProcessData {
     if (-not $raw) { return @() }
     $byPid = @{}
     foreach ($p in $raw) { $byPid[[string]$p.ProcessId] = $p }
+    # Owners: one bulk call when elevated (fast); per-process CIM GetOwner otherwise (only own processes resolve).
+    $owners = @{}
+    if (Test-WfxAdmin) { try { Get-Process -IncludeUserName -ErrorAction Stop | ForEach-Object { if ($_.UserName) { $owners[[string]$_.Id] = $_.UserName } } } catch {} }
     $companyCache = @{}
     $out = foreach ($p in $raw) {
         if ($Skip.Count -and $Skip.ContainsKey("$($p.ProcessId):$($p.Name)")) { continue }
@@ -83,8 +86,10 @@ function Get-WfxProcessData {
             $company = $companyCache[$path]
         }
         $parent = $byPid[[string]$p.ParentProcessId]
-        $owner = ''
-        try { $o = Invoke-CimMethod -InputObject $p -MethodName GetOwner -ErrorAction SilentlyContinue; if ($o.User) { $owner = if ($o.Domain) { "$($o.Domain)\$($o.User)" } else { $o.User } } } catch { $owner = '' }
+        $owner = [string]$owners[[string]$p.ProcessId]
+        if (-not $owner -and $owners.Count -eq 0 -and [int]$p.SessionId -ne 0) {
+            try { $o = Invoke-CimMethod -InputObject $p -MethodName GetOwner -ErrorAction SilentlyContinue; if ($o.User) { $owner = if ($o.Domain) { "$($o.Domain)\$($o.User)" } else { $o.User } } } catch { $owner = '' }
+        }
         [pscustomobject]@{
             Pid               = [int]$p.ProcessId
             Ppid              = [int]$p.ParentProcessId
@@ -104,7 +109,7 @@ function Get-WfxProcessData {
             SessionId         = [int]$p.SessionId
         }
     }
-    , @($out)
+    $out
 }
 
 function Get-WfxNetworkData {
@@ -144,7 +149,7 @@ function Get-WfxNetworkData {
             }
         }
     }
-    , @($out.ToArray())
+    $out.ToArray()
 }
 
 function Get-WfxDnsData {
@@ -160,9 +165,9 @@ function Get-WfxDnsData {
             if ($line -match 'Record Name[.\s]*:\s*(\S+)') { $cur = $Matches[1] }
             elseif ($line -match '(?:A \(Host\)|AAAA) Record[.\s]*:\s*(\S+)' -and $cur) { $out.Add([pscustomobject]@{ Name = $cur; Type = 'A'; Data = $Matches[1] }) }
         }
-        return , @($out.ToArray())
+        return $out.ToArray()
     }
-    , @($raw | ForEach-Object { [pscustomobject]@{ Name = $_.Entry; RecordName = $_.Name; Type = [string]$_.Type; Data = [string]$_.Data; TTL = $_.TimeToLive } } | Where-Object { $_.Name })
+    $raw | ForEach-Object { [pscustomobject]@{ Name = $_.Entry; RecordName = $_.Name; Type = [string]$_.Type; Data = [string]$_.Data; TTL = $_.TimeToLive } } | Where-Object { $_.Name }
 }
 
 function Get-WfxServiceAndDriver {
@@ -182,5 +187,5 @@ function Get-WfxServiceAndDriver {
         $out.Add([pscustomobject]@{ Kind = 'Driver'; Name = $d.Name; DisplayName = $d.DisplayName; Command = (Protect-WfxText $d.PathName); Path = $img
                 Location = "Driver:$($d.StartMode)"; State = [string]$d.State; Enabled = ($d.StartMode -ne 'Disabled'); SignatureStatus = (Get-WfxSignature $img) })
     }
-    , @($out.ToArray())
+    $out.ToArray()
 }

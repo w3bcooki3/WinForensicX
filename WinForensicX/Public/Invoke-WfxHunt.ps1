@@ -96,13 +96,14 @@
         & $push 'file' (Get-WfxValue $f 'HostUrl' '') "download source of $($f.Path)"
         if (-not $InputPath -and (Test-WfxWindows)) { & $hashFile $f.Path 'file' }
     }
+    foreach ($a in @(Get-WfxValue $bundle 'Activity' @())) { $ctx = "$($a.Category): $($a.Action) @ $($a.Time)"; & $push 'activity' $a.Target $ctx; & $push 'activity' $a.Detail $ctx; & $push 'activity' $a.Actor $ctx }
     foreach ($x in @(Get-WfxValue $bundle 'Exposure' @())) { & $push 'exposure' $x.Path "$($x.Kind)" }
 
     $findings = New-Object System.Collections.Generic.List[object]
     foreach ($i in $iocs) {
         $kind = Get-WfxIocKind $i
         $rx = switch ($kind) {
-            'ip' { '(?<![\d.:A-Fa-f])' + [regex]::Escape($i) + '(?![\d.:A-Fa-f])' }
+            'ip' { if ($i.Contains(':')) { '(?i)(?<![\d.:A-Fa-f])' + [regex]::Escape($i) + '(?![\d.:A-Fa-f])' } else { '(?<![\d.])' + [regex]::Escape($i) + '(?![\d]|\.\d)' } }
             'domain' { '(?i)(?<![A-Za-z0-9\-.])(?:[A-Za-z0-9\-]+\.)*' + [regex]::Escape($i) + '(?![A-Za-z0-9\-])' }
             default { $null }
         }

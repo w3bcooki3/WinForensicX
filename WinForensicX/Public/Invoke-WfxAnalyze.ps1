@@ -43,7 +43,7 @@
 
         $events = @(Get-WfxValue $Bundle 'Events' @())
         # DNS evidence: the DNS cache plus Sysmon 22 (DNS query) events, when present.
-        $dns = @(Get-WfxValue $Bundle 'Dns' @()) + @($events | Where-Object { [int](Get-WfxValue $_ 'Id' 0) -eq 22 -and [string](Get-WfxValue $_ 'Log' '') -match 'Sysmon' } | ForEach-Object {
+        $dns = @(Get-WfxValue $Bundle 'Dns' @()) + @($events | Where-Object { (ConvertTo-WfxInt (Get-WfxValue $_ 'Id' 0)) -eq 22 -and [string](Get-WfxValue $_ 'Log' '') -match 'Sysmon' } | ForEach-Object {
                 $q = [string](Get-WfxValue (Get-WfxValue $_ 'Fields' @{}) 'QueryName' '')
                 if ($q) { [pscustomobject]@{ Name = $q; Type = 'Sysmon22'; Data = '' } } })
         $dnsMap = Get-WfxDnsAddressMap -DnsEntry $dns
@@ -53,6 +53,8 @@
         & $run 'dns'         { Invoke-WfxDnsAnalyzer         -DnsEntry   $dns                                      -HostName $HostName }
         & $run 'persistence' { Invoke-WfxPersistenceAnalyzer -Autostart  @(Get-WfxValue $Bundle 'Persistence' @()) -HostName $HostName }
         & $run 'events'      { Invoke-WfxEventAnalyzer       -Event      $events                                   -HostName $HostName }
+        $activity = @(Get-WfxValue $Bundle 'Activity' @())
+        & $run 'activity'    { Invoke-WfxActivityAnalyzer    -Activity   $activity                                 -HostName $HostName }
         & $run 'files'       { Invoke-WfxFileAnalyzer        -File       @(Get-WfxValue $Bundle 'Files' @())       -HostName $HostName }
         & $run 'exposure'    { Invoke-WfxExposureAnalyzer    -Exposure   @(Get-WfxValue $Bundle 'Exposure' @())    -HostName $HostName }
         & $run 'posture'     { Invoke-WfxPostureAnalyzer     -Posture    (Get-WfxValue $Bundle 'Security' $null)   -HostName $HostName }
@@ -95,6 +97,8 @@
             Summary        = $summary
             Findings       = @($findings)
             Suppressed     = @($split.Suppressed)
+            Activity       = @($activity | Sort-Object { [string]$_.Time } -Descending | Select-Object -First 3000)
+            ActivityTotal  = $activity.Count
             AttackCoverage = @($coverage)
             Gaps           = @($gaps.ToArray())
             Meta           = (Get-WfxValue $Bundle 'Meta' $null)

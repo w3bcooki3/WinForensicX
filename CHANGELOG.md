@@ -1,5 +1,218 @@
 # Changelog
 
+## 2.6.0 — case report redesign
+
+### Changed
+- **Case report (`report.html`) rewritten** as a plain, document-style report that reads top to bottom and
+  prints cleanly:
+  - **Summary:** a verdict in words (compromise indicated / likely, suspicious activity, no strong
+    indicators), a numbered *Do first* list (deduplicated), the suspicious-activity window, accounts
+    involved, external addresses and the hardening score.
+  - **Attack path:** findings placed on the ATT&CK lifecycle, earliest stage first, with the time each stage
+    was first seen.
+  - **Findings:** a sortable table filterable by severity, stage and area. Each row opens to show why it
+    matters, what to do, the evidence fields, the rule and source, and every other event within 30 minutes.
+  - **Indicators:** IPs, domains, URLs, hashes, files, registry keys and accounts extracted from the
+    attacker-related findings, with defang-for-sharing, copy and CSV. Private addresses and stock Windows
+    binaries are hidden by default.
+  - **Timeline** grouped by day (CSV export), the **Changes** table, and an **ATT&CK** matrix with a
+    MITRE ATT&CK Navigator layer download.
+  - **Not visible** (collection gaps and suppressed findings), **custody** (case ID, operator, parameters,
+    hash) with the `Test-WfxCase` command to verify it.
+  - Dark mode, print and narrow (phone) layouts. The printed copy leaves out the full change list (it is
+    in the CSV and `raw/bundle.json`).
+- The report now has a strict Content-Security-Policy (no network access, no external resources). Every
+  evidence value is escaped, and CSV exports neutralise spreadsheet formulas.
+
+### Fixed
+- Font ligatures and contextual alternates could render evidence text incorrectly (for example `3x9`
+  shown as `3×9`) in all HTML outputs. They are now disabled everywhere.
+- Report header showed no OS when the bundle used the `OS` property; timestamps carried milliseconds.
+- *Accounts involved* could list process paths; only account-shaped values are kept.
+
+## 2.5.0 — automated attack-scenario testing
+
+### Added
+- **Attack-scenario suite** (`tools/Invoke-WfxScenarioSuite.ps1`, part of `Invoke-Pester ./tests`): ten
+  scenarios from a clean host to a multi-day APT chain, 42 evasion variants, 15 benign look-alikes and every
+  workflow; 324 checks; writes `scenario-results.json` and `scenario-report.html`. Synthetic evidence only.
+- **Windows Sandbox emulation** (`Invoke-WfxSandboxEmulation.ps1`, shipped separately): harmless look-alike
+  artefacts on real Windows, checked and reverted; refuses to run outside Windows Sandbox.
+- `PROC-RENAMED-INTERPRETER`: an encoded PowerShell payload run by a program not named PowerShell (T1036.003).
+- AI coding assistants installed as npm/pip packages (Claude Code, Codex CLI, Gemini CLI, Aider, OpenHands …)
+  are recognised from the node/python command line.
+
+### Fixed (found by the suite)
+- Command-line rules missed common obfuscation: en/em-dash parameters (`–enc`), cmd caret escapes
+  (`p^o^w^e^r^s^h^e^l^l`), empty-quote splitting (`p""owershell`) and `/switch` spellings (`certutil /urlcache`).
+  Rules now also match the canonical form of each command line; evidence keeps the original text.
+- `EVT-RDP-EXTERNAL` fired on local logons whose address is `-` (every unlock), even on clean hosts.
+- A password spray followed by a successful logon for a *different* sprayed account from the same source was not
+  correlated; `EVT-4625-THEN-4624` now also correlates by source address.
+- One malformed field (e.g. a non-numeric event ID) in saved evidence aborted the whole analysis; such records
+  are now skipped.
+- Explore views did not flag activity whose target is empty (e.g. Defender real-time protection disabled).
+- PowerShell-history wiping was matched on a parameter that does not exist; now matched as it is really done
+  (`-HistorySaveStyle SaveNothing`, `Remove-Item (Get-PSReadlineOption).HistorySavePath`).
+- cloudflared tunnels (`*.argotunnel.com`) were not recognised as a tunnelling service.
+- All HTML outputs disable font ligatures and contextual alternates, so text such as `kq3x9` can never render
+  as `kq3×9` in an indicator.
+
+### Packaging
+- Released as two packages: the toolkit (no test data) and a `-source` package that adds `tests\`. Test
+  fixtures contain attacker command lines as text, which heuristic antivirus engines flag (Avast reported
+  `LNK:Downloader-AD` for the 2.5.0 download, although no shortcut file exists in it).
+
+### Documented gaps (by design, listed in the scenario report)
+- DLL side-loading by a validly signed program in a user folder (loaded DLLs are not collected).
+- Exfiltration volume (no data-transfer telemetry); internal RDP by a valid account without correlation;
+  admin-share access is logged on the target, not the source.
+
+## 2.4.0 — suspicious-activity flags, field guide
+
+### Added
+- **Flags in Explore views.** 35 views mark suspicious rows with Flag / Why / Technique / Rule. Analyzer-backed
+  views (processes, connections, listeners, DNS, autostarts, services, drivers, every *Recent changes* view) run
+  the same analyzers as triage, so a view and a report never disagree; the others get focused checks
+  (scheduled tasks, WMI consumers, PowerShell history and 4104 script blocks, new services, cleared logs, failed
+  logons, account changes, RDP from public addresses, Defender detections, hosts file, firewall, Prefetch,
+  downloads, new programs, installed software, users, shares). Command text is checked in full, before it is
+  shortened for display. Flagged rows are coloured in the console, **S** shows only them, bursts (mass delete /
+  rename) are shown as patterns. The triage allowlist (menu setting or `$env:WFX_ALLOWLIST`) applies to views.
+- **Inventory report** opens with every flagged item across all views, ranked by severity.
+- New activity detections: file in a Startup folder, double extension (`.pdf.exe`), ransom-note names, short-lived
+  executables, deleted event logs and PowerShell history, offensive / remote-access tools executed (Prefetch,
+  BAM, UserAssist), Defender exclusions, malware detections, new accounts, privileged-group additions, scheduled
+  tasks with attack-technique commands, outbound connections to C2-typical ports.
+- **Field guide** `docs/guide.html` (offline, one file): start-up, menu map with exact keys, how to read flags,
+  seven investigation walkthroughs, all 53 views and all commands. Reference sections are generated from the
+  tool's own help model and view table (`tools/build-guide.ps1`), so they match the code. **H** opens it.
+
+### Fixed
+- Activity rules that had stopped matching after 2.3.2 renamed journal actions: alternate-data-stream writes,
+  mass rename (ransomware), Sysmon executable creation.
+- Deleted `.evtx` files were hidden by the journal's noise filter.
+- The allowlist read by views was nested one level too deep, so multi-entry allowlists would not have matched.
+- `New-WfxCase` now stops with one clear message when the output folder cannot be created (it used to continue
+  and cascade errors).
+- Browser view: short values no longer break mid-word; wide tables scroll instead of crushing columns.
+- Removed two malformed entries from the remote-access tool list (`" scinstaller"`, `"mmc.exe/vnc"`) that could
+  never match; a test now keeps the lists well-formed.
+- A help example contained a literal tab instead of `\t` (`.\today` displayed as `.<TAB>oday`).
+- Launch instructions: right-click *Run with PowerShell* is no longer suggested (it defaults to refusing the
+  execution-policy change and closes the window); README and guide give the exact fix for each refusal message.
+
+## 2.3.2 — correctness fixes for live views and change reconstruction
+
+### Fixed
+- **Explore views showed one blank row instead of the data** (e.g. *Deleted files* → "1 row(s)" with empty
+  columns). Collectors returned their records wrapped as a single array object; views piped that object into
+  `Select-Object`. Affected every collector-backed view (processes, network, DNS, autostarts, services,
+  drivers and all *Recent changes* views) and `Get-WfxActivity` in a pipeline. Collectors now stream records.
+- **Live monitor** baseline counted the whole process / connection list as one item.
+- **Triage bundle**: autostarts and services were stored as two nested arrays; offline `.evtx` events were
+  wrapped in one item. Both are now flat lists.
+- **Ransomware scan roots / "new programs" view** built wrong paths on machines with more than one profile.
+- **NTFS change journal** (*File system changes*):
+  - a file or folder sent to the Recycle Bin is a *rename* into `$Recycle.Bin`, not a delete — it was
+    invisible. Renames are now paired with their old name: reported as **Deleted to Recycle Bin** (with the
+    original path), **Renamed** or **Moved**; deleting `$R…` items is reported as the bin being emptied;
+  - reason flags were mislabelled (an ordered dictionary was indexed by position, not by flag);
+  - accepts hex or text reason codes, quoted names containing commas, and non-English column headers;
+  - file IDs are passed to `fsutil file queryFileNameById` in its documented `0x…` form (128- and 64-bit);
+  - files vs. folders are distinguished; unresolved folders are shown as a placeholder, never guessed;
+  - when nothing can be read, the view says exactly why (rights, journal disabled, unsupported output) and
+    how far back the readable journal window goes.
+- **Recycle Bin**: reads every fixed drive, validates `$I` records, and states whether the item is a file or
+  folder and whether its content is still recoverable (with its `$R` path).
+
+### Changed
+- **G** in a view now opens a self-contained, offline browser table (sort, filter, copy as TSV). Values are
+  inserted as text only and the page has a no-network Content-Security-Policy, so hostile file names in the
+  evidence cannot run script. Out-GridView is offered (as **W**) only where it actually works — it needs the
+  ISE graphical host, which Windows Sandbox, Server Core and PowerShell 7 usually lack.
+- Empty or partial views show **Notes (coverage and limits)** instead of "Nothing found".
+
+## 2.3.1 — simpler, more transparent launcher
+
+### Changed
+- **Removed `Start-WinForensicX.cmd`.** Start the tool with `.\Start-WinForensicX.ps1` from a PowerShell
+  window (administrator recommended), or right-click it → Run with PowerShell.
+- **The launcher no longer elevates or relaunches itself** and never passes `-ExecutionPolicy`. When not
+  elevated it says what will be missing and how to reopen as administrator. A batch file that starts
+  PowerShell with a policy bypass, plus a self-elevating relaunch, is the pattern heuristic antivirus engines
+  associate with script droppers (Avast reported the 2.3.0 archive as `VBS:Runner-NI`). The tool did nothing
+  harmful; the launch pattern simply looked like one.
+- **Recent files** view parses `.lnk` shortcuts directly from their bytes (`[MS-SHLLINK]`) instead of
+  using the `WScript.Shell` COM object, and also shows the target's recorded modification time.
+
+### Added
+- `SHA256SUMS.txt` in the release, and README sections on verifying the download and handling antivirus
+  warnings (report false positives; never disable protection).
+
+## 2.3.0 — what changed recently, and a new report
+
+### Added
+- **Recent-activity reconstruction** (`Get-WfxActivity`, collected in every triage):
+  - registry last-write times for persistence, hijack, credential, defence, firewall-rule, service, task and
+    uninstall keys
+  - NTFS change journal (with `-FileScan` / `-Journal`, admin): created, deleted, content overwritten /
+    extended / truncated, renamed, alternate data stream and timestamp changes, with parent folders resolved
+  - Recycle Bin deletions with original path and recoverability
+  - MSI install/remove and driver install/load events
+  - Prefetch, BAM and UserAssist execution
+  - connection history from Sysmon 3, WFP 5156, the firewall log, live connection creation times and saved
+    RDP targets
+  - config-change events: services, tasks, accounts/groups, audit policy, time change, log clearing, firewall
+    rules, Defender, BITS, WMI, RDP client, Sysmon 2/11/12/13/14/23/26
+- **Activity detections** (ACT-*): Defender exclusion/policy changes, hijack keys, autostart keys,
+  WDigest/LSA weakening, RMM installs, PsExec-style and user-path services, firewall changes by non-system
+  programs, audit-policy change, log tampering, Defender disabled, timestomping, time change, BITS from
+  unusual hosts, WMI subscriptions, user-folder executions, staging-folder drops, alternate data streams,
+  mass deletion and mass modification bursts.
+- **Recent changes** group in Explore (8 views, listed first), and activity in the timeline, hunt and report.
+- **File-integrity baselines**: `New-WfxFileBaseline` / `Compare-WfxFileBaseline` (added, deleted,
+  content-changed, timestamp-only), also in Hunt & analyze.
+- 5 new tests (83 total).
+
+### Changed
+- **Redesigned HTML report** in a case-file style:
+  - a sticky sidebar with the host, both scores and the sections
+  - an evidence-tag verdict in plain words with a numbered "start here" list
+  - findings as a worklist grouped by area with severity and area filters, search and expandable evidence
+  - a searchable Recent activity table
+  - a day-grouped timeline merging findings and notable changes
+  - ATT&CK techniques in lifecycle order, a "what this report could not see" section, and case & custody details
+  - light/dark themes, a phone layout and print styles; still a single offline file
+- Fixed: findings without a time no longer appear at 1 Jan 1970 in the timeline. IP IOCs now match `ip:port`.
+
+## 2.2.0 — usability: launcher, menu, live views, speed
+
+### Added
+- **`Start-WinForensicX.cmd`** (double-click) and **`Start-WinForensicX.ps1`** in the repository root. They use
+  PowerShell 7 when installed, offer to restart as administrator, load the module and open the menu, and show
+  a clear error instead of a closing window if something is missing.
+- **Rebuilt menu** with sections and submenus: Investigate, Explore, Hunt & analyze, Cases & evidence, Live
+  monitor, Settings, Help. It has a status header (host, elevation, output folder, last case), a description
+  on every option, validated input (paths checked, numbers range-checked, invalid keys re-asked), B/Q
+  everywhere, errors that never close the menu, and an offer to open the report after a triage.
+- **`Get-WfxInsight`**: 45 live, read-only views across System, Processes, Network, Persistence, Events,
+  Files and Security. In the menu each view can be filtered, listed, opened in Out-GridView and exported
+  to CSV. **`Save-WfxInsight`** exports all views as a hashed inventory case (inventory.html + one CSV per view).
+- **`Test-WfxCase`**: verifies a case against its manifest (changed / missing / added-after-close files,
+  optional check of the recorded manifest hash). Available from the menu.
+- Per-stage collection progress with timings (`[3/9] Processes … 12.4s 312 items`) and a progress bar.
+
+### Changed / fixed
+- **Much faster event collection.** Rendered message text (the slowest part, milliseconds per event) is only
+  read for low-volume events that need it. Secret redaction runs only on free-text fields. Default caps are
+  lower (15,000 logon/process events), and caps are still reported as gaps.
+- Process owners come from one bulk `Get-Process -IncludeUserName` call when elevated, instead of one CIM call
+  per process.
+- Ransomware file collection now runs as part of the file-scan stage. File triage accepts paths containing `[ ]`.
+- Version 2.2.0. 5 new tests (78 total). PSScriptAnalyzer is clean, including Windows PowerShell 5.1
+  command/syntax compatibility checks.
+
 ## 2.1.0 — correctness, evidence integrity and investigator tooling
 
 ### Fixed

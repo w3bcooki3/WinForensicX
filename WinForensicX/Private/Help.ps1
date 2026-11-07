@@ -4,7 +4,7 @@
 function Get-WfxHelpModel {
     [pscustomobject]@{
         Version  = $script:WfxVersion
-        Tagline  = 'Read-only DFIR / incident-triage for Windows. Collect a host, analyze it against ATT&CK-mapped rules, score the risk, and get a report you can act on.'
+        Tagline  = 'Read-only DFIR toolkit for Windows. Start it from an administrator PowerShell window with .\Start-WinForensicX.ps1, then use the menu: Investigate, Explore, Hunt & analyze, Cases.'
         Commands = @(
             [pscustomobject]@{ Name = 'Invoke-WfxTriage'; Summary = 'Collect -> analyze -> score -> report. The main command.'
                 Params = @('[-FileScan] [-ExposureScan] [-OutputPath <external media>] [-AllowlistPath <json>]', '-ComputerName <hosts> [-Credential <cred>]  (remote, WinRM)', '-EvtxPath <path>  (offline event logs only; nothing collected locally)', '-InputPath <case>  (re-analyze saved evidence)')
@@ -15,6 +15,16 @@ function Get-WfxHelpModel {
                 Params = @('[-Interval <sec>] [-Duration <sec>] [-MinSeverity <sev>]'); Examples = @('Start-WfxMonitor -Interval 5 -Duration 300') }
             [pscustomobject]@{ Name = 'Invoke-WfxHunt'; Summary = 'Sweep a host or saved bundle for IOCs (MD5/SHA-1/SHA-256, exact IPs, domains+subdomains, strings), incl. event logs.'
                 Params = @('-Ioc <list> | -IocFile <txt> [-InputPath <case>] [-FileScan] [-HashProcesses]'); Examples = @("Invoke-WfxHunt -Ioc 'evil.example','203.0.113.7' -FileScan", 'Invoke-WfxHunt -IocFile .\iocs.txt -InputPath .\WFX_host_case') }
+            [pscustomobject]@{ Name = 'Get-WfxActivity'; Summary = 'What changed recently: registry writes in persistence/security keys, software & driver installs, services, tasks, accounts, firewall/Defender/audit changes, executions (Prefetch/BAM/UserAssist), connection history, deletions; -Journal adds the NTFS change journal.'
+                Params = @('[-Days <n>] [-Journal]'); Examples = @('Get-WfxActivity -Days 2', "Get-WfxActivity -Days 1 -Journal | Where-Object Category -eq 'File'") }
+            [pscustomobject]@{ Name = 'New-WfxFileBaseline / Compare-WfxFileBaseline'; Summary = 'File-integrity baseline: hash folders now, later list added, deleted, content-changed and timestamp-only files.'
+                Params = @('-Path <folders> [-OutputPath <json>]', '-Baseline <json>'); Examples = @('New-WfxFileBaseline -Path C:\inetpub\wwwroot -OutputPath E:\bl\web.json', 'Compare-WfxFileBaseline -Baseline E:\bl\web.json') }
+            [pscustomobject]@{ Name = 'Get-WfxInsight'; Summary = '53 live read-only views, each suspicious row flagged with severity, reason and ATT&CK technique: system, updates, software, users, groups, sessions, USB, processes, process tree, ports, connections, DNS, routes, proxy, Wi-Fi, firewall, autostarts, services, tasks, WMI, logons, failed logons, RDP, account changes, Defender, downloads, Prefetch, recent files, PS history, posture.'
+                Params = @('-List', '<topic> [-Days <n>]'); Examples = @('Get-WfxInsight -List', 'Get-WfxInsight logons -Days 3 | Format-Table', "Get-WfxInsight listeners | Where-Object Exposure -eq 'all interfaces'") }
+            [pscustomobject]@{ Name = 'Save-WfxInsight'; Summary = 'Export every live view to a hashed inventory case: inventory.html + one CSV per view.'
+                Params = @('[-Topic <list>] [-OutputPath <folder>]'); Examples = @('Save-WfxInsight -OutputPath E:\cases') }
+            [pscustomobject]@{ Name = 'Test-WfxCase'; Summary = 'Verify a case against its manifest: changed, missing or added files.'
+                Params = @('-Path <case> [-ExpectedManifestSha256 <hash>]'); Examples = @('Test-WfxCase -Path E:\cases\WFX_PC01_20261103-101500Z') }
             [pscustomobject]@{ Name = 'Get-WfxFileTriage'; Summary = 'What is this file? Hashes, true type vs extension, entropy, MOTW download URL, ADS, signature, PE facts, strings + IOCs. Never executes.'
                 Params = @('-Path <files> [-Strings] [-MaxReadMB <n>]'); Examples = @('Get-WfxFileTriage .\sample.bin -Strings | Format-List', 'Get-ChildItem .\Downloads -File | Get-WfxFileTriage | Where-Object ExtensionMismatch') }
             [pscustomobject]@{ Name = 'ConvertFrom-WfxEncodedCommand'; Summary = 'Decode -EncodedCommand / Base64 / gzip / nested FromBase64String payloads (decode only).'
@@ -22,7 +32,7 @@ function Get-WfxHelpModel {
             [pscustomobject]@{ Name = 'Export-WfxTimeline'; Summary = 'UTC super-timeline of a case (processes, connections, events, files, findings) to CSV/JSON.'
                 Params = @('-InputPath <case> [-Format Csv|Json] [-From <utc>] [-To <utc>]'); Examples = @('Export-WfxTimeline -InputPath .\WFX_host_case') }
             [pscustomobject]@{ Name = 'Compare-WfxCase'; Summary = 'Diff two cases: new processes, autostarts, services, listeners, DNS, exposure, findings.'
-                Params = @('-Baseline <case> -Current <case> [-OutputPath <csv|json>]'); Examples = @('Compare-WfxCase -Baseline .\golden -Current .	oday') }
+                Params = @('-Baseline <case> -Current <case> [-OutputPath <csv|json>]'); Examples = @('Compare-WfxCase -Baseline .\golden -Current .\today') }
             [pscustomobject]@{ Name = 'Save-WfxEvidence'; Summary = 'Collect a hashed, read-only evidence bundle now; analyze later with -InputPath.'
                 Params = @('[-FileScan] [-ExposureScan]'); Examples = @('Save-WfxEvidence -FileScan -ExposureScan') }
             [pscustomobject]@{ Name = 'Show-WfxMenu'; Summary = 'Interactive menu over everything above.'
@@ -42,6 +52,7 @@ function Get-WfxHelpModel {
         Safety   = @(
             'Read-only: it changes no settings and executes nothing it finds. It sends no network traffic of its own (remote mode uses WinRM you initiate; -ExposureScan reads the domain SYSVOL share).',
             'Its only writes are its own case folder (default Desktop\WinForensicX) — use -OutputPath on external media for evidence work. Reading files can update NTFS last-access times.',
+            'PowerShell 7 itself (not WinForensicX) sends anonymous start-up telemetry to Microsoft unless POWERSHELL_TELEMETRY_OPTOUT=1 is set; set it for evidence work, or use Windows PowerShell 5.1, which does not.',
             'Credential exposure is AUDITED, never extracted: it reports THAT a secret is exposed with the value redacted to type + length.',
             'No LSASS dumping, no SAM/NTDS hash parsing, no DPAPI/browser decryption, no exfiltration.',
             'Command lines, event messages and file contents are secret-scrubbed at collection time, so the raw bundle is safe to keep and ship.'

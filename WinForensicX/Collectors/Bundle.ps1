@@ -15,36 +15,54 @@ function Get-WfxCollectionBundle {
         [int]$Hours = 72,
         [switch]$FileScan,
         [switch]$ExposureScan,
-        [ValidateSet('Host', 'Process', 'Network', 'Dns', 'Persistence', 'Events', 'Files', 'Exposure', 'Security')]
-        [string[]]$Sections = @('Host', 'Process', 'Network', 'Dns', 'Persistence', 'Events', 'Files', 'Exposure', 'Security')
+        [ValidateSet('Host', 'Process', 'Network', 'Dns', 'Persistence', 'Events', 'Activity', 'Files', 'Exposure', 'Security')]
+        [string[]]$Sections = @('Host', 'Process', 'Network', 'Dns', 'Persistence', 'Events', 'Activity', 'Files', 'Exposure', 'Security')
     )
     $want = @{}; foreach ($s in $Sections) { $want[$s] = $true }
     Clear-WfxGap
     $script:WfxSigCache = @{}
     $started = Get-WfxUtcNow
+    $steps = @('Host', 'Dns', 'Network', 'Process', 'Persistence', 'Events', 'Activity', 'Files', 'Exposure', 'Security') | Where-Object { $want[$_] -and ($_ -ne 'Files' -or $FileScan) }
+    $script:WfxProgress = @{ N = 0; Total = @($steps).Count }
+    $stage = {
+        param([string]$Label, [scriptblock]$Body)
+        $script:WfxProgress.N++
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        Write-WfxConsole ("  [{0}/{1}] {2,-34}" -f $script:WfxProgress.N, $script:WfxProgress.Total, $Label) -Kind Plain -NoNewline
+        if (-not $script:WfxQuiet) { Write-Progress -Activity 'WinForensicX collection' -Status $Label -PercentComplete ([int](100 * ($script:WfxProgress.N - 1) / [Math]::Max(1, $script:WfxProgress.Total))) }
+        $r = & $Body
+        $count = if ($null -eq $r) { 0 } elseif ($r -is [System.Collections.IEnumerable] -and $r -isnot [string]) { @($r).Count } else { 1 }
+        Write-WfxConsole ("{0,7:N1}s  {1}" -f $sw.Elapsed.TotalSeconds, $(if ($count -gt 1) { "$count items" } else { '' })) -Kind Dim
+        $r
+    }
 
     # Volatile, fast-changing state first (DNS cache, connections, processes), then the rest.
-    $hostInfo = if ($want.Host) { Get-WfxHostInfo } else { $null }
-    $dns = if ($want.Dns) { @(Get-WfxDnsData) } else { @() }
-    $net = if ($want.Network) { @(Get-WfxNetworkData) } else { @() }
-    $procs = if ($want.Process) { @(Get-WfxProcessData) } else { @() }
+    $hostInfo = if ($want.Host) { & $stage 'System information' { Get-WfxHostInfo } } else { $null }
+    $dns = if ($want.Dns) { @(& $stage 'DNS cache' { Get-WfxDnsData }) } else { @() }
+    $net = if ($want.Network) { @(& $stage 'Network connections' { Get-WfxNetworkData }) } else { @() }
+    $procs = if ($want.Process) { @(& $stage 'Processes (+ signatures)' { Get-WfxProcessData }) } else { @() }
 
     $persist = @()
-    if ($want.Persistence) { $persist = @(Get-WfxPersistenceData) + @(Get-WfxServiceAndDriver) }
+    if ($want.Persistence) { $persist = @(& $stage 'Autostarts, services, drivers' { @(Get-WfxPersistenceData) + @(Get-WfxServiceAndDriver) }) }
 
     $events = @()
-    if ($want.Events) { $events = @(Get-WfxEventData -Hours $Hours) }
+    if ($want.Events) { $events = @(& $stage "Event logs (last $Hours h)" { Get-WfxEventData -Hours $Hours }) }
+
+    $activity = @()
+    $days = [int][Math]::Max(1, [Math]::Ceiling($Hours / 24.0))
+    if ($want.Activity) { $activity = @(& $stage "Recent changes (last $days d$(if ($FileScan) { ', incl. NTFS journal' }))" { Get-WfxActivityData -Days $days -Journal:$FileScan }) }
 
     $files = @(); $ransom = [pscustomobject]@{ Note = @(); RecentFile = @() }
     if ($want.Files -and $FileScan) {
-        $files = @(Get-WfxFileData)
-        $ransom = Get-WfxRansomwareData
+        $files = @(& $stage 'File scan (web roots, drops, ransomware)' { $script:WfxRansomTmp = Get-WfxRansomwareData; Get-WfxFileData })
+        $ransom = $script:WfxRansomTmp
     }
 
     $exposure = @()
-    if ($want.Exposure) { $exposure = @(Get-WfxExposureData -IncludeFileScan:$ExposureScan) }
+    if ($want.Exposure) { $exposure = @(& $stage 'Credential exposure audit (redacted)' { Get-WfxExposureData -IncludeFileScan:$ExposureScan }) }
 
-    $security = if ($want.Security) { Get-WfxSecurityData } else { $null }
+    $security = if ($want.Security) { & $stage 'Security posture' { Get-WfxSecurityData } } else { $null }
+    if (-not $script:WfxQuiet) { Write-Progress -Activity 'WinForensicX collection' -Completed }
 
     [pscustomobject]@{
         Schema      = 'winforensicx.bundle/2'
@@ -58,6 +76,7 @@ function Get-WfxCollectionBundle {
         Dns         = $dns
         Persistence = $persist
         Events      = $events
+        Activity    = $activity
         Files       = $files
         Ransom      = $ransom
         Exposure    = $exposure
@@ -87,7 +106,7 @@ function Get-WfxOfflineBundle {
         Collected   = (Get-WfxUtcNow)
         HostName    = $hostName
         Host        = [pscustomobject]@{ HostName = $hostName; Fqdn = $hn; Os = '(offline event logs)'; Collected = (Get-WfxUtcNow); Admin = $null; Operator = [Environment]::UserName }
-        Process     = @(); Network = @(); Dns = @(); Persistence = @(); Files = @(); Exposure = @(); Security = $null
+        Process     = @(); Network = @(); Dns = @(); Persistence = @(); Activity = @(); Files = @(); Exposure = @(); Security = $null
         Ransom      = [pscustomobject]@{ Note = @(); RecentFile = @() }
         Events      = $events
         Gaps        = @(Get-WfxGap)

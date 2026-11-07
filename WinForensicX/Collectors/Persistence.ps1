@@ -142,7 +142,7 @@ function Get-WfxPersistenceData {
         }
     }
 
-    , @($out.ToArray())
+    $out.ToArray()
 }
 
 function Get-WfxUserHives {

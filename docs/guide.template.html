@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src file: 'self'">
+<title>WinForensicX field guide</title>
+<style>html{font-variant-ligatures:none;font-feature-settings:"calt" 0,"liga" 0,"clig" 0}
+
+:root{
+  --paper:#EDF0F3; --sheet:#FFFFFF; --ink:#17212B; --slate:#52606E; --rule:#C7D0D9;
+  --tag:#F2C230; --tag-ink:#2B2100; --console:#15212C; --console-ink:#D3DEE8; --console-dim:#7F93A6;
+  --crit:#7A0E0E; --high:#C0362C; --med:#E8A33D; --low:#3E6E9C; --link:#1F5FAD;
+  --head:"Bahnschrift","DIN Alternate","DIN 2014","Arial Narrow",system-ui,sans-serif;
+  --body:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --mono:"Cascadia Mono","Cascadia Code",Consolas,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root{--paper:#11181F;--sheet:#18212A;--ink:#E2E8EE;--slate:#93A2B1;--rule:#2C3946;--link:#86B6EE;--console:#0C131A}}
+*{box-sizing:border-box}
+html{scroll-padding-top:16px}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 var(--body);-webkit-text-size-adjust:100%}
+a{color:var(--link);text-underline-offset:2px}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--tag);outline-offset:2px;border-radius:2px}
+h1,h2,h3{font-family:var(--head);font-weight:700;line-height:1.15;letter-spacing:-.005em;margin:0}
+h2{font-size:30px;margin:0 0 6px;font-stretch:semi-condensed}
+h3{font-size:21px;margin:30px 0 6px;font-stretch:semi-condensed}
+p{margin:0 0 14px}
+code,kbd,pre{font-family:var(--mono);font-size:.88em}
+p code,li code,td code{background:rgba(82,96,110,.12);padding:1px 5px;border-radius:3px;overflow-wrap:anywhere}
+
+/* layout */
+.frame{display:grid;grid-template-columns:240px minmax(0,1fr);max-width:1180px;margin:0 auto}
+nav.rail{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;padding:30px 18px 30px 22px;border-right:1px solid var(--rule)}
+nav.rail .mark{font-family:var(--head);font-weight:700;font-size:19px;letter-spacing:.01em;display:block;margin-bottom:2px}
+nav.rail .ver{color:var(--slate);font-size:13px;margin-bottom:22px}
+nav.rail ol{list-style:none;margin:0;padding:0}
+nav.rail li{margin:2px 0}
+nav.rail a{display:block;padding:4px 8px;margin-left:-8px;border-radius:4px;color:var(--ink);text-decoration:none;font-size:14.5px}
+nav.rail a:hover{background:rgba(82,96,110,.12)}
+nav.rail .sub a{padding-left:20px;color:var(--slate);font-size:13.5px}
+main{padding:44px 48px 80px;min-width:0}
+section{max-width:720px;margin:0 0 64px}
+.lede{font-size:18px;color:var(--slate);max-width:62ch}
+
+/* the hero: the tool's own main menu */
+.hero h1{font-size:56px;font-stretch:condensed;letter-spacing:-.01em;margin-bottom:12px}
+.hero{max-width:none}
+.hero .lede{margin-bottom:26px}
+.launch{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.35fr);gap:32px;align-items:start;margin-top:8px}
+.launch>*{min-width:0}
+.launch .console{margin-top:0}
+.launch ol{margin:0;padding:0;list-style:none;counter-reset:s}
+.launch li{counter-increment:s;position:relative;padding:0 0 18px 44px}
+.launch li::before{content:counter(s);position:absolute;left:0;top:-2px;font:700 26px/1 var(--head);color:var(--slate)}
+.launch li strong{display:block;font-family:var(--head);font-size:18px;font-weight:600}
+
+/* console transcripts */
+.console{background:var(--console);color:var(--console-ink);border-radius:6px;padding:16px 18px;margin:18px 0 22px;overflow-x:auto;font:13px/1.55 var(--mono);white-space:pre;tab-size:4}
+.console .dim{color:var(--console-dim)}
+.console .ps{color:#8CC7FF}
+.console .key{color:var(--tag)}
+.console .r{color:#FF8A80}.console .y{color:#FFD27A}.console .c{color:#9CCBFF}
+.wide{margin-right:-120px}
+.console.has-copy{position:relative;padding-top:40px}
+.copy{position:absolute;top:9px;right:10px;font:12px var(--body);color:var(--console-ink);background:transparent;border:1px solid #3A4B5B;border-radius:4px;padding:3px 8px;cursor:pointer}
+.copy:hover{border-color:var(--tag)}
+figure{margin:22px 0 26px}
+figure img{display:block;max-width:100%;height:auto;border:1px solid var(--rule);border-radius:6px}
+figcaption{font-size:13.5px;color:var(--slate);margin-top:8px}
+
+/* evidence tags: the key path for every task */
+.tag{display:inline-flex;align-items:center;gap:7px;background:var(--tag);color:var(--tag-ink);font:600 14px/1 var(--head);padding:6px 11px 6px 9px;border-radius:2px 6px 6px 2px;position:relative;white-space:nowrap;vertical-align:1px}
+.tag::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--paper);box-shadow:inset 0 0 0 1.5px rgba(43,33,0,.35)}
+.tag kbd{font:600 14px/1 var(--head)}
+.tag .sep{opacity:.55;font-weight:400}
+
+/* scenarios */
+.case{border-left:3px solid var(--rule);padding:2px 0 2px 22px;margin:34px 0 0}
+.case h3{margin-top:0;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.case .when{color:var(--slate);margin-bottom:12px}
+.case ol{padding-left:22px;margin:0 0 14px}
+.case li{margin:4px 0}
+.next{font-size:15px;color:var(--slate)}
+.next b{color:var(--ink);font-weight:600}
+
+/* tables */
+.tbl{width:100%;border-collapse:collapse;margin:14px 0 22px;font-size:14.5px}
+.tbl th{font-family:var(--head);font-weight:600;font-size:14px;text-align:left;border-bottom:2px solid var(--ink);padding:6px 10px 6px 0}
+.tbl td{border-bottom:1px solid var(--rule);padding:8px 10px 8px 0;vertical-align:top}
+.tbl td:first-child{white-space:nowrap}
+.sev{display:inline-block;font:600 12px/1 var(--head);letter-spacing:.03em;padding:4px 7px;border-radius:3px;color:#fff}
+.sev.crit{background:var(--crit)}.sev.high{background:var(--high)}.sev.med{background:var(--med);color:#1B1300}.sev.low{background:#D5E3F2;color:#123}
+.yes{font-family:var(--head);font-weight:600}
+.no{color:var(--slate)}
+
+/* reference blocks */
+details.cmd{border-top:1px solid var(--rule);padding:10px 0}
+details.cmd:last-of-type{border-bottom:1px solid var(--rule)}
+details.cmd summary{cursor:pointer;font:600 15px var(--mono);list-style:none;display:flex;justify-content:space-between;gap:16px}
+details.cmd summary::-webkit-details-marker{display:none}
+details.cmd summary span{font:14px var(--body);color:var(--slate);text-align:right}
+details.cmd[open] summary{margin-bottom:6px}
+details.cmd .console{margin:8px 0 6px}
+.group h3{margin-top:34px}
+.note{border-left:3px solid var(--tag);background:var(--sheet);padding:12px 16px;margin:16px 0 20px;font-size:15px}
+.note p:last-child{margin:0}
+ul.plain{padding-left:20px;margin:0 0 14px}ul.plain li{margin:5px 0}
+footer{color:var(--slate);font-size:13.5px;border-top:1px solid var(--rule);padding-top:16px;max-width:720px}
+
+@media (max-width:1100px){.wide{margin-right:0}}
+@media (max-width:900px){
+  .frame{grid-template-columns:1fr}
+  nav.rail{position:static;height:auto;border-right:0;border-bottom:1px solid var(--rule);padding:18px 16px}
+  nav.rail ol{columns:2;column-gap:18px}nav.rail .sub{display:none}
+  main{padding:28px 16px 60px}
+  .hero h1{font-size:40px}
+  .launch{grid-template-columns:1fr}
+  .tbl{font-size:13.5px}
+  .tbl.views td:nth-child(3){display:none}.tbl.views th:nth-child(3){display:none}
+}
+@media print{nav.rail,.copy{display:none}.frame{display:block}main{padding:0}.console{white-space:pre-wrap;border:1px solid #999}section{break-inside:avoid-page}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+*,*::before,*::after{font-variant-ligatures:none!important;font-feature-settings:"calt" 0,"liga" 0,"clig" 0!important}
+</style>
+</head>
+<body>
+<div class="frame">
+<nav class="rail" aria-label="Contents">
+  <span class="mark">WinForensicX</span>
+  <div class="ver">Field guide for version {{VERSION}}</div>
+  <ol>
+    <li><a href="#start">Start it</a></li>
+    <li><a href="#map">Find your way</a></li>
+    <li><a href="#flags">Read the flags</a></li>
+    <li><a href="#cases">Investigations</a></li>
+    <li class="sub"><a href="#case-compromise">Is this PC compromised?</a></li>
+    <li class="sub"><a href="#case-lasthour">What changed in the last hour?</a></li>
+    <li class="sub"><a href="#case-deleted">Something was deleted</a></li>
+    <li class="sub"><a href="#case-file">A suspicious file or command</a></li>
+    <li class="sub"><a href="#case-lab">Malware lab and CTF</a></li>
+    <li class="sub"><a href="#case-ioc">Sweep for known IOCs</a></li>
+    <li class="sub"><a href="#case-handover">Hand the case over</a></li>
+    <li><a href="#views">All live views</a></li>
+    <li><a href="#commands">PowerShell commands</a></li>
+    <li><a href="#outputs">The case folder</a></li>
+    <li><a href="#limits">Limits and safety</a></li>
+  </ol>
+</nav>
+
+<main>
+<section class="hero" id="top">
+  <h1>WinForensicX field guide</h1>
+  <p class="lede">A read-only toolkit for looking inside a Windows computer: what is running, what persists, what changed, and which of it looks like an attacker. It changes nothing on the machine and sends nothing anywhere.</p>
+
+  <div class="launch" id="start">
+    <ol>
+      <li><strong>Extract the whole archive</strong>Keep the folder structure. Optionally compare the files with <code>SHA256SUMS.txt</code>.</li>
+      <li><strong>Open PowerShell as administrator</strong>Start, type <em>PowerShell</em>, choose <em>Run as administrator</em>. Without it the tool still runs, with less to see.</li>
+      <li><strong>Start the menu</strong>Change to the extracted folder and run the launcher. Everything else is a key press away.</li>
+    </ol>
+    <div>
+<pre class="console has-copy"><button class="copy" type="button" data-copy="cd &quot;$HOME\Downloads\WinForensicX-{{VERSION}}&quot;&#10;.\Start-WinForensicX.ps1">Copy</button><span class="ps">PS C:\&gt;</span> cd "$HOME\Downloads\WinForensicX-{{VERSION}}"
+<span class="ps">PS …\WinForensicX-{{VERSION}}&gt;</span> .\Start-WinForensicX.ps1
+
+  WinForensicX  v{{VERSION}} <span class="dim">· read-only DFIR toolkit</span>
+  <span class="dim">Host PC-0412 · elevated · output E:\cases</span>
+
+  ── Main menu ──────────────────────────────────
+   <span class="key">1</span>  Investigate this computer  <span class="dim">triage and report</span>
+   <span class="key">2</span>  Explore this computer      <span class="dim">53 live views</span>
+   <span class="key">3</span>  Hunt &amp; analyze             <span class="dim">IOCs, files, payloads</span>
+   <span class="key">4</span>  Cases &amp; evidence           <span class="dim">reports, verify</span>
+   <span class="key">5</span>  Live monitor
+   <span class="key">6</span>  Settings
+   <span class="key">H</span>  Help &amp; guide
+   <span class="key">Q</span>  Quit
+
+  Choose: <span class="key">_</span></pre>
+    </div>
+  </div>
+
+  <h3>If PowerShell refuses to run it</h3>
+  <table class="tbl">
+    <tr><th>The message says</th><th>Do this</th></tr>
+    <tr><td><em>running scripts is disabled</em></td><td>Run <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code>, then start it again. It applies to this window only and ends when you close it.</td></tr>
+    <tr><td><em>is not digitally signed</em></td><td>The files still carry the downloaded-from-the-Internet mark. After checking the hashes, run <code>Get-ChildItem -Recurse | Unblock-File</code> in the folder, or use the command above.</td></tr>
+    <tr><td>A window flashes and closes</td><td>That is Explorer's right-click <em>Run with PowerShell</em>. It asks to change the execution policy with <em>No</em> as the default, never runs as administrator, and closes on any refusal. Start from a PowerShell window instead.</td></tr>
+  </table>
+</section>
+
+<section id="map">
+  <h2>Find your way</h2>
+  <p>Every task in this guide is labelled with the keys that reach it, like <span class="tag"><kbd>2</kbd><span class="sep">›</span><kbd>1</kbd><span class="sep">›</span><kbd>1</kbd></span>: Explore, Recent changes, Everything that changed. <kbd>B</kbd> goes back one level and <kbd>Q</kbd> quits from anywhere.</p>
+  <table class="tbl">
+    <tr><th>Key</th><th>Menu</th><th>Use it to</th></tr>
+    <tr><td><span class="tag"><kbd>1</kbd></span></td><td>Investigate</td><td>Run a quick or full triage of this computer, collect evidence only, triage remote computers over WinRM, analyze exported <code>.evtx</code> logs, or re-analyze a saved case. Produces the HTML report.</td></tr>
+    <tr><td><span class="tag"><kbd>2</kbd></span></td><td>Explore</td><td>Browse 53 live views in eight groups, from <em>Recent changes</em> to <em>Security posture</em>. Suspicious rows are flagged. <kbd>A</kbd> exports every view into one hashed inventory report.</td></tr>
+    <tr><td><span class="tag"><kbd>3</kbd></span></td><td>Hunt &amp; analyze</td><td>Sweep for IOCs, triage a file or a whole folder, decode encoded commands, and take or compare a file-integrity baseline.</td></tr>
+    <tr><td><span class="tag"><kbd>4</kbd></span></td><td>Cases &amp; evidence</td><td>Open a report or case folder, verify a case against its manifest, export a UTC timeline, compare two cases.</td></tr>
+    <tr><td><span class="tag"><kbd>5</kbd></span></td><td>Live monitor</td><td>Take a baseline, then report new suspicious processes, connections and beacons as they appear.</td></tr>
+    <tr><td><span class="tag"><kbd>6</kbd></span></td><td>Settings</td><td>Output folder, look-back windows, allowlist file and custom rule folder for this session.</td></tr>
+  </table>
+  <p>Inside any view: <kbd>S</kbd> shows suspicious rows only, <kbd>F</kbd> filters by text, <kbd>L</kbd> lists every column, <kbd>G</kbd> opens the view as a sortable page in your browser, <kbd>E</kbd> saves it as CSV and <kbd>R</kbd> refreshes it.</p>
+</section>
+
+<section id="flags">
+  <h2>Read the flags</h2>
+  <p>Views that can show attacker activity check every row against the same rules the triage report uses. A flagged row gets four extra columns.</p>
+  <table class="tbl">
+    <tr><th>Column</th><th>Meaning</th></tr>
+    <tr><td>Flag</td><td>The highest severity among the rules the row matched.</td></tr>
+    <tr><td>Why</td><td>Each reason in plain words, separated by <code>|</code>. The console shows the first reason and how many more there are.</td></tr>
+    <tr><td>Technique</td><td>MITRE ATT&amp;CK technique IDs for the reasons.</td></tr>
+    <tr><td>Rule</td><td>The triage rule ID, for the allowlist. Shown in the browser page and the CSV.</td></tr>
+  </table>
+  <table class="tbl">
+    <tr><th>Flag</th><th>What it usually means</th><th>What to do</th></tr>
+    <tr><td><span class="sev crit">CRITICAL</span> <span class="sev high">HIGH</span></td><td>A pattern attackers use and normal software rarely does: an encoded PowerShell launch, a known credential-theft tool, a deleted event log, a disguised double extension.</td><td>Stop and look now. Note the time, keep the evidence, check what happened around it.</td></tr>
+    <tr><td><span class="sev med">MEDIUM</span></td><td>Suspicious in context: remote-access software, a new local account, a program running from AppData, an exposed port.</td><td>Confirm with the owner of the machine whether it is expected.</td></tr>
+    <tr><td><span class="sev low">LOW</span></td><td>Worth a glance: a Windows binary that can proxy execution, an executable in Downloads, a static hosts entry.</td><td>Review if it fits the timeline you are building.</td></tr>
+  </table>
+  <p>Some findings are about many rows at once. A burst of 300 deletions or renames in ten minutes appears above the table as a <em>pattern</em>, because no single row shows it.</p>
+  <div class="note">
+    <p>A flag is a lead, not a verdict. The opposite also holds: a view with no flags does not mean the computer is clean, only that nothing visible in that view matched a rule. The <em>Notes</em> under each view say what could not be seen, for example without administrator rights.</p>
+  </div>
+  <h3>Silence a known-good flag</h3>
+  <p>Copy the Rule value from the browser page or CSV into an allowlist file, give the reason, and load it with <span class="tag"><kbd>6</kbd><span class="sep">›</span><kbd>4</kbd></span>. Triage and the views then suppress it; the report still lists suppressed findings with your reason.</p>
+<pre class="console">[
+  { "Id": "NET-LISTENER-EXPOSED", "Entity": "listen:8080:java*", "Host": "BUILD-*",
+    "Reason": "Build servers run Jenkins on 8080 (CHG-1042)" }
+]</pre>
+  <p>Flags raised by view-specific checks, such as a cleared Security log or a hosts-file override, have no rule ID and are always shown.</p>
+</section>
+
+<section id="cases">
+  <h2>Investigations</h2>
+  <p class="lede">Seven situations investigators and CTF players meet most, each with the keys to press and what to look at first. The sample output is synthetic, produced by this version of the tool from planted test data.</p>
+
+  <div class="case" id="case-compromise">
+    <h3>Is this PC compromised? <span class="tag"><kbd>1</kbd><span class="sep">›</span><kbd>1</kbd></span></h3>
+    <p class="when">A user reports odd behaviour, an alert fired, or you are asked to clear a machine.</p>
+    <ol>
+      <li>Run a quick triage. It collects processes, network, autostarts, recent events and security posture, and takes one to five minutes.</li>
+      <li>Open the report with <span class="tag"><kbd>4</kbd><span class="sep">›</span><kbd>1</kbd></span>. Start with the verdict and the <em>start here</em> list, then the findings grouped by category.</li>
+      <li>Read the gaps section before you conclude anything. No process auditing and no Sysmon means much was simply not visible.</li>
+    </ol>
+    <p>For evidence work, set the output folder to external media first with <span class="tag"><kbd>6</kbd><span class="sep">›</span><kbd>1</kbd></span>. Choose <span class="tag"><kbd>1</kbd><span class="sep">›</span><kbd>2</kbd></span> for a full triage that also looks for web shells, dropped files, ransomware notes and exposed secrets.</p>
+    <p class="next"><b>Then:</b> open the <em>Recent changes</em> timeline for the hours around the first finding.</p>
+  </div>
+
+  <div class="case" id="case-lasthour">
+    <h3>What changed in the last hour? <span class="tag"><kbd>2</kbd><span class="sep">›</span><kbd>1</kbd><span class="sep">›</span><kbd>1</kbd></span></h3>
+    <p class="when">You know roughly when something happened and want everything that changed around it, in one list.</p>
+    <p>The combined timeline merges registry writes in persistence and security keys, installs, services, scheduled tasks, accounts, firewall and Defender changes, program executions, connections and deletions. Set a shorter look-back with <span class="tag"><kbd>6</kbd><span class="sep">›</span><kbd>3</kbd></span>.</p>
+<pre class="console wide">  ── Explore › Everything that changed recently (combined timeline) ──
+  <span class="r">Suspicious: 4 HIGH · 1 MEDIUM   (S = show only these)</span>
+
+Flag   Why                                              Time                 Action                 Target
+----   ---                                              ----                 ------                 ------
+<span class="r">HIGH   File with a disguised double extension: Invoi…   2026-11-07T14:02:11Z Created                C:\Users\analyst\Downloads\Invoice_Nov.pdf.exe</span>
+<span class="r">HIGH   Known offensive tool executed: MIMIKATZ.EXE      2026-11-07T14:04:11Z Program ran (Prefetch) MIMIKATZ.EXE</span>
+<span class="r">HIGH   Encoded PowerShell command (scheduled task… (+1) 2026-11-07T14:05:11Z Scheduled task created \OneDrive Sync Helper</span>
+<span class="r">HIGH   Event log file deleted: Microsoft-Windows-Power… 2026-11-07T14:12:11Z Deleted                C:\Windows\System32\winevt\Logs\…Operational.evtx</span>
+-                                                       2026-11-07T14:22:11Z Content extended       C:\Users\analyst\Documents\Q3 budget.xlsx
+<span class="y">MEDIUM Remote-access software installed: anydesk        2026-11-07T14:32:11Z Software installed     Product: AnyDesk -- Installation completed…</span>
+
+  6 row(s).
+   <span class="key">S</span>  Show suspicious rows only    <span class="dim">4 HIGH · 1 MEDIUM</span>
+   <span class="key">G</span>  Open in browser (sort, filter, copy)</pre>
+    <p>Press <kbd>S</kbd> to hide everything that matched no rule, and <kbd>G</kbd> to open the view as a page you can sort, filter and copy from. The page works offline and treats every value as plain text, so a hostile file name cannot run script in it.</p>
+    <figure>
+      <img alt="The same timeline opened in a browser: severity badges in the first column, the reasons, ATT&amp;CK technique and rule ID beside each row, and a Suspicious only checkbox above the table." src="img/flagged-view.png" width="1180" height="520">
+      <figcaption>Key <kbd>G</kbd> on the same view. Synthetic data.</figcaption>
+    </figure>
+    <p class="next"><b>Then:</b> for a flagged program, triage the file itself with <span class="tag"><kbd>3</kbd><span class="sep">›</span><kbd>3</kbd></span>; for a flagged task or service, open <span class="tag"><kbd>2</kbd><span class="sep">›</span><kbd>5</kbd></span> Persistence.</p>
+  </div>
+
+  <div class="case" id="case-deleted">
+    <h3>Something was deleted <span class="tag"><kbd>2</kbd><span class="sep">›</span><kbd>1</kbd><span class="sep">›</span><kbd>4</kbd></span></h3>
+    <p class="when">A file or folder is missing, or you suspect someone cleaned up after themselves.</p>
+    <ol>
+      <li><em>Deleted files</em> reads the Recycle Bin of every fixed drive: original path, deletion time, owner, size, and whether the content is still recoverable, with its exact location. With Sysmon installed it adds deletions logged by events 23 and 26.</li>
+      <li><em>File system changes</em> <span class="tag"><kbd>2</kbd><span class="sep">›</span><kbd>1</kbd><span class="sep">›</span><kbd>3</kbd></span> reads the NTFS change journal and needs administrator rights. It shows files created, deleted, overwritten, renamed and moved, and recognises a move into the Recycle Bin as a deletion with its original path.</li>
+      <li>Watch for flags on deleted event logs, deleted PowerShell history, short-lived executables and bursts of deletions.</li>
+    </ol>
+    <p>The change journal keeps a limited history, often hours to a few days on a busy system drive. The view tells you where its readable window starts.</p>
+    <p class="next"><b>Then:</b> copy a recoverable item out of the <code>$Recycle.Bin</code> path shown, and hash it with <span class="tag"><kbd>3</kbd><span class="sep">›</span><kbd>3</kbd></span>.</p>
+  </div>
+
+  <div class="case" id="case-file">
+    <h3>A suspicious file or command <span class="tag"><kbd>3</kbd><span class="sep">›</span><kbd>3</kbd></span></h3>
+    <p class="when">An attachment, a download, a binary in AppData, or a long Base64 command line in a log.</p>
+    <p><em>File triage</em> reports hashes, the real file type against its extension, entropy, the download URL from the Mark of the Web, alternate data streams, the signature, PE facts and printable strings with any IOCs in them. The file is only read, never run. <span class="tag"><kbd>3</kbd><span class="sep">›</span><kbd>4</kbd></span> does the same for a whole folder as one table.</p>
+    <p>For a command line, <span class="tag"><kbd>3</kbd><span class="sep">›</span><kbd>5</kbd></span> peels <code>-EncodedCommand</code>, Base64, gzip and nested <code>FromBase64String</code> layers and shows each step. Nothing is executed.</p>
+<pre class="console"><span class="ps">PS&gt;</span> ConvertFrom-WfxEncodedCommand 'powershell -enc VwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIAAnAGgAaQAnAA=='</pre>
+    <p class="next"><b>Then:</b> search for the hashes and indicators you found across the computer with <span class="tag"><kbd>3</kbd><span class="sep">›</span><kbd>1</kbd></span>.</p>
+  </div>
+
+  <div class="case" id="case-lab">
+    <h3>Malware lab and CTF <span class="tag"><kbd>3</kbd><span class="sep">›</span><kbd>6</kbd></span></h3>
+    <p class="when">You will run a sample, or solve a forensics challenge, and need to know exactly what it changed.</p>
+    <ol>
+      <li>Before the run, take a file-integrity baseline of the folders that matter, and collect evidence with <span class="tag"><kbd>1</kbd><span class="sep">›</span><kbd>3</kbd></span>.</li>
+      <li>Optionally start the <span class="tag"><kbd>5</kbd></span> live monitor, which reports new suspicious processes and connections as they appear.</li>
+      <li>After the run, compare the files with <span class="tag"><kbd>3</kbd><span class="sep">›</span><kbd>7</kbd></span>: added, deleted, content changed, or only timestamps changed. Collect again and compare the two cases with <span class="tag"><kbd>4</kbd><span class="sep">›</span><kbd>5</kbd></span> for new processes, autostarts, services, listeners and DNS names.</li>
+    </ol>
+<pre class="console"><span class="ps">PS&gt;</span> New-WfxFileBaseline -Path C:\Users\lab\AppData, C:\ProgramData -OutputPath E:\bl\before.json
+<span class="ps">PS&gt;</span> Compare-WfxFileBaseline -Baseline E:\bl\before.json | Where-Object Change -ne 'TimestampOnly'</pre>
+    <p class="next"><b>Then:</b> the <em>Recent changes</em> views show the registry, task and service side of the same run.</p>
+  </div>
+
+  <div class="case" id="case-ioc">
+    <h3>Sweep for known IOCs <span class="tag"><kbd>3</kbd><span class="sep">›</span><kbd>1</kbd></span></h3>
+    <p class="when">You have hashes, IP addresses, domains or strings from a report or another host.</p>
+    <p>The hunt matches MD5, SHA-1 and SHA-256 hashes, exact IP addresses, domains with their subdomains, and strings against what it collects from the computer, event logs included. <code>-FileScan</code> also hashes files, and <code>-HashProcesses</code> hashes running programs. A text file with one indicator per line works as well as a typed list. <span class="tag"><kbd>3</kbd><span class="sep">›</span><kbd>2</kbd></span> sweeps a saved case instead, without touching the live system.</p>
+<pre class="console"><span class="ps">PS&gt;</span> Invoke-WfxHunt -IocFile .\iocs.txt -FileScan
+<span class="ps">PS&gt;</span> Invoke-WfxTriage -ComputerName srv01,srv02 -Credential (Get-Credential)</pre>
+    <p class="next"><b>Then:</b> for several machines, collect from each over WinRM with <span class="tag"><kbd>1</kbd><span class="sep">›</span><kbd>4</kbd></span> and hunt in the saved cases.</p>
+  </div>
+
+  <div class="case" id="case-handover">
+    <h3>Hand the case over <span class="tag"><kbd>4</kbd><span class="sep">›</span><kbd>3</kbd></span></h3>
+    <p class="when">The work goes to a colleague, a lawyer, or a write-up.</p>
+    <ol>
+      <li>Verify the case: every file is re-hashed against <code>manifest.json</code>, and any changed, missing or added file is reported.</li>
+      <li>Record the manifest's SHA-256, printed at the end of each run, somewhere outside the case folder. The manifest is not signed, so that recorded hash is what makes later tampering detectable.</li>
+      <li>Export one UTC-sorted timeline with <span class="tag"><kbd>4</kbd><span class="sep">›</span><kbd>4</kbd></span> for a spreadsheet or timeline tool.</li>
+    </ol>
+<pre class="console"><span class="ps">PS&gt;</span> Test-WfxCase -Path E:\cases\WFX_PC-0412_20261107-140211Z
+<span class="ps">PS&gt;</span> Export-WfxTimeline -InputPath E:\cases\WFX_PC-0412_20261107-140211Z -Format Csv</pre>
+  </div>
+</section>
+
+<section id="views">
+  <h2>All live views</h2>
+  <p>Every view under <span class="tag"><kbd>2</kbd></span> Explore, with its keys. Views marked <em>flagged</em> check each row for suspicious activity. Views marked <em>admin</em> need an elevated window for complete results.</p>
+<!--@VIEWS-->
+</section>
+
+<section id="commands">
+  <h2>PowerShell commands</h2>
+  <p>Everything in the menu is also a command, for scripts and remote sessions. Import the module with <code>Import-Module .\WinForensicX\WinForensicX.psd1</code>, or dot-source the single file <code>dist\WinForensicX.ps1</code>. <code>Show-WfxHelp</code> prints this list in the terminal.</p>
+<!--@COMMANDS-->
+</section>
+
+<section id="outputs">
+  <h2>The case folder</h2>
+  <p>Each run writes one folder named after the host and the UTC start time, under the output folder you chose. Nothing is written anywhere else.</p>
+<!--@OUTPUTS-->
+</section>
+
+<section id="limits">
+  <h2>Limits and safety</h2>
+  <h3>What it will and will not do</h3>
+<!--@SAFETY-->
+  <h3>What to keep in mind</h3>
+<!--@LIMITS-->
+  <h3>Requirements</h3>
+<!--@REQUIRES-->
+</section>
+
+<footer>
+  WinForensicX {{VERSION}}. This guide is generated from the tool's own help and view definitions, so commands and keys match this version. Sample output in it is synthetic.
+</footer>
+</main>
+</div>
+<script>
+document.querySelectorAll('button.copy').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var t = b.getAttribute('data-copy');
+    if (!navigator.clipboard) { return; }
+    navigator.clipboard.writeText(t).then(function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1500); });
+  });
+});
+</script>
+</body>
+</html>

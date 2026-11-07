@@ -140,7 +140,7 @@ function Get-WfxFileTriage {
     )
     process {
         foreach ($pp in $Path) {
-            $items = @(Get-Item -Path $pp -Force -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer })
+            $items = @($(if (Test-Path -LiteralPath $pp) { Get-Item -LiteralPath $pp -Force -ErrorAction SilentlyContinue } else { Get-Item -Path $pp -Force -ErrorAction SilentlyContinue }) | Where-Object { -not $_.PSIsContainer })
             if (-not $items.Count) { Write-Warning "Not found or not a file: $pp"; continue }
             foreach ($it in $items) {
                 $full = $it.FullName

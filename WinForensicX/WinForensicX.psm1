@@ -13,5 +13,5 @@ foreach ($layer in 'Private', 'Analyzers', 'Collectors', 'Report', 'Public') {
     }
 }
 
-$script:WfxPublic = @('Invoke-WfxTriage', 'Invoke-WfxAnalyze', 'Start-WfxMonitor', 'Invoke-WfxHunt', 'Save-WfxEvidence', 'Show-WfxMenu', 'Show-WfxHelp', 'Get-WfxFileTriage', 'ConvertFrom-WfxEncodedCommand', 'Get-WfxTimeline', 'Export-WfxTimeline', 'Compare-WfxCase')
+$script:WfxPublic = @('Invoke-WfxTriage', 'Invoke-WfxAnalyze', 'Start-WfxMonitor', 'Invoke-WfxHunt', 'Save-WfxEvidence', 'Show-WfxMenu', 'Show-WfxHelp', 'Get-WfxFileTriage', 'ConvertFrom-WfxEncodedCommand', 'Get-WfxTimeline', 'Export-WfxTimeline', 'Compare-WfxCase', 'Get-WfxInsight', 'Save-WfxInsight', 'Test-WfxCase', 'Get-WfxActivity', 'New-WfxFileBaseline', 'Compare-WfxFileBaseline')
 Export-ModuleMember -Function $script:WfxPublic

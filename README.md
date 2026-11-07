@@ -12,6 +12,130 @@ hunting, super-timelines and case diffing.
 
 ---
 
+## ▶ Start here (30 seconds)
+
+1. **Download and extract** the whole archive (not just one file). Optionally check the files against
+   `SHA256SUMS.txt` (see [Verifying the download](#verifying-the-download)).
+2. Open **Windows PowerShell** with **Run as administrator** (Start → type *PowerShell* → *Run as
+   administrator*). Administrator rights let it read the Security log, every process, Prefetch, the NTFS
+   change journal and BitLocker state; a normal window works with less visibility.
+3. Go to the extracted folder and start it:
+   ```powershell
+   cd "$HOME\Downloads\WinForensicX-2.6.0"
+   .\Start-WinForensicX.ps1
+   ```
+   If PowerShell refuses, the message says why:
+
+   | Message | What to do |
+   |---|---|
+   | *running scripts is disabled on this system* | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, then run it again. Applies to **this window only**; nothing on the system changes. |
+   | *…is not digitally signed* | The files still carry the "downloaded from the Internet" mark. After checking the hashes, remove it with `Get-ChildItem -Recurse \| Unblock-File`, or use the same process-only command above. |
+
+   > **Why not right-click → "Run with PowerShell"?** That shortcut first asks *"Do you want to change the
+   > execution policy?"* with **No** as the default, never runs as administrator, and closes the window the
+   > moment PowerShell refuses — so you see a window flash and disappear. Start it from a PowerShell window
+   > as above.
+4. Use the menu:
+
+```
+  ── Main menu ───────────────────────────────────────────────────
+   1  Investigate this computer    triage: find signs of compromise and get a report
+   2  Explore this computer        53 live views: what changed recently, users, software, network, USB...
+   3  Hunt & analyze               IOC hunting, file triage, decode payloads
+   4  Cases & evidence             open reports, verify, timeline, compare
+   5  Live monitor                 watch new processes / connections as they happen
+   6  Settings                     output folder, look-back, allowlist, custom rules
+   H  Help & guide                 what everything does, in a browser page
+   Q  Quit
+```
+
+Every submenu explains each option on the same line. **B** goes back and **Q** quits from anywhere.
+Paths are checked before anything runs. Results (cases, CSV exports) go to `Desktop\WinForensicX` unless you
+change the output folder in **Settings**; use an external drive for real evidence work.
+
+**Using the commands directly:** `Import-Module .\WinForensicX\WinForensicX.psd1` to use the commands directly. The portable single file is
+`dist\WinForensicX.ps1`.
+
+### Two packages
+
+| Package | For | Contains |
+|---|---|---|
+| `WinForensicX-<version>.zip` | Investigators, CTF players: **use this** | The toolkit, single-file build, rule packs, guide, examples. |
+| `WinForensicX-<version>-source.zip` | Developers and reviewers | Everything above **plus** `tests\`: unit tests and the attack-scenario suite. |
+
+The test data in the source package contains realistic attacker command lines (download cradles, ClickFix
+lures, encoded PowerShell, credential-dumping commands) as plain text, so the detections can be tested. Heuristic
+antivirus engines often flag such files. Nothing in them runs; they are inputs to the analyzers. If you only want
+to use the tool, take the main package.
+
+### Verifying the download
+
+```powershell
+Get-Content .\SHA256SUMS.txt | ForEach-Object {
+  $h, $f = $_ -split '  ', 2
+  if ((Get-FileHash -Algorithm SHA256 -LiteralPath $f).Hash -ne $h) { "CHANGED: $f" }
+}
+```
+No output means every file matches the release.
+
+### Antivirus warnings
+
+WinForensicX is a forensics tool: its rule packs *contain* the names and command-line patterns of attacker
+tools (mimikatz, wscript, encoded PowerShell …) so it can detect them, and it reads security-sensitive places
+(event logs, Run keys, the NTFS journal). Heuristic scanners sometimes flag that. The code is plain, readable
+PowerShell with no obfuscation, no downloads, no encoded payloads and nothing that runs on its own. If your
+antivirus blocks it: **do not turn the antivirus off.** Check the hashes above, read the flagged file, and
+report the false positive to the vendor (e.g. Avast: <https://www.avast.com/false-positive-file-form.php>).
+
+### Which files are which
+
+| File / folder | What it is |
+|---|---|
+| `Start-WinForensicX.ps1` | **Run this.** Loads the module and opens the menu. It never elevates or relaunches itself and never changes the execution policy. |
+| `SHA256SUMS.txt` | SHA-256 of every file in the release, to check nothing was altered. |
+| `WinForensicX\` | The module (all source code and rule packs). |
+| `dist\WinForensicX.ps1` | Everything in one file, for copying to a USB stick or a remote host. |
+| `docs\guide.html` | **The field guide**: investigations step by step, how to read the flags, every view and command. Opens with **H** in the menu. |
+| `tools\`, `docs\`, `examples\` | Build scripts, rule-writing guide, sample report and allowlist. |
+| `tests\` | **Source package only** (see [Two packages](#two-packages)): unit tests and the attack-scenario suite. |
+
+### Explore: live views of the computer
+
+Instant, read-only answers without a full triage. Each view can be filtered, opened in a sortable browser table (offline, works in Windows Sandbox and Server Core)
+and exported to CSV, or exported all together as a hashed **inventory report** (HTML + CSVs).
+
+**Suspicious rows are flagged.** Views that can show attacker activity run the same analyzers as triage over
+every row and add **Flag** (CRITICAL / HIGH / MEDIUM / LOW), **Why** (each reason in plain words),
+**Technique** (MITRE ATT&CK) and **Rule** (the rule ID, for the allowlist). Flagged rows are coloured in the
+console, **S** shows them alone, and the inventory report opens with every flagged item across all views.
+Examples: encoded or hidden PowerShell, Office spawning a shell, a known credential-theft tool in Prefetch, an
+executable dropped in a Startup folder, `invoice.pdf.exe`, a deleted event log, a Defender exclusion, a new
+local admin, a hosts-file override of a security vendor, remote-access software, a connection to port 4444.
+A flag is a lead, not a verdict; a view without flags is not proof the host is clean.
+
+| Group | Views |
+|---|---|
+| **Recent changes** | everything that changed (combined timeline), registry writes in persistence & security keys, file system changes from the NTFS change journal (created / deleted / content changed / renamed / alternate streams / timestamps), deleted files (Recycle Bin + Sysmon), software & driver installs/removals, programs that ran (Prefetch, BAM, UserAssist), connection history (Sysmon 3, WFP 5156, firewall log, live, saved RDP targets), security-relevant config changes (accounts, tasks, audit policy, firewall rules, Defender, time changes, log clearing, BITS, WMI) |
+| System | overview, installed updates, installed software, local users, privileged groups, logged-on sessions, profiles, shares, USB storage history, drives & BitLocker |
+| Processes | all processes (signer, owner, parent, command line), process tree, unsigned / user-folder programs |
+| Network | listening ports, active connections (named from DNS cache), DNS cache, adapters, routes, ARP, hosts file, proxy, saved Wi-Fi names, custom firewall rules, SMB sessions |
+| Persistence | autostarts, non-standard services, non-standard drivers, non-Microsoft scheduled tasks, WMI subscriptions |
+| Events | logon summary, failed logons, RDP activity, account & group changes, installed services, cleared logs, reboots/crashes, suspicious PowerShell, Defender detections |
+| Files | recent downloads with source URL, new programs/scripts in user folders, Prefetch execution history, recently opened files, PowerShell history (redacted), Run-dialog history |
+| Security | posture checklist (AV, tamper, firewall, UAC, LSA, Credential Guard, WDigest, SMBv1, LLMNR, logging, Sysmon, RDP NLA, auto-logon, patch age) with fixes |
+
+From PowerShell: `Get-WfxInsight -List`, `Get-WfxInsight logons -Days 3`, `Save-WfxInsight`, `Get-WfxActivity -Days 2 -Journal`.
+
+**How "recent changes" works without prior monitoring.** Windows already keeps the evidence; WinForensicX reads it.
+Registry keys carry a last-write time, and the NTFS change journal records file creates, deletes and writes.
+The Recycle Bin keeps original paths and deletion times. Prefetch, BAM and UserAssist record program runs. The
+event logs record installs, services, tasks, accounts, firewall and Defender changes. Sysmon, the Windows
+Filtering Platform audit (5156) and the firewall log, *when enabled*, record connections. What isn't enabled is
+reported as a gap. For continuous file-integrity checking of specific folders, use **Hunt & analyze → Take a
+file-integrity baseline** (`New-WfxFileBaseline` / `Compare-WfxFileBaseline`).
+
+---
+
 ## What's in the box
 
 | Command | What it does |
@@ -24,6 +148,8 @@ hunting, super-timelines and case diffing.
 | `ConvertFrom-WfxEncodedCommand` | Decode `-EncodedCommand`, Base64 (UTF-16LE / UTF-8), gzip-wrapped and nested `FromBase64String(...)` payloads, and run the detection rules over the result. Decode only. |
 | `Export-WfxTimeline` / `Get-WfxTimeline` | UTC super-timeline of a case: boot/install, process starts, connections, event-log records, file writes, findings → CSV / JSON. |
 | `Compare-WfxCase` | Diff two cases: new/removed processes, autostarts, services & drivers, listeners, DNS names, exposures, findings. Baselines, before/after malware runs, CTF "what changed?". |
+| `Get-WfxInsight` / `Save-WfxInsight` | 45 live read-only views of the host (see above) / export them all as a hashed inventory report. |
+| `Test-WfxCase` | Verify a case: re-hash every file against its manifest and flag changed, missing or added files. |
 | `Start-WfxMonitor` | Live baseline + delta monitoring of processes and connections, with beacon detection. |
 | `Show-WfxMenu` / `Show-WfxHelp` | Interactive menu over everything above; help in the terminal and as an HTML guide. |
 
@@ -38,6 +164,7 @@ hunting, super-timelines and case diffing.
 | **Network & DNS** | Non-default listeners on all interfaces, tunnels (ngrok/Cloudflare/…), C2 ports, DGA-like names, risky TLDs, paste sites, AI-API use, low-jitter beaconing (monitor) |
 | **Files** (`-FileScan`) | Web shells, double extensions, internet-downloaded executables (with download URL), packed binaries, ransom notes (same name dropped in many folders), mass encryption |
 | **Exposure (redacted)** | GPP cPassword, unattend passwords, **live SAM/SYSTEM/SECURITY/NTDS readable by users (HiveNightmare)**, stray hive copies, world-readable cloud credentials, auto-logon password, unencrypted SSH keys, AI/API keys and secrets in env vars, history and config files |
+| **Recent activity** | Defender exclusion / policy keys changed, IFEO / SilentProcessExit / UAC-bypass handler keys changed, autostart keys changed, WDigest/LSA weakened, remote-access tool installed, PsExec-style or user-path services installed, firewall changed by a non-system program, audit policy changed, logs cleared, Defender disabled, timestomping, system time changed, BITS downloads from unusual hosts, permanent WMI subscriptions, programs run from user folders, executables dropped in staging folders, alternate data streams, **mass deletion / mass modification bursts** (ransomware, wipers) |
 | **Posture & visibility** | AV off / no AV, tamper protection, stale signatures, Defender exclusions, process/command-line/script-block auditing, Sysmon, firewall, RDP without NLA, LSASS protection |
 
 **Two scores.** *Compromise risk* is computed only from evidence of attacker activity. *Posture* is
@@ -56,7 +183,7 @@ files) with `Get-FileHash`. A DFIR tool contains detection strings for attacker 
 products may flag it. Do not disable your antivirus. Verify the hash, then add a narrowly scoped, approved
 exception or report the false positive to your AV vendor.
 
-### Option A — single file
+### Option A — single file (`dist\WinForensicX.ps1`)
 ```powershell
 .\WinForensicX.ps1                 # interactive menu
 .\WinForensicX.ps1 -RunTriage      # triage straight away
@@ -135,10 +262,32 @@ in your ticket or evidence log, or sign it, to make the case tamper-evident.
 ## Testing & quality
 
 ```powershell
-Invoke-Pester ./tests          # 73 tests: analyzers, rule self-tests, regressions, features (any OS)
+Invoke-Pester ./tests          # 120 tests incl. the attack-scenario suite below (any OS)
 Invoke-ScriptAnalyzer -Path ./WinForensicX -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
 pwsh -File tools/build.ps1     # deterministic single-file build → dist/WinForensicX.ps1
+pwsh -File tools/build-guide.ps1   # docs/guide.html from the template + the tool's own help and view table
 ```
+
+### Attack-scenario suite
+
+`tools/Invoke-WfxScenarioSuite.ps1` runs synthetic evidence for ten scenarios through every workflow:
+a clean and a busy-admin workstation (false-positive controls), commodity phishing malware, a LOLBin download
+chain, a hands-on-keyboard intrusion, credential theft, a multi-day APT chain (ISO lure → persistence → C2 →
+anti-forensics → ransomware), malware-free lateral movement, ClickFix and AI-tool abuse, and malformed/hostile
+evidence. For each it checks the expected and forbidden detections, report, manifest and tamper detection,
+timeline, IOC hunt and the Explore-view flags. It also runs 42 command-line evasion variants (carets, en-dash
+parameters, renamed PowerShell, alternate cradles, slash switches…) against 15 benign look-alikes, and the
+case diff, file baseline, file triage, decoder, live monitor and inventory workflows. Nothing is executed;
+the evidence is data. `-SingleFile` tests the built `dist\WinForensicX.ps1`; the run writes
+`scenario-results.json` and a readable `scenario-report.html`.
+
+```powershell
+pwsh -File tools/Invoke-WfxScenarioSuite.ps1 -OutputPath .\scenario-results
+```
+
+Testing the Windows collectors needs real Windows: a separate script, `Invoke-WfxSandboxEmulation.ps1`
+(distributed separately from the toolkit), creates harmless look-alike artefacts **inside Windows Sandbox only**,
+checks that each is flagged, and reverts them.
 
 ## Honest limitations
 

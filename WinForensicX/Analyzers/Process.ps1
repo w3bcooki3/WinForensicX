@@ -38,6 +38,8 @@ function Invoke-WfxProcessAnalyzer {
     $rmm = @($threats.rmmProcesses | ForEach-Object { $_.ToLowerInvariant() })
     $aiRuntime = @($ai.runtimeProcesses | ForEach-Object { $_.ToLowerInvariant() })
     $aiAssist = @($ai.assistantProcesses | ForEach-Object { $_.ToLowerInvariant() })
+    # Assistants installed as npm / pip packages run as node.exe or python.exe: recognise them by package path.
+    $aiAssistCmd = @($ai.assistantCommandHints | ForEach-Object { ([string]$_).ToLowerInvariant() } | Where-Object { $_ })
     $agentHints = @($ai.agentHints | ForEach-Object { ([string]$_).ToLowerInvariant() } | Where-Object { $_ })
     $byPid = @{}
     foreach ($p in $procs) { if ($null -ne $p.Pid) { $byPid[[string]$p.Pid] = $p } }
@@ -66,8 +68,19 @@ function Invoke-WfxProcessAnalyzer {
         }
 
         # 1b. Encoded PowerShell: decode (text only — never executed) and run the rules over the decoded script.
-        if ($name -in @('powershell.exe', 'pwsh.exe', 'powershell_ise.exe') -or $cmd -match '(?i)\bp(?:ower)?sh') {
-            $decoded = Get-WfxEncodedCommandPayload $cmd
+        $isPs = $name -in @('powershell.exe', 'pwsh.exe', 'powershell_ise.exe')
+        $canonCmd = ConvertTo-WfxCanonicalCommand $cmd
+        if ($isPs -or $canonCmd -match '(?i)\bp(?:ower)?sh' -or $canonCmd -match '(?i)(?:^|\s)-(?:e|ec|en|enc|encodedcommand)\s+["'']?[A-Za-z0-9+/]{20,}') {
+            $decoded = Get-WfxEncodedCommandPayload $canonCmd
+            if ($decoded -and -not $isPs -and $canonCmd -notmatch '(?i)\bp(?:ower)?sh(?:ell)?(?:_ise)?(?:\.exe)?\b' -and $decoded -match '(?i)[a-z]+-[a-z]+|\biex\b|\$[a-z_]') {
+                # A PowerShell payload handed to a program that is not called PowerShell: a copied/renamed interpreter.
+                $findings.Add((New-WfxFinding -Id 'PROC-RENAMED-INTERPRETER' -Title "Encoded PowerShell run by a program named $name (renamed PowerShell?)" `
+                            -Severity 'High' -Confidence 'Medium' -Category 'Process' -Technique @('T1036.003', 'T1059.001') `
+                            -Description 'The process received a Base64 -EncodedCommand that decodes to PowerShell, but its executable is not named PowerShell. Attackers copy powershell.exe under another name to slip past name-based rules.' `
+                            -Recommendation 'Hash the executable and compare with System32\WindowsPowerShell\v1.0\powershell.exe; read the decoded script.' `
+                            -Entity "$entity`:renamed" -HostName $HostName -Time (Get-WfxValue $p 'CreateTime') -Source 'process' `
+                            -Evidence ([ordered]@{ Pid = $p.Pid; Process = $name; Path = $path; DecodedCommand = (Protect-WfxText $(if ($decoded.Length -gt 600) { $decoded.Substring(0, 600) + ' …' } else { $decoded })) })))
+            }
             if ($decoded) {
                 $dshort = Protect-WfxText $(if ($decoded.Length -gt 2000) { $decoded.Substring(0, 2000) + ' …[truncated]' } else { $decoded })
                 foreach ($r in (Test-WfxCommandLine -CommandLine $decoded -Image 'powershell.exe')) {
@@ -172,13 +185,14 @@ function Invoke-WfxProcessAnalyzer {
                         -Entity "$entity`:agent" -HostName $HostName -Time (Get-WfxValue $p 'CreateTime') -Source 'process' `
                         -Evidence ([ordered]@{ Pid = $p.Pid; Process = $name; Hint = $agent; CommandLine = (Protect-WfxText $cmd) })))
         }
-        if ($aiAssist -contains $name) {
-            $findings.Add((New-WfxFinding -Id 'AI-ASSISTANT-PRESENT' -Title "AI assistant / agent running: $name" `
+        $assistHint = if ($aiAssist -contains $name) { $name } else { @($aiAssistCmd | Where-Object { $cmdL.Replace('\', '/').Contains($_) }) | Select-Object -First 1 }
+        if ($assistHint) {
+            $findings.Add((New-WfxFinding -Id 'AI-ASSISTANT-PRESENT' -Title "AI assistant / agent running: $(if ($assistHint -ne $name) { "$assistHint (in $name)" } else { $name })" `
                         -Severity 'Info' -Confidence 'Low' -Category 'AI' -Technique @('T1204.004') `
                         -Description "An AI coding assistant or agent capable of running commands is present. Relevant when attributing activity: some commands may have been generated and run by this tool." `
                         -Recommendation "If reconstructing a timeline, consider this tool as a possible actor for shell activity." `
                         -Entity $entity -HostName $HostName -Time (Get-WfxValue $p 'CreateTime') -Source 'process' `
-                        -Evidence ([ordered]@{ Pid = $p.Pid; Process = $name })))
+                        -Evidence ([ordered]@{ Pid = $p.Pid; Process = $name; Hint = $assistHint })))
         }
     }
     return , (Merge-WfxFinding -Finding $findings.ToArray())

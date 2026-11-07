@@ -58,6 +58,18 @@
     "llamafile",
     "aichat"
   ],
+  "assistantCommandHints": [
+    "@anthropic-ai/claude-code",
+    "@openai/codex",
+    "@google/gemini-cli",
+    "@qwen-code/qwen-code",
+    "@sourcegraph/amp",
+    "opencode-ai",
+    "aider-chat",
+    "aider/__main__",
+    "open-interpreter",
+    "openhands"
+  ],
   "agentHints": [
     "autogpt",
     "agentgpt",

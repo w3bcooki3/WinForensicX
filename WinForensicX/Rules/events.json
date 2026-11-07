@@ -217,7 +217,7 @@
       "eventIds": [
         4104
       ],
-      "pattern": "(?i)set-psreadlineoption\\s+-historysaving\\s+disable|clear-history|remove-item[^\\n]*consolehost_history|group\\s*policy[^\\n]*scriptblocklogging[^\\n]*0|\\bEtwEventWriteFull\\b|wevtutil\\s+sl\\s+microsoft-windows-powershell",
+      "pattern": "(?i)set-psreadlineoption\\s+-historysaving\\s+disable|clear-history|remove-item[^\\n]*consolehost_history|group\\s*policy[^\\n]*scriptblocklogging[^\\n]*0|\\bEtwEventWriteFull\\b|wevtutil\\s+sl\\s+microsoft-windows-powershell|set-psreadlineoption\\s+-historysavestyle\\s+savenothing|(?:remove-item|\\bri\\b|\\bdel\\b|\\brm\\b|clear-content|set-content|out-file)\\s.{0,120}historysavepath",
       "fields": [
         "ScriptBlockText"
       ],

@@ -109,6 +109,22 @@ function Test-WfxRulePackSet {
     $bad
 }
 
+function ConvertTo-WfxCanonicalCommand {
+    <#
+    .SYNOPSIS The command line as the shell will actually run it, for rule matching only (evidence keeps the original).
+    .DESCRIPTION Undoes common, cheap obfuscation: en/em dashes and minus signs used as parameter prefixes (PowerShell
+    accepts them), cmd caret escapes (p^o^w^e^r^s^h^e^l^l), empty-quote splitting (p""owershell), and "/switch"
+    spellings of "-switch" for tools that accept both (certutil, regsvr32, msiexec ...).
+    #>
+    param([AllowEmptyString()][string]$CommandLine)
+    if ([string]::IsNullOrEmpty($CommandLine)) { return $CommandLine }
+    $c = $CommandLine -replace '[\u2013\u2014\u2015\u2212]', '-'
+    $c = $c -replace '\^', ''
+    $c = $c -replace '(?<=\w)""(?=\w)', ''
+    $c = $c -replace '(?<=\s)/(?=[A-Za-z][\w:-]*)', '-'
+    return $c
+}
+
 function Test-WfxCommandLine {
     <#
     .SYNOPSIS Runs the command-line rule pack against one command line. Returns matching rules.
@@ -120,7 +136,14 @@ function Test-WfxCommandLine {
     $leaf = (Get-WfxLeaf $Image).ToLowerInvariant()
     if ($leaf -and $leaf -notmatch '\.') { $leaf += '.exe' }
     $pack = Get-WfxRulePack -Name 'lotl'
+    # Match the text as written and as it will run (de-obfuscated); report each rule once.
+    $texts = @($CommandLine)
+    $canon = ConvertTo-WfxCanonicalCommand $CommandLine
+    if ($canon -ne $CommandLine) { $texts += $canon }
+    $seen = @{}
+    foreach ($CommandLine in $texts) {
     foreach ($r in $pack.rules) {
+        if ($seen.ContainsKey($r.id)) { continue }
         if ($r.imageSet.Count -gt 0 -and $r.imageSet -notcontains $leaf) {
             # Image-specific rule: still applies when the binary is invoked through cmd/powershell in the same line.
             $named = $false
@@ -129,6 +152,8 @@ function Test-WfxCommandLine {
         }
         if (-not (Test-WfxRegex $r.rx $CommandLine)) { continue }
         if ($r.rxExclude -and (Test-WfxRegex $r.rxExclude $CommandLine)) { continue }
+        $seen[$r.id] = $true
         $r
+    }
     }
 }

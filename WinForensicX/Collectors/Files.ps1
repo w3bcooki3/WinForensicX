@@ -155,7 +155,7 @@ function Get-WfxFileData {
         if ($budget.Value -le 0) { Add-WfxGap -Source 'files' -Reason "File cap ($MaxFiles) reached; remaining files were not examined." }
     } | Out-Null
 
-    , @($out.ToArray())
+    $out.ToArray()
 }
 
 function Get-WfxRansomwareData {

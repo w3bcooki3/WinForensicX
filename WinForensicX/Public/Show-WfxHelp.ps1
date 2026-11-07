@@ -51,7 +51,13 @@ function Show-WfxHelp {
 
     if (-not $NoGuide -and (Get-Command New-WfxGuide -ErrorAction SilentlyContinue)) {
         try {
-            $gp = New-WfxGuide -Path $GuidePath
+            # Prefer the field guide shipped with the release (docs\guide.html: scenarios, flags, every view);
+            # fall back to generating the reference guide (single-file use, or a stripped copy).
+            $shipped = @(
+                $(if ($script:WfxModuleRoot) { Join-Path (Split-Path -Parent $script:WfxModuleRoot) 'docs\guide.html' })
+                $(if ($script:WfxSingleFilePath) { Join-Path (Split-Path -Parent (Split-Path -Parent $script:WfxSingleFilePath)) 'docs\guide.html' })
+            ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+            $gp = if ($shipped) { (Resolve-Path -LiteralPath $shipped).Path } else { New-WfxGuide -Path $GuidePath }
             $uri = ConvertTo-WfxFileUri $gp
             Write-WfxSection 'Full guide'
             Write-WfxConsole '  Open the full illustrated guide in a browser (Ctrl/Cmd-click the link):' -Kind Plain

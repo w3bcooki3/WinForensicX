@@ -12,14 +12,14 @@ function Join-WfxScriptBlock {
     foreach ($e in $Event) {
         $fl = Get-WfxValue $e 'Fields' @{}
         $sbid = [string](Get-WfxValue $fl 'ScriptBlockId' '')
-        $tot = [int](Get-WfxValue $fl 'MessageTotal' 1)
-        if ([int](Get-WfxValue $e 'Id' 0) -eq 4104 -and $sbid -and $tot -gt 1) {
+        $tot = (ConvertTo-WfxInt (Get-WfxValue $fl 'MessageTotal' 1))
+        if ((ConvertTo-WfxInt (Get-WfxValue $e 'Id' 0)) -eq 4104 -and $sbid -and $tot -gt 1) {
             if (-not $groups.ContainsKey($sbid)) { $groups[$sbid] = New-Object System.Collections.Generic.List[object] }
             $groups[$sbid].Add($e)
         } else { $out.Add($e) }
     }
     foreach ($k in $groups.Keys) {
-        $parts = @($groups[$k] | Sort-Object { [int](Get-WfxValue (Get-WfxValue $_ 'Fields' @{}) 'MessageNumber' 0) })
+        $parts = @($groups[$k] | Sort-Object { (ConvertTo-WfxInt (Get-WfxValue (Get-WfxValue $_ 'Fields' @{}) 'MessageNumber' 0)) })
         $text = ($parts | ForEach-Object { [string](Get-WfxValue (Get-WfxValue $_ 'Fields' @{}) 'ScriptBlockText' '') }) -join ''
         $first = $parts[0]
         $fields = @{}
@@ -54,7 +54,7 @@ function Invoke-WfxEventAnalyzer {
 
     # ── Per-event rules (Sigma-lite) ──
     foreach ($e in $events) {
-        $id = [int](Get-WfxValue $e 'Id' 0)
+        $id = (ConvertTo-WfxInt (Get-WfxValue $e 'Id' 0))
         if (-not $byId.ContainsKey($id)) { continue }
         $log = [string](Get-WfxValue $e 'Log' '')
         foreach ($rule in $byId[$id]) {
@@ -97,7 +97,7 @@ function Invoke-WfxEventAnalyzer {
     }
 
     # ── Aggregate rules: failed-logon bursts and spraying (4625) ──
-    $fails = @($events | Where-Object { [int](Get-WfxValue $_ 'Id' 0) -eq 4625 })
+    $fails = @($events | Where-Object { (ConvertTo-WfxInt (Get-WfxValue $_ 'Id' 0)) -eq 4625 })
     if ($fails.Count -ge 10) {
         $bySource = $fails | Group-Object { & $f $_ 'IpAddress' }
         foreach ($g in $bySource) {
@@ -125,19 +125,27 @@ function Invoke-WfxEventAnalyzer {
 
     # ── Correlation: repeated failures (in the 24 h BEFORE) then a success, same user + source. O(n) via index. ──
     $failIdx = @{}
+    $failBySrc = @{}
     foreach ($x in $fails) {
         $k = "$((& $f $x 'TargetUserName').ToLowerInvariant())|$(& $f $x 'IpAddress')"
         $t = ConvertTo-WfxDateTime (Get-WfxValue $x 'TimeCreated')
         if (-not $t) { continue }
         if (-not $failIdx.ContainsKey($k)) { $failIdx[$k] = New-Object System.Collections.Generic.List[datetime] }
         $failIdx[$k].Add($t)
+        $fsrc = & $f $x 'IpAddress'
+        if ($fsrc -and $fsrc -ne '-') {
+            if (-not $failBySrc.ContainsKey($fsrc)) { $failBySrc[$fsrc] = New-Object System.Collections.Generic.List[object] }
+            $failBySrc[$fsrc].Add([pscustomobject]@{ T = $t; U = (& $f $x 'TargetUserName').ToLowerInvariant() })
+        }
     }
-    $successes = @($events | Where-Object { [int](Get-WfxValue $_ 'Id' 0) -eq 4624 -and (& $f $_ 'LogonType') -in @('2', '3', '7', '10', '11') })
+    $successes = @($events | Where-Object { (ConvertTo-WfxInt (Get-WfxValue $_ 'Id' 0)) -eq 4624 -and (& $f $_ 'LogonType') -in @('2', '3', '7', '10', '11') })
     $reported = @{}
     foreach ($s in $successes) {
         $src = & $f $s 'IpAddress'; $user = & $f $s 'TargetUserName'; $lt = & $f $s 'LogonType'
         $st = ConvertTo-WfxDateTime (Get-WfxValue $s 'TimeCreated')
-        if ($src -and -not (Test-WfxPrivateIp $src) -and $lt -in @('10', '7')) {
+        $srcIp = $null
+        $isIp = $src -and [System.Net.IPAddress]::TryParse($src.Trim('[', ']'), [ref]$srcIp)   # '-' and host names are not addresses
+        if ($isIp -and -not (Test-WfxPrivateIp $src) -and $lt -in @('10', '7')) {
             $findings.Add((New-WfxFinding -Id 'EVT-RDP-EXTERNAL' -Title "Remote logon for $user from external address $src" `
                         -Severity 'Medium' -Confidence 'Medium' -Category 'EventLog' -Technique @('T1021.001', 'T1133') `
                         -Description "An interactive/remote-desktop logon succeeded from a public IP. Internet-facing RDP is a frequent intrusion vector." `
@@ -147,6 +155,21 @@ function Invoke-WfxEventAnalyzer {
         }
         if (-not $user -or -not $st) { continue }
         $k = "$($user.ToLowerInvariant())|$src"
+        # A password spray rarely fails against the account that finally works: also correlate by source address.
+        if ((-not $failIdx.ContainsKey($k)) -and $isIp -and $failBySrc.ContainsKey($src) -and -not $reported.ContainsKey("src|$src")) {
+            $priorSrc = @($failBySrc[$src] | Where-Object { $_.T -lt $st -and $_.T -ge $st.AddHours(-24) })
+            $usersTried = @($priorSrc | ForEach-Object { $_.U } | Sort-Object -Unique)
+            if ($priorSrc.Count -ge 8) {
+                $reported["src|$src"] = $true
+                $findings.Add((New-WfxFinding -Id 'EVT-4625-THEN-4624' -Title "Successful logon for $user from $src after $($priorSrc.Count) failed logons from that source ($($usersTried.Count) accounts tried, previous 24 h)" `
+                            -Severity 'High' -Confidence 'High' -Category 'EventLog' -Technique @('T1110', 'T1110.003') `
+                            -Description 'A source that was failing to log on with many attempts (password guessing or spraying) then logged on successfully. The account that succeeded is likely compromised.' `
+                            -Recommendation 'Reset the account''s password, review what it did after the logon, and block the source.' `
+                            -Entity "bruteok:${src}:$user" -HostName $HostName -Time $st -Source 'evt:Security' `
+                            -Evidence ([ordered]@{ User = $user; Source = $src; LogonType = $lt; Failures = $priorSrc.Count; AccountsTried = $usersTried.Count; Time = (Get-WfxValue $s 'TimeCreated') })))
+            }
+            continue
+        }
         if (-not $failIdx.ContainsKey($k) -or $reported.ContainsKey($k)) { continue }
         $prior = @($failIdx[$k] | Where-Object { $_ -lt $st -and $_ -ge $st.AddHours(-24) })
         if ($prior.Count -ge 8) {

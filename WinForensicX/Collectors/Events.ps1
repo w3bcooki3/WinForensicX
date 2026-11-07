@@ -2,16 +2,20 @@
 # Both paths produce { Log, Provider, Id, TimeCreated (UTC ISO), Computer, RecordId, Message, Fields = @{...} }.
 
 # High-volume IDs get their own query (and cap) so they can't crowd rare, high-value events out of the window.
+# Msg = $true only where the rendered message is needed: formatting Message text is by far the slowest part
+# of reading events (milliseconds each), and high-volume events carry everything we need in their data fields.
 $script:WfxEventQuery = @(
-    @{ Log = 'Security'; Ids = @(4624, 4625, 4648, 4688); Max = 30000 }
-    @{ Log = 'Security'; Ids = @(1102, 4697, 4698, 4720, 4728, 4732, 4740, 4756); Max = 5000 }
-    @{ Log = 'System'; Ids = @(104, 7030, 7040, 7045); Max = 5000 }
-    @{ Log = 'Microsoft-Windows-PowerShell/Operational'; Ids = @(4103, 4104); Max = 20000 }
-    @{ Log = 'Microsoft-Windows-TaskScheduler/Operational'; Ids = @(106, 140, 141, 200); Max = 5000 }
-    @{ Log = 'Microsoft-Windows-Windows Defender/Operational'; Ids = @(1116, 1117, 5001, 5007); Max = 5000 }
-    @{ Log = 'Microsoft-Windows-Sysmon/Operational'; Ids = @(1, 3, 7, 8, 10, 11, 13, 22, 23); Max = 30000 }
-    @{ Log = 'Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational'; Ids = @(1149); Max = 5000 }
+    @{ Log = 'Security'; Ids = @(4624, 4625, 4648, 4688); Max = 15000; Msg = $false }
+    @{ Log = 'Security'; Ids = @(1102, 4697, 4698, 4720, 4726, 4728, 4732, 4740, 4756); Max = 3000; Msg = $true }
+    @{ Log = 'System'; Ids = @(104, 7030, 7040, 7045); Max = 3000; Msg = $true }
+    @{ Log = 'Microsoft-Windows-PowerShell/Operational'; Ids = @(4104); Max = 5000; Msg = $false }
+    @{ Log = 'Microsoft-Windows-TaskScheduler/Operational'; Ids = @(106, 140, 141, 200); Max = 3000; Msg = $false }
+    @{ Log = 'Microsoft-Windows-Windows Defender/Operational'; Ids = @(1116, 1117, 5001, 5007); Max = 2000; Msg = $true }
+    @{ Log = 'Microsoft-Windows-Sysmon/Operational'; Ids = @(1, 3, 7, 8, 10, 11, 13, 22, 23); Max = 15000; Msg = $false }
+    @{ Log = 'Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational'; Ids = @(1149); Max = 2000; Msg = $false }
 )
+# Only fields that can carry free text are secret-scrubbed; names, SIDs, IPs, GUIDs and codes cannot.
+$script:WfxEventTextFields = @('CommandLine', 'ProcessCommandLine', 'ParentCommandLine', 'ScriptBlockText', 'Payload', 'ContextInfo', 'ImagePath', 'Details', 'TaskContent', 'Path', 'Detection User', 'Param1', 'Param2', 'Param3', 'Data', 'Message')
 # Get-WinEvent rejects FilterHashtable queries with too many Id values; keep each query well under the limit.
 $script:WfxMaxIdsPerQuery = 20
 
@@ -41,13 +45,13 @@ function Get-WfxEventData {
                     $chunk = $ids[$i..([Math]::Min($i + $script:WfxMaxIdsPerQuery, $ids.Count) - 1)]
                     try {
                         Get-WinEvent -FilterHashtable @{ Path = $f; Id = $chunk } -MaxEvents ($MaxPerLog - $n) -ErrorAction Stop |
-                            ForEach-Object { $out.Add((ConvertTo-WfxEvent $_ '')); $n++ }
+                            ForEach-Object { $out.Add((ConvertTo-WfxEvent $_ '' -WithMessage:($_.Id -in 1102, 104, 7045, 1116, 1117, 5001, 5007))); $n++ }
                     } catch { if (-not (Test-WfxNoEventsError $_)) { throw } }
                     if ($n -ge $MaxPerLog) { Add-WfxGap -Source "events:evtx:$leaf" -Reason "Capped at $MaxPerLog events; older events in this file were not analyzed."; break }
                 }
             } | Out-Null
         }
-        return , @($out.ToArray())
+        return $out.ToArray()
     }
 
     $start = (Get-Date).AddHours(-[Math]::Abs($Hours))
@@ -59,15 +63,15 @@ function Get-WfxEventData {
                 if (Test-WfxNoEventsError $_) { return }        # log exists, nothing matched: that's a result, not a gap
                 throw
             }
-            foreach ($e in $ev) { $out.Add((ConvertTo-WfxEvent $e $q.Log)) }
+            foreach ($e in $ev) { $out.Add((ConvertTo-WfxEvent $e $q.Log -WithMessage:$q.Msg)) }
             if ($ev.Count -ge $q.Max) { Add-WfxGap -Source "events:$($q.Log)" -Reason "Capped at $($q.Max) events for IDs $($q.Ids -join ','); the oldest part of the $Hours h window was not collected." -Fix 'Re-run with a smaller -Hours window, or export the log and use -EvtxPath.' }
         } | Out-Null
     }
-    , @($out.ToArray())
+    $out.ToArray()
 }
 
 function ConvertTo-WfxEvent {
-    param($Record, [string]$Log)
+    param($Record, [string]$Log, [switch]$WithMessage)
     $fields = @{}
     try {
         $xml = [xml]$Record.ToXml()
@@ -82,12 +86,15 @@ function ConvertTo-WfxEvent {
     if (-not $fields.ContainsKey('CommandLine') -and $fields.ContainsKey('ProcessCommandLine')) { $fields['CommandLine'] = $fields['ProcessCommandLine'] }
     if (-not $fields.ContainsKey('ScriptBlockText') -and $Record.Id -eq 4104) { try { $fields['ScriptBlockText'] = [string]$Record.Properties[2].Value } catch {} }
     $msg = ''
-    try { $msg = [string]$Record.Message } catch { $msg = '' }
+    if ($WithMessage) { try { $msg = [string]$Record.Message } catch { $msg = '' } }
     # Redact secrets in the message and every field value at collection time (4688 command lines and 4104
     # script blocks in particular can carry passwords/keys). Structure and tool names are preserved.
     $msg = Protect-WfxText $msg
     if ($msg.Length -gt 8192) { $msg = $msg.Substring(0, 8192) + ' …[truncated]' }
-    foreach ($fk in @($fields.Keys)) { $fields[$fk] = Protect-WfxText ([string]$fields[$fk]) }
+    foreach ($fk in @($fields.Keys)) {
+        $v = [string]$fields[$fk]
+        if ($v.Length -gt 12 -and ($script:WfxEventTextFields -contains $fk -or $v.Length -gt 200)) { $fields[$fk] = Protect-WfxText $v }
+    }
     $logName = if ($Record.LogName) { [string]$Record.LogName } else { $Log }
     [pscustomobject]@{
         Log         = $logName

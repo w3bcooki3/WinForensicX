@@ -216,7 +216,7 @@
     {
       "id": "LOTL-PS-HISTORY-TAMPER",
       "title": "Shell history disabled or deleted",
-      "pattern": "(?i)set-psreadlineoption\\s+-historysavestyle\\s+savenothing|remove-item\\s.{0,120}consolehost_history|clear-history\\b",
+      "pattern": "(?i)set-psreadlineoption\\s+-historysavestyle\\s+savenothing|remove-item\\s.{0,120}consolehost_history|clear-history\\b|set-psreadlineoption\\s+-historysavestyle\\s+savenothing|(?:remove-item|\\bri\\b|\\bdel\\b|\\brm\\b|clear-content|set-content|out-file)\\s.{0,120}historysavepath",
       "technique": [
         "T1070.003"
       ],
@@ -226,7 +226,7 @@
       "recommendation": "Recover history from backups / EDR and review the session's other activity.",
       "tests": {
         "match": [
-          "powershell Set-PSReadLineOption -HistorySaveStyle SaveNothing"
+          "powershell Set-PSReadLineOption -HistorySaveStyle SaveNothing", "powershell -c Remove-Item (Get-PSReadlineOption).HistorySavePath"
         ],
         "nomatch": [
           "powershell Set-PSReadLineOption -EditMode Emacs"

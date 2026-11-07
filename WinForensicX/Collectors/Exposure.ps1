@@ -88,7 +88,7 @@ function Get-WfxRedactedHits {
             $hits.Add([pscustomobject]@{ Type = "$($ma.Groups[1].Value) value"; Line = $i + 1; Redacted = "$($ma.Groups[1].Value) (line $($i+1)): $(Format-WfxSecret $ma.Groups[2].Value)" })
         }
     }
-    , $hits.ToArray()
+    $hits.ToArray()
 }
 
 function Get-WfxExposureData {
@@ -299,5 +299,5 @@ function Get-WfxExposureData {
         } | Out-Null
     }
 
-    , @($out.ToArray())
+    $out.ToArray()
 }

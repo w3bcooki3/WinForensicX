@@ -29,6 +29,7 @@
         $msg = [string](Get-WfxValue $e 'Message' ''); $first = ($msg -split "`r?`n")[0]
         & $add $e.TimeCreated "evt:$($e.Log)" "event-$($e.Id)" "$($e.Id) $first" $kv
     }
+    foreach ($a in @(Get-WfxValue $b 'Activity' @())) { & $add $a.Time "activity:$($a.Category)" $a.Action $a.Target "$($a.Detail) $(if ($a.Actor) { "by $($a.Actor)" }) [$($a.Source)]" }
     foreach ($f in @(Get-WfxValue $b 'Files' @())) {
         & $add $f.LastWrite 'file' 'file-modified' $f.Path "sha256=$(Get-WfxValue $f 'SHA256' '') zone=$(Get-WfxValue $f 'Zone' '') $(Get-WfxValue $f 'HostUrl' '')"
         & $add (Get-WfxValue $f 'Created' '') 'file' 'file-created' $f.Path

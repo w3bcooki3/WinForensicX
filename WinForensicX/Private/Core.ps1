@@ -2,7 +2,7 @@
 # Compatible with Windows PowerShell 5.1 and PowerShell 7+. Analysis helpers here are
 # platform-neutral so analyzers can run (and be tested) on any OS.
 
-$script:WfxVersion = '2.1.0'
+$script:WfxVersion = '2.6.0'
 $script:WfxSeverities = @('Info', 'Low', 'Medium', 'High', 'Critical')
 $script:WfxSeverityWeight = @{ Info = 0; Low = 2; Medium = 5; High = 10; Critical = 20 }
 $script:WfxConfidenceFactor = @{ Low = 0.5; Medium = 0.8; High = 1.0 }
@@ -124,6 +124,23 @@ function Add-WfxGap {
     $script:WfxGaps.Add([pscustomobject]@{ Source = $Source; Reason = $Reason; Fix = $Fix })
     Write-WfxLog -Event 'gap' -Data @{ source = $Source; reason = $Reason }
     Write-Verbose "[$Source] gap: $Reason"
+}
+
+function Expand-WfxRecord {
+    <#
+    .SYNOPSIS Turns collector output into a stream of records.
+    .DESCRIPTION Collectors and analyzers return their results as ONE array object (", @(...)") so that callers
+    which assign them always get an array. Piped straight into Select-Object / Where-Object that single array
+    object is treated as one record (one blank row). Every pipeline that consumes collector output starts with
+    "Get-WfxXxx | Expand-WfxRecord | ...". Nulls are dropped; strings and dictionaries are never split.
+    #>
+    param([Parameter(ValueFromPipeline)]$InputObject)
+    process {
+        if ($null -eq $InputObject) { return }
+        if ($InputObject -is [System.Collections.IEnumerable] -and $InputObject -isnot [string] -and $InputObject -isnot [System.Collections.IDictionary]) {
+            foreach ($x in $InputObject) { if ($null -ne $x) { $x } }
+        } else { $InputObject }
+    }
 }
 
 function Get-WfxGap { , $script:WfxGaps.ToArray() }
@@ -429,6 +446,15 @@ function Get-WfxImagePath {
     return ($c -split '\s+')[0]
 }
 
+function Get-WfxShortText {
+    <# One-line, length-capped version of a text for tables. #>
+    param([AllowEmptyString()][string]$Text, [int]$Max = 120)
+    if (-not $Text) { return '' }
+    $t = ($Text -replace '\s+', ' ').Trim()
+    if ($t.Length -gt $Max) { return $t.Substring(0, $Max - 1) + '…' }
+    return $t
+}
+
 function Get-WfxLeaf {
     param([AllowEmptyString()][string]$Path)
     if ([string]::IsNullOrEmpty($Path)) { return '' }
@@ -479,6 +505,14 @@ function ConvertTo-WfxArray {
     param($InputObject)
     if ($null -eq $InputObject) { return , @() }
     return , @($InputObject)
+}
+
+function ConvertTo-WfxInt {
+    <# Integer from saved evidence that may be malformed ("x", "", $null, "4625 "): never throws, returns -Default. #>
+    param($Value, [int]$Default = 0)
+    $n = 0
+    if ($null -ne $Value -and [int]::TryParse(([string]$Value).Trim(), [ref]$n)) { return $n }
+    return $Default
 }
 
 function Get-WfxValue {
@@ -534,8 +568,13 @@ function New-WfxCase {
     $folder = if ($Name) { ($Name -replace '[^A-Za-z0-9._-]', '_') + "_$safeHost`_$stamp" } else { "WFX_$safeHost`_$stamp" }
     $path = Join-Path $OutputPath $folder
     $n = 1; while (Test-Path -LiteralPath $path) { $path = Join-Path $OutputPath "$folder-$n"; $n++ }
-    New-Item -ItemType Directory -Path (Join-Path $path 'raw') -Force | Out-Null
-    $full = (Resolve-Path -LiteralPath $path).Path
+    # Fail fast with one clear message: every later step writes into this folder.
+    try {
+        New-Item -ItemType Directory -Path (Join-Path $path 'raw') -Force -ErrorAction Stop | Out-Null
+        $full = (Resolve-Path -LiteralPath $path -ErrorAction Stop).Path
+    } catch {
+        throw "Cannot create the case folder '$path': $($_.Exception.Message) Choose a writable output folder (menu: Settings, or -OutputPath)."
+    }
     $onSystem = $false
     if ((Test-WfxWindows) -and $env:SystemDrive -and $full.StartsWith($env:SystemDrive, [StringComparison]::OrdinalIgnoreCase) -and $Mode -in @('local', 'evidence', 'monitor')) { $onSystem = $true }
     $script:WfxCase = [pscustomobject]@{

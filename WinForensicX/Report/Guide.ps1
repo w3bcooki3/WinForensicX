@@ -28,7 +28,8 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WinForensicX $(& $enc $h.Version) · Guide</title>
-<style>
+<style>html{font-variant-ligatures:none;font-feature-settings:"calt" 0,"liga" 0,"clig" 0}
+
 $(Get-WfxThemeCss)
 .wrap{max-width:900px;margin:0 auto;padding:24px 22px 90px}
 .hero{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px 28px;box-shadow:var(--sh2);margin-bottom:24px}
@@ -52,6 +53,7 @@ ul.list.warn li{border-left:3px solid var(--high)}
 ul.list.safe li{border-left:3px solid var(--ok)}
 .req{font-family:var(--mono);font-size:12.5px;color:var(--dim);border:1px dashed var(--line2);border-radius:12px;padding:11px 14px;background:var(--card)}
 .foot{margin-top:32px;border-top:1px solid var(--line);padding-top:16px;color:var(--faint);font-size:12.5px}
+*,*::before,*::after{font-variant-ligatures:none!important;font-feature-settings:"calt" 0,"liga" 0,"clig" 0!important}
 </style></head><body>
 <div class="wrap">
   <div class="bar"><div class="bz">W</div><div class="bn">WinForensicX<span>help &amp; how-to</span></div>

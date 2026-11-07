@@ -24,7 +24,7 @@ function Invoke-WfxNetworkAnalyzer {
     foreach ($c in $conns) {
         $state = [string](Get-WfxValue $c 'State' '')
         $laddr = [string](Get-WfxValue $c 'LocalAddress' '')
-        $lport = [int](Get-WfxValue $c 'LocalPort' 0)
+        $lport = (ConvertTo-WfxInt (Get-WfxValue $c 'LocalPort' 0))
         $proc = [string](Get-WfxValue $c 'Process' '')
         $pid2 = Get-WfxValue $c 'Pid' '?'
         if ($state -match '^Listen' -and ($laddr -eq '0.0.0.0' -or $laddr -eq '::' -or $laddr -eq '[::]' -or $laddr -eq '*')) {
@@ -46,7 +46,7 @@ function Invoke-WfxNetworkAnalyzer {
 
         # Established connections to public addresses on suspicious / tunneling ports or hosts.
         $raddr = [string](Get-WfxValue $c 'RemoteAddress' '')
-        $rport = [int](Get-WfxValue $c 'RemotePort' 0)
+        $rport = (ConvertTo-WfxInt (Get-WfxValue $c 'RemotePort' 0))
         if ($state -match 'Establish' -and $raddr -and -not (Test-WfxPrivateIp $raddr)) {
             $rhost = [string](Get-WfxValue $c 'RemoteHost' '')
             if (-not $rhost -and $DnsMap.ContainsKey($raddr)) { $rhost = (@($DnsMap[$raddr]) -join ',') }
