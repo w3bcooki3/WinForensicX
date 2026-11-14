@@ -10,11 +10,15 @@
           • IPv4/IPv6 — exact address match (1.2.3.4 does NOT match 11.2.3.45).
           • Domains — the name itself or any subdomain (evil.com matches a.evil.com, not notevil.com).
           • Anything else — case-insensitive substring.
-        Searched: processes, network, DNS cache, persistence, event logs (message + fields), files, exposure paths.
+        Searched: processes, network, DNS cache, persistence, event logs (message + fields), files, exposure paths,
+        recent activity, and execution / user-activity artifacts (Amcache SHA-1, ShimCache, Prefetch, BAM,
+        Jump Lists, shortcuts, ShellBags, browser downloads with their URLs, Defender logs).
         Results are written to a hunt case folder (hunt.json / hunt.csv / manifest) unless -NoCase.
     .PARAMETER Ioc          One or more indicators.
     .PARAMETER IocFile      Text file with one indicator per line ('#' comments and blank lines ignored).
     .PARAMETER InputPath    Hunt inside a previously saved case/bundle instead of collecting live.
+    .PARAMETER ArtifactPath Hunt inside a folder of collected evidence (hives, Jump Lists, .evtx, ...).
+                            Amcache SHA-1 values let hash IOCs match programs that have since been deleted.
     .PARAMETER Hours        Event look-back when collecting live (default 72).
     .PARAMETER FileScan     Include the file scan when collecting live (lets hash/name IOCs match files).
     .PARAMETER HashProcesses Hash the binaries of running processes, services and autostarts (slower).
@@ -28,6 +32,7 @@
         [string[]]$Ioc = @(),
         [string]$IocFile = '',
         [string]$InputPath = '',
+        [string]$ArtifactPath = '',
         [ValidateRange(1, 8760)][int]$Hours = 72,
         [switch]$FileScan,
         [switch]$HashProcesses,
@@ -46,6 +51,9 @@
 
     if ($InputPath) {
         $bundle = Read-WfxBundle -Path $InputPath
+    } elseif ($ArtifactPath) {
+        $bundle = Get-WfxArtifactBundle -Path $ArtifactPath
+        $InputPath = $ArtifactPath            # offline: never hash files on the analysis machine
     } else {
         if (-not (Test-WfxWindows)) { Write-WfxConsole 'Live hunt requires Windows (or pass -InputPath).' -Kind Bad; return }
         $bundle = Get-WfxCollectionBundle -Hours $Hours -FileScan:$FileScan
@@ -98,6 +106,13 @@
     }
     foreach ($a in @(Get-WfxValue $bundle 'Activity' @())) { $ctx = "$($a.Category): $($a.Action) @ $($a.Time)"; & $push 'activity' $a.Target $ctx; & $push 'activity' $a.Detail $ctx; & $push 'activity' $a.Actor $ctx }
     foreach ($x in @(Get-WfxValue $bundle 'Exposure' @())) { & $push 'exposure' $x.Path "$($x.Kind)" }
+    foreach ($a in @(Get-WfxValue $bundle 'Artifacts' @())) {
+        $ctx = "$($a.Artifact) @ $($a.Time)$(if ($a.User) { " ($($a.User))" })"
+        & $push 'artifact' $a.Path $ctx; & $push 'artifact' $a.Detail $ctx
+        if ($a.Sha1) { & $push 'hash' ([string]$a.Sha1).ToUpperInvariant() "SHA1 of $($a.Path) ($($a.Artifact))" }
+        $x = Get-WfxValue $a 'Extra' $null
+        if ($x) { foreach ($k in 'Url', 'FirstUrl', 'Referrer', 'Arguments', 'Threat') { $v = [string](Get-WfxValue $x $k ''); if ($v) { & $push 'artifact' $v "$ctx [$k]" } } }
+    }
 
     $findings = New-Object System.Collections.Generic.List[object]
     foreach ($i in $iocs) {

@@ -2,7 +2,7 @@
 # Compatible with Windows PowerShell 5.1 and PowerShell 7+. Analysis helpers here are
 # platform-neutral so analyzers can run (and be tested) on any OS.
 
-$script:WfxVersion = '2.6.0'
+$script:WfxVersion = '3.0.0'
 $script:WfxSeverities = @('Info', 'Low', 'Medium', 'High', 'Critical')
 $script:WfxSeverityWeight = @{ Info = 0; Low = 2; Medium = 5; High = 10; Critical = 20 }
 $script:WfxConfidenceFactor = @{ Low = 0.5; Medium = 0.8; High = 1.0 }
@@ -371,11 +371,16 @@ $script:WfxRedactRules = @(
     , @('(?i)(https?://[^:/\s]+:)([^@\s]+)(@)', '$1***$3')
 )
 
+$script:WfxRedactHint = '(?i)sk-|aiza|hf_|gsk_|xai-|r8_|akia|asia|gh[pousr]_|github_pat|xox|_live_|eyj|begin|pass|pwd|secret|key|token|\s-p|/p|net1?(?:\.exe)?\s+user|schtasks|://'
+
 function Protect-WfxText {
     <# Redacts secrets and key=value credentials in free text before it is stored, displayed or reported.
        FAIL-CLOSED: if any redaction regex times out on hostile input, the text is withheld entirely. #>
     param([AllowEmptyString()][string]$Text)
     if ([string]::IsNullOrEmpty($Text)) { return $Text }
+    # Cheap pre-filter: every pattern below needs one of these literals. Text without any of them is
+    # returned unchanged without running ~20 regexes (this matters for large artifact sets).
+    if (-not (Get-WfxRx $script:WfxRedactHint).IsMatch($Text)) { return $Text }
     $t = $Text
     try {
         foreach ($p in $script:WfxSecretPatterns) { $t = (Get-WfxRx $p.Pattern).Replace($t, [System.Text.RegularExpressions.MatchEvaluator] { param($m) Format-WfxSecret $m.Value }) }

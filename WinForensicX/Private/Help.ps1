@@ -7,19 +7,21 @@ function Get-WfxHelpModel {
         Tagline  = 'Read-only DFIR toolkit for Windows. Start it from an administrator PowerShell window with .\Start-WinForensicX.ps1, then use the menu: Investigate, Explore, Hunt & analyze, Cases.'
         Commands = @(
             [pscustomobject]@{ Name = 'Invoke-WfxTriage'; Summary = 'Collect -> analyze -> score -> report. The main command.'
-                Params = @('[-FileScan] [-ExposureScan] [-OutputPath <external media>] [-AllowlistPath <json>]', '-ComputerName <hosts> [-Credential <cred>]  (remote, WinRM)', '-EvtxPath <path>  (offline event logs only; nothing collected locally)', '-InputPath <case>  (re-analyze saved evidence)')
-                Examples = @('Invoke-WfxTriage', 'Invoke-WfxTriage -FileScan -ExposureScan', 'Invoke-WfxTriage -ComputerName srv01,srv02 -Credential (Get-Credential)', 'Invoke-WfxTriage -EvtxPath D:\evidence\Security.evtx', 'Invoke-WfxTriage -InputPath C:\cases\WFX_host_20260101-000000Z') }
+                Params = @('[-FileScan] [-ExposureScan] [-OutputPath <external media>] [-AllowlistPath <json>] [-SigmaPath <rules>] [-YaraRules <rules>]', '-ComputerName <hosts> [-Credential <cred>]  (remote, WinRM)', '-ArtifactPath <folder>  (collected evidence: hives, Amcache, Jump Lists, .lnk, browsers, .evtx)', '-EvtxPath <path>  (offline event logs only; nothing collected locally)', '-InputPath <case>  (re-analyze saved evidence)')
+                Examples = @('Invoke-WfxTriage', 'Invoke-WfxTriage -FileScan -ExposureScan', 'Invoke-WfxTriage -ArtifactPath D:\kape\C -CaseName ctf-01', 'Invoke-WfxTriage -SigmaPath D:\sigma\rules\windows -YaraRules D:\yara', 'Invoke-WfxTriage -ComputerName srv01,srv02 -Credential (Get-Credential)', 'Invoke-WfxTriage -EvtxPath D:\evidence\Security.evtx', 'Invoke-WfxTriage -InputPath C:\cases\WFX_host_20260101-000000Z') }
             [pscustomobject]@{ Name = 'Invoke-WfxAnalyze'; Summary = 'Run all analyzers over a collected bundle (object, bundle.json, or case folder). OS-neutral.'
                 Params = @('-Bundle <path|object>'); Examples = @('Invoke-WfxAnalyze -Bundle .\WFX_host\raw\bundle.json') }
             [pscustomobject]@{ Name = 'Start-WfxMonitor'; Summary = 'Live baseline, then alert on new suspicious processes / connections / beacons.'
                 Params = @('[-Interval <sec>] [-Duration <sec>] [-MinSeverity <sev>]'); Examples = @('Start-WfxMonitor -Interval 5 -Duration 300') }
-            [pscustomobject]@{ Name = 'Invoke-WfxHunt'; Summary = 'Sweep a host or saved bundle for IOCs (MD5/SHA-1/SHA-256, exact IPs, domains+subdomains, strings), incl. event logs.'
-                Params = @('-Ioc <list> | -IocFile <txt> [-InputPath <case>] [-FileScan] [-HashProcesses]'); Examples = @("Invoke-WfxHunt -Ioc 'evil.example','203.0.113.7' -FileScan", 'Invoke-WfxHunt -IocFile .\iocs.txt -InputPath .\WFX_host_case') }
+            [pscustomobject]@{ Name = 'Invoke-WfxHunt'; Summary = 'Sweep a host, saved case or evidence folder for IOCs (MD5/SHA-1/SHA-256, exact IPs, domains+subdomains, strings): event logs, artifacts (Amcache SHA-1 finds deleted programs), downloads.'
+                Params = @('-Ioc <list> | -IocFile <txt> [-InputPath <case> | -ArtifactPath <folder>] [-FileScan] [-HashProcesses]'); Examples = @("Invoke-WfxHunt -Ioc 'evil.example','203.0.113.7' -FileScan", 'Invoke-WfxHunt -IocFile .\iocs.txt -InputPath .\WFX_host_case', 'Invoke-WfxHunt -IocFile .\iocs.txt -ArtifactPath D:\kape\C') }
+            [pscustomobject]@{ Name = 'Get-WfxArtifact'; Summary = 'Parse execution and user-activity artifacts, live or from collected files: Amcache, ShimCache, Prefetch, BAM, UserAssist, PCA, ShellBags, Jump Lists, .lnk, RunMRU, typed paths, searches, browser downloads, Defender logs. -Flag adds the triage verdict.'
+                Params = @('[-Path <folder|file>] [-Artifact <types>] [-Flag]'); Examples = @('Get-WfxArtifact -Path D:\kape\C -Flag | Where-Object Flag', 'Get-WfxArtifact -Path .\Amcache.hve | Where-Object Sha1 -eq <sha1>', "Get-WfxArtifact -Artifact JumpList,Shortcut | Where-Object { `$_.Extra.DriveType -eq 'Removable' }") }
             [pscustomobject]@{ Name = 'Get-WfxActivity'; Summary = 'What changed recently: registry writes in persistence/security keys, software & driver installs, services, tasks, accounts, firewall/Defender/audit changes, executions (Prefetch/BAM/UserAssist), connection history, deletions; -Journal adds the NTFS change journal.'
                 Params = @('[-Days <n>] [-Journal]'); Examples = @('Get-WfxActivity -Days 2', "Get-WfxActivity -Days 1 -Journal | Where-Object Category -eq 'File'") }
             [pscustomobject]@{ Name = 'New-WfxFileBaseline / Compare-WfxFileBaseline'; Summary = 'File-integrity baseline: hash folders now, later list added, deleted, content-changed and timestamp-only files.'
                 Params = @('-Path <folders> [-OutputPath <json>]', '-Baseline <json>'); Examples = @('New-WfxFileBaseline -Path C:\inetpub\wwwroot -OutputPath E:\bl\web.json', 'Compare-WfxFileBaseline -Baseline E:\bl\web.json') }
-            [pscustomobject]@{ Name = 'Get-WfxInsight'; Summary = '53 live read-only views, each suspicious row flagged with severity, reason and ATT&CK technique: system, updates, software, users, groups, sessions, USB, processes, process tree, ports, connections, DNS, routes, proxy, Wi-Fi, firewall, autostarts, services, tasks, WMI, logons, failed logons, RDP, account changes, Defender, downloads, Prefetch, recent files, PS history, posture.'
+            [pscustomobject]@{ Name = 'Get-WfxInsight'; Summary = '57 live read-only views, each suspicious row flagged with severity, reason and ATT&CK technique: system, updates, software, users, groups, sessions, USB, processes, process tree, ports, connections, DNS, routes, proxy, Wi-Fi, firewall, autostarts, services, tasks, WMI, logons, failed logons, RDP, account changes, Defender, downloads, Prefetch, recent files, PS history, posture.'
                 Params = @('-List', '<topic> [-Days <n>]'); Examples = @('Get-WfxInsight -List', 'Get-WfxInsight logons -Days 3 | Format-Table', "Get-WfxInsight listeners | Where-Object Exposure -eq 'all interfaces'") }
             [pscustomobject]@{ Name = 'Save-WfxInsight'; Summary = 'Export every live view to a hashed inventory case: inventory.html + one CSV per view.'
                 Params = @('[-Topic <list>] [-OutputPath <folder>]'); Examples = @('Save-WfxInsight -OutputPath E:\cases') }
@@ -33,6 +35,10 @@ function Get-WfxHelpModel {
                 Params = @('-InputPath <case> [-Format Csv|Json] [-From <utc>] [-To <utc>]'); Examples = @('Export-WfxTimeline -InputPath .\WFX_host_case') }
             [pscustomobject]@{ Name = 'Compare-WfxCase'; Summary = 'Diff two cases: new processes, autostarts, services, listeners, DNS, exposure, findings.'
                 Params = @('-Baseline <case> -Current <case> [-OutputPath <csv|json>]'); Examples = @('Compare-WfxCase -Baseline .\golden -Current .\today') }
+            [pscustomobject]@{ Name = 'Export-WfxCase'; Summary = 'Export a case for other tools: Timesketch CSV, ECS JSON lines (Elastic, Splunk, Sentinel), STIX 2.1 (MISP, OpenCTI), indicator CSV. Written next to the case.'
+                Params = @('-InputPath <case> [-Format Timesketch|Ecs|Stix|Indicators|All] [-OutputPath <folder>]'); Examples = @('Export-WfxCase -InputPath .\WFX_host_case', 'Export-WfxCase -InputPath .\case -Format Stix') }
+            [pscustomobject]@{ Name = 'New-WfxFleetReport'; Summary = 'One page for many hosts: risk per host, patient zero and spread, indicators and findings shared between hosts, ATT&CK stages per host.'
+                Params = @('-Path <folder of cases> [-OutputPath <html>]'); Examples = @('New-WfxFleetReport -Path E:\ir-cases') }
             [pscustomobject]@{ Name = 'Save-WfxEvidence'; Summary = 'Collect a hashed, read-only evidence bundle now; analyze later with -InputPath.'
                 Params = @('[-FileScan] [-ExposureScan]'); Examples = @('Save-WfxEvidence -FileScan -ExposureScan') }
             [pscustomobject]@{ Name = 'Show-WfxMenu'; Summary = 'Interactive menu over everything above.'
@@ -47,7 +53,8 @@ function Get-WfxHelpModel {
             'raw/bundle.json - the normalized collected data (re-analyzable with -InputPath)',
             'audit.log     - every step the tool took, with timings (JSON lines)',
             'manifest.json - SHA-256 of every output + tool/rule hashes + parameters, written last; the case is then closed',
-            'hunt.json / hunt.csv - IOC hits (Invoke-WfxHunt)'
+            'hunt.json / hunt.csv - IOC hits (Invoke-WfxHunt)',
+            '<case>-timesketch.csv / -ecs.ndjson / -stix.json / -indicators.csv - Export-WfxCase, written next to the case'
         )
         Safety   = @(
             'Read-only: it changes no settings and executes nothing it finds. It sends no network traffic of its own (remote mode uses WinRM you initiate; -ExposureScan reads the domain SYSVOL share).',
@@ -66,7 +73,9 @@ function Get-WfxHelpModel {
             'Only loaded user registry hives (logged-on users) are inspected; event collection is capped per query and caps are reported as gaps.',
             'Administrator rights are recommended; without them some data is unavailable (recorded as gaps). Remote mode needs WinRM enabled on the target.',
             'It will not extract, decrypt, or dump secrets - that is a deliberate boundary, not a missing feature.',
-            'The manifest is not signed: record its SHA-256 (printed at the end of each run) out-of-band to make the case tamper-evident.'
+            'The manifest is not signed: record its SHA-256 (printed at the end of each run) out-of-band to make the case tamper-evident.',
+            'Artifacts: Amcache.hve is locked on a running system (collect it with a raw-copy tool and use -ArtifactPath); dirty hives are repaired from .LOG1/.LOG2 only when the logs continue the hive; browser rows still in the -wal file and compressed Prefetch contents are not read (Prefetch gives name and times).',
+            'Sigma: rules run only on the event logs and IDs the tool collects (rules can add Security/System IDs they need); aggregations and correlation rules are skipped and counted as a gap. YARA needs a yara executable you provide.'
         )
         Requires = 'Windows PowerShell 5.1 or PowerShell 7+. No external modules. Live collection needs Windows; analysis, re-analysis, hunting in saved cases, timelines, diffs and file triage also run on Linux/macOS (PowerShell 7).'
     }

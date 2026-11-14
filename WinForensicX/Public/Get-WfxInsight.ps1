@@ -294,6 +294,28 @@ $script:WfxInsightTopics = [ordered]@{
         }
     }
 
+    # ───────────── Evidence of execution & user activity (artifacts) ─────────────
+    'execution'   = @{ Group = 'Evidence of execution'; Title = 'Programs that ran or existed (Amcache, ShimCache, Prefetch, BAM, UserAssist, PCA)'; Desc = 'Every execution artifact in one list, flagged: attack and exfiltration tools, programs in staging folders, system names in the wrong place. Survives deletion of the program.'; Admin = $true; Script = {
+            Get-WfxArtifactCache | Where-Object { $_.Evidence -in 'Execution', 'Presence', 'Install' } | Sort-Object { [string]$_.Time } -Descending |
+                ForEach-Object { $_.PSObject.Copy() } | Add-WfxFlag Artifact | Select-Object Flag, Why, Technique, Rule, Time, TimeKind, Artifact, Path, User, Sha1, Detail, Source
+        }
+    }
+    'useractivity' = @{ Group = 'Evidence of execution'; Title = 'Folders and files users opened (ShellBags, Jump Lists, shortcuts, Run box, searches)'; Desc = 'What each user browsed and opened, including on USB drives and network shares, and what they typed into Win+R or searched for.'; Admin = $false; Script = {
+            Get-WfxArtifactCache | Where-Object { $_.Artifact -in 'ShellBag', 'JumpList', 'Shortcut', 'TypedPath', 'Search', 'RunMRU' } | Sort-Object { [string]$_.Time } -Descending |
+                ForEach-Object { $_.PSObject.Copy() } | Add-WfxFlag Artifact | Select-Object Flag, Why, Technique, Rule, Time, TimeKind, Artifact, User, Path, Detail, Source
+        }
+    }
+    'browserdl'   = @{ Group = 'Evidence of execution'; Title = 'Browser download history (Chrome, Edge, Brave, Opera, Vivaldi, Firefox)'; Desc = 'Every download the browsers recorded: source URL, referrer, browser warnings, whether it was opened. Kept even after the file is deleted.'; Admin = $false; Script = {
+            Get-WfxArtifactCache | Where-Object Artifact -eq 'Download' | Sort-Object { [string]$_.Time } -Descending |
+                ForEach-Object { $_.PSObject.Copy() } | Add-WfxFlag Artifact | Select-Object Flag, Why, Technique, Rule, Time, User, Path, @{ n = 'Url'; e = { $_.Extra.Url } }, @{ n = 'Referrer'; e = { $_.Extra.Referrer } }, @{ n = 'Browser'; e = { $_.Extra.Browser } }, @{ n = 'Warning'; e = { $_.Extra.Danger } }, @{ n = 'Opened'; e = { $_.Extra.Opened } }, Source
+        }
+    }
+    'defenderlog' = @{ Group = 'Evidence of execution'; Title = 'Microsoft Defender support logs (detections, processes seen)'; Desc = 'Detections and process names from MPLog files. These are separate from the event log, so they often survive log clearing (needs admin).'; Admin = $true; Script = {
+            Get-WfxArtifactCache | Where-Object Artifact -eq 'DefenderLog' | Sort-Object { [string]$_.Time } -Descending |
+                ForEach-Object { $_.PSObject.Copy() } | Add-WfxFlag Artifact | Select-Object Flag, Why, Technique, Rule, Time, TimeKind, Path, Name, Detail, Source
+        }
+    }
+
     # ───────────── Files & user activity ─────────────
     'downloads'   = @{ Group = 'Files'; Title = 'Recent downloads (with source URL)'; Desc = 'Files in users'' Downloads folders, newest first, with the Mark-of-the-Web download URL.'; Admin = $false; Days = 14; Script = {
             param($Days)
@@ -400,12 +422,22 @@ $script:WfxFlagTopic = [ordered]@{
     software = 'first'; users = 'first'; shares = 'first'; hosts = 'first'; firewall = 'first'; prefetch = 'first'
     downloads = 'first'; recentexe = 'first'; failedlogons = 'first'
     pshistory = 'keep'; powershell = 'keep'; newservices = 'keep'; logclears = 'keep'; accounts = 'keep'; rdp = 'keep'; defender = 'keep'
+    execution = 'first'; useractivity = 'first'; browserdl = 'first'; defenderlog = 'first'
     changes = 'keep'; regchanges = 'keep'; filechanges = 'keep'; deleted = 'keep'; installs = 'keep'; executions = 'keep'; connhistory = 'keep'; configchanges = 'keep'
 }
 $script:WfxRiskyExt = '(?i)\.(?:iso|img|vhdx?|lnk|hta|js|jse|vbs|vbe|wsf|wsh|one|xll|cpl|scr|pif|bat|cmd|ps1|msc|jar|appref-ms|library-ms|search-ms|url)$'
 $script:WfxDoubleExt = '(?i)\.(?:pdf|docx?|xlsx?|pptx?|jpe?g|png|gif|txt|rtf|zip|rar|mp4|mp3)\.(?:exe|scr|com|pif|js|jse|vbs|vbe|wsf|hta|bat|cmd|lnk|ps1)$'
 $script:WfxProxyExec = @('mshta.exe', 'hh.exe', 'cmstp.exe', 'installutil.exe', 'regasm.exe', 'regsvcs.exe', 'msbuild.exe', 'odbcconf.exe', 'certutil.exe', 'bitsadmin.exe', 'msxsl.exe', 'wmic.exe', 'forfiles.exe', 'pcalua.exe', 'mavinject.exe', 'presentationhost.exe')
 $script:WfxSecurityDomains = '(?i)(?:^|\.)(?:microsoft|windowsupdate|msftncsi|msftconnecttest|smartscreen|wdcp|virustotal|kaspersky|eset|sophos|symantec|norton|crowdstrike|sentinelone|malwarebytes|avast|avg|bitdefender|mcafee|trendmicro|f-secure|webroot|carbonblack|cylance|paloaltonetworks|fortinet|clamav|elastic|cisco|zscaler|withsecure|emsisoft|gdata|drweb|comodo)\.[a-z.]+$'
+
+function Get-WfxArtifactCache {
+    <# Live artifact collection is shared by the Explore views and kept for 5 minutes, so moving between
+       views does not re-read every hive and Jump List. #>
+    if ($script:WfxArtifactCache -and $script:WfxArtifactCacheTime -gt (Get-Date).AddMinutes(-5)) { return $script:WfxArtifactCache }
+    $script:WfxArtifactCache = @(Get-WfxArtifactData | Expand-WfxRecord)
+    $script:WfxArtifactCacheTime = Get-Date
+    $script:WfxArtifactCache
+}
 
 function Get-WfxThreatList {
     param([ValidateSet('offensiveProcesses', 'rmmProcesses')][string]$Name)
@@ -656,6 +688,8 @@ $script:WfxActivityTopics = [ordered]@{
 }
 $i = 0
 foreach ($k in $script:WfxActivityTopics.Keys) { $script:WfxInsightTopics.Insert($i, $k, $script:WfxActivityTopics[$k]); $i++ }
+# Evidence of execution comes right after Recent changes in the menu.
+foreach ($k in 'execution', 'useractivity', 'browserdl', 'defenderlog') { $v = $script:WfxInsightTopics[$k]; $script:WfxInsightTopics.Remove($k); $script:WfxInsightTopics.Insert($i, $k, $v); $i++ }
 
 function Get-WfxActivity {
     <#

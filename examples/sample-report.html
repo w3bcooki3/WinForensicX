@@ -36,7 +36,7 @@ code,.mono{font-family:var(--mono);font-size:12.5px}
 .brand span{color:var(--ink3);font-weight:400}
 .nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1}
 .nav::-webkit-scrollbar{display:none}
-.nav a{color:var(--ink2);padding:13px 9px 12px;white-space:nowrap;border-bottom:2px solid transparent}
+.nav a{color:var(--ink2);padding:13px 7px 12px;white-space:nowrap;border-bottom:2px solid transparent}
 .nav a:hover{color:var(--ink);text-decoration:none}
 .nav a.on{color:var(--ink);border-bottom-color:var(--ink)}
 .nav a .n{color:var(--ink3);margin-left:4px;font-size:12px}
@@ -157,7 +157,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
 @media (max-width:640px){.brand span{display:none}.tools .btn.hide-s{display:none}.tb input[type=search]{min-width:0;max-width:none;width:100%}#ftbl .c-tac,#ftbl .c-cnt,#ftbl .c-time{display:none}dl.facts dd{text-align:left}dl.facts{grid-template-columns:1fr}dl.facts dt{border-bottom:0;padding-bottom:0}}
 @media print{
   .bar,.tb,.btn,.toast{display:none!important}
-  #abox,#tbox tr.chg{display:none}
+  #abox,#ebox,#tbox tr.chg{display:none}
   .pnote{display:block!important;color:#555;margin:4px 0 8px}
   body{font-size:11.5px}section{break-inside:auto;padding-top:18px}
   tr.detail{display:table-row!important}tr.row{break-inside:avoid}
@@ -172,7 +172,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
 <header class="bar"><div class="wrap">
   <div class="brand">WS-APT <span>case report</span></div>
   <nav class="nav" id="nav" aria-label="Sections">
-    <a href="#summary">Summary</a><a href="#path">Attack path<span class="n" id="n-p"></span></a><a href="#findings">Findings<span class="n" id="n-f"></span></a><a href="#iocs">Indicators<span class="n" id="n-i"></span></a><a href="#timeline">Timeline<span class="n" id="n-t"></span></a><a href="#activity">Changes<span class="n" id="n-a"></span></a><a href="#attack">ATT&amp;CK<span class="n" id="n-x"></span></a><a href="#visibility">Not visible<span class="n" id="n-g"></span></a><a href="#custody">Custody</a>
+    <a href="#summary">Summary</a><a href="#incidents">Incidents<span class="n" id="n-n"></span></a><a href="#path">Path<span class="n" id="n-p"></span></a><a href="#findings">Findings<span class="n" id="n-f"></span></a><a href="#iocs">IOCs<span class="n" id="n-i"></span></a><a href="#timeline">Timeline<span class="n" id="n-t"></span></a><a href="#activity">Changes<span class="n" id="n-a"></span></a><a href="#execution">Execution<span class="n" id="n-e"></span></a><a href="#attack">ATT&amp;CK<span class="n" id="n-x"></span></a><a href="#visibility">Gaps<span class="n" id="n-g"></span></a><a href="#custody">Custody</a>
   </nav>
   <div class="tools"><button class="btn hide-s" id="theme" type="button">Dark</button><button class="btn" id="print" type="button">Print</button></div>
 </div></header>
@@ -191,6 +191,12 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
     <dl class="facts" id="facts"></dl>
   </div>
 </div>
+
+<section id="incidents">
+  <h2>Incidents</h2>
+  <p class="desc">Findings grouped into incidents: findings that share a file, account or address and happen close together, or high-severity findings within minutes of each other. Each row is one story to investigate; the links say why findings were grouped.</p>
+  <div id="nbox"></div>
+</section>
 
 <section id="path">
   <h2>Attack path</h2>
@@ -248,6 +254,19 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
   <div id="abox"></div>
 </section>
 
+<section id="execution">
+  <div class="head"><div><h2>Evidence of execution and user activity</h2><p class="desc" id="esub">Programs that ran or existed (Amcache, ShimCache, Prefetch, BAM, UserAssist, PCA), what users opened (ShellBags, Jump Lists, shortcuts, Run box, searches), browser downloads and Defender's own logs. These records outlive the files they describe. A severity mark means a finding refers to that path.</p></div>
+    <div class="tools"><button class="btn" id="e-csv" type="button">Download CSV</button></div></div>
+  <div class="tb">
+    <input type="search" id="eq" placeholder="Search paths, users, hashes" aria-label="Search execution evidence">
+    <select id="eart" aria-label="Artifact"></select>
+    <select id="eev" aria-label="Evidence type"></select>
+    <label><input type="checkbox" id="eflag"> Flagged only</label>
+  </div>
+  <p class="pnote" hidden>Left out of the printed copy; see the CSV or raw/bundle.json.</p>
+  <div id="ebox"></div>
+</section>
+
 <section id="attack">
   <div class="head"><div><h2>MITRE ATT&amp;CK</h2><p class="desc">Techniques behind the findings, by tactic. The square shows the most severe finding for each technique.</p></div>
     <div class="tools"><button class="btn" id="x-layer" type="button">Download Navigator layer</button></div></div>
@@ -271,8 +290,8 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script id="wfx-data" type="application/json">{
-  "tool": "WinForensicX 2.6.0",
-  "generated": "2026-11-07T18:33:16.213Z",
+  "tool": "WinForensicX 3.0.0",
+  "generated": "2026-11-14T05:14:06.808Z",
   "hostName": "WS-APT",
   "host": {
     "HostName": "WS-APT",
@@ -287,11 +306,11 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
     "Score": 0,
     "Level": "Low"
   },
-  "collected": "2026-11-07T18:33:09.528Z",
+  "collected": "2026-11-14T05:14:04.793Z",
   "case": {
-    "Id": "sample-synthetic-L5-APT",
+    "Id": "5a3c9e1f-0d2b-4c7e-9a41-6f2e8b7d1c30",
     "Mode": "Reanalysis",
-    "Started": "2026-11-07T18:33:16.208Z",
+    "Started": "2026-11-14T05:14:06.803Z",
     "Operator": "analyst",
     "OperatorHost": "IR-WS01",
     "Admin": true,
@@ -302,9 +321,9 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
   "suppressed": [],
   "summary": {
     "Critical": 4,
-    "High": 13,
-    "Medium": 12,
-    "Low": 3,
+    "High": 18,
+    "Medium": 13,
+    "Low": 5,
     "Info": 1
   },
   "findings": [
@@ -329,7 +348,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Isolate the host immediately and protect remaining backups.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T18:03:09.528Z",
+      "Time": "2026-11-14T04:44:04.793Z",
       "Source": "process",
       "Occurrences": 1
     },
@@ -347,7 +366,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Entity": "event:1:LOTL-SHADOW-DELETE:",
       "Evidence": {
         "EventId": 1,
-        "Time": "2026-11-07T18:03:09.528Z",
+        "Time": "2026-11-14T04:44:04.793Z",
         "Image": "C:\\Windows\\System32\\vssadmin.exe",
         "Command": "vssadmin.exe delete shadows /all /quiet",
         "Parent": "C:\\Windows\\System32\\cmd.exe",
@@ -355,7 +374,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Isolate the host immediately and protect remaining backups.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T18:03:09.528Z",
+      "Time": "2026-11-14T04:44:04.793Z",
       "Source": "evt:Microsoft-Windows-Sysmon/Operational",
       "Occurrences": 1
     },
@@ -413,6 +432,31 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Occurrences": 1
     },
     {
+      "Id": "ART-DEFENDER-DETECTION",
+      "Title": "Defender detection in its own log: Backdoor:Win64/CobaltStrike.NP!dha",
+      "Severity": "High",
+      "Confidence": "High",
+      "Score": 10.0,
+      "Category": "Malware",
+      "Technique": [],
+      "Description": "Microsoft Defender's support log records a detection of Backdoor:Win64/CobaltStrike.NP!dha on C:\\ProgramData\\cf\\x.exe. This log is separate from the event log, so it can survive when event logs were cleared.",
+      "Entity": "defender:Backdoor:Win64/CobaltStrike.NP!dha:C:\\ProgramData\\cf\\x.exe",
+      "Evidence": {
+        "Artifact": "DefenderLog",
+        "Time": "2026-11-13T07:39:04.793Z",
+        "TimeKind": "Detected",
+        "Path": "C:\\ProgramData\\cf\\x.exe",
+        "Detail": "DETECTIONEVENT: Backdoor:Win64/CobaltStrike.NP!dha (file)",
+        "User": "",
+        "Source": "synthetic"
+      },
+      "Recommendation": "Confirm the remediation succeeded, find how the file arrived, and check for related detections on other hosts.",
+      "Host": "WS-APT",
+      "Time": "2026-11-13T07:39:04.793Z",
+      "Source": "artifacts",
+      "Occurrences": 1
+    },
+    {
       "Id": "LOTL-LOG-CLEAR",
       "Title": "Event log cleared from the command line",
       "Severity": "High",
@@ -433,7 +477,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Recover logs from forwarding/SIEM; find what happened just before.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T18:05:09.528Z",
+      "Time": "2026-11-14T04:46:04.793Z",
       "Source": "process",
       "Occurrences": 1
     },
@@ -452,12 +496,12 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Evidence": {
         "EventId": 1102,
         "Log": "Security",
-        "Time": "2026-11-07T18:08:09.528Z",
+        "Time": "2026-11-14T04:49:04.793Z",
         "Details": "analyst"
       },
       "Recommendation": "Find who cleared it and when, and recover logs from your SIEM or forwarded copies.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T18:08:09.528Z",
+      "Time": "2026-11-14T04:49:04.793Z",
       "Source": "evt:Security",
       "Occurrences": 1
     },
@@ -474,7 +518,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Description": "Event logging was cleared or stopped, destroying evidence.",
       "Entity": "activity:ACT-LOGGING-TAMPER:CORP\\analyst",
       "Evidence": {
-        "Time": "2026-11-07T18:08:09.528Z",
+        "Time": "2026-11-14T04:49:04.793Z",
         "Action": "Security log cleared",
         "Target": "CORP\\analyst",
         "Detail": "",
@@ -483,7 +527,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Recover logs from forwarding/SIEM and review what happened just before.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T18:08:09.528Z",
+      "Time": "2026-11-14T04:49:04.793Z",
       "Source": "activity:Security 1102",
       "Occurrences": 1
     },
@@ -538,6 +582,34 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Occurrences": 1
     },
     {
+      "Id": "ART-EXFIL-TOOL",
+      "Title": "Data-transfer tool ran: rclone.exe",
+      "Severity": "High",
+      "Confidence": "Medium",
+      "Score": 8.0,
+      "Category": "Exfiltration",
+      "Technique": [
+        "T1567.002",
+        "T1048"
+      ],
+      "Description": "rclone.exe copies files to cloud storage or remote servers and is the most common exfiltration tool in ransomware intrusions. Seen in: Prefetch.",
+      "Entity": "file:RCLONE.EXE",
+      "Evidence": {
+        "Path": "RCLONE.EXE",
+        "SeenIn": "Prefetch",
+        "FirstSeen": "2026-11-13T07:34:04.793Z",
+        "LastSeen": "2026-11-13T07:34:04.793Z",
+        "Sha1": null,
+        "Publisher": null,
+        "Users": "analyst"
+      },
+      "Recommendation": "Find its configuration file (e.g. rclone.conf) and command lines, establish what was copied and where to, and preserve proxy / firewall logs.",
+      "Host": "WS-APT",
+      "Time": "2026-11-13T07:34:04.793Z",
+      "Source": "artifacts",
+      "Occurrences": 1
+    },
+    {
       "Id": "ACT-EVTX-DELETED",
       "Title": "Event log file deleted: Microsoft-Windows-Sysmon%4Operational.evtx",
       "Severity": "High",
@@ -550,7 +622,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Description": "A Windows event log file was deleted from the log folder — evidence destruction.",
       "Entity": "activity:ACT-EVTX-DELETED:C:\\Windows\\System32\\winevt\\Logs\\Microsoft-Windows-Sysmon%4Operational.evtx",
       "Evidence": {
-        "Time": "2026-11-07T18:10:09.528Z",
+        "Time": "2026-11-14T04:51:04.793Z",
         "Action": "Deleted",
         "Target": "C:\\Windows\\System32\\winevt\\Logs\\Microsoft-Windows-Sysmon%4Operational.evtx",
         "Detail": "file",
@@ -559,7 +631,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Recover the log from forwarding/SIEM or backups; review what happened just before.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T18:10:09.528Z",
+      "Time": "2026-11-14T04:51:04.793Z",
       "Source": "activity:NTFS change journal C:",
       "Occurrences": 1
     },
@@ -577,7 +649,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Description": "An Image File Execution Options, SilentProcessExit or shell-handler key was written in the look-back window. These keys let an attacker run code whenever a program starts or bypass UAC.",
       "Entity": "activity:ACT-HIJACK-KEY-CHANGED:HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\sethc.exe",
       "Evidence": {
-        "Time": "2026-11-05T19:13:09.528Z",
+        "Time": "2026-11-12T05:54:04.793Z",
         "Action": "Hijack key written",
         "Target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\sethc.exe",
         "Detail": "Debugger = C:\\Windows\\System32\\cmd.exe",
@@ -586,7 +658,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Inspect the key values (Detail) and remove any Debugger / command values you did not set.",
       "Host": "WS-APT",
-      "Time": "2026-11-05T19:13:09.528Z",
+      "Time": "2026-11-12T05:54:04.793Z",
       "Source": "activity:registry key last-write time",
       "Occurrences": 1
     },
@@ -603,7 +675,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Description": "A file was created in a Startup folder; it will run at every logon of that user (or all users).",
       "Entity": "activity:ACT-STARTUP-DROP:C:\\Users\\analyst\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OneDrive Sync.lnk",
       "Evidence": {
-        "Time": "2026-11-05T19:33:09.528Z",
+        "Time": "2026-11-12T06:14:04.793Z",
         "Action": "Created",
         "Target": "C:\\Users\\analyst\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OneDrive Sync.lnk",
         "Detail": "file",
@@ -612,7 +684,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Inspect the file and remove it if it was not installed by known software.",
       "Host": "WS-APT",
-      "Time": "2026-11-05T19:33:09.528Z",
+      "Time": "2026-11-12T06:14:04.793Z",
       "Source": "activity:NTFS change journal C:",
       "Occurrences": 1
     },
@@ -641,6 +713,34 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Occurrences": 1
     },
     {
+      "Id": "ART-VULNERABLE-DRIVER",
+      "Title": "Known-vulnerable driver recorded: rtcore64.sys",
+      "Severity": "High",
+      "Confidence": "Medium",
+      "Score": 8.0,
+      "Category": "Defense Evasion",
+      "Technique": [
+        "T1068",
+        "T1562.001"
+      ],
+      "Description": "rtcore64.sys is a signed but vulnerable driver abused to kill security tools or gain kernel access (bring-your-own-vulnerable-driver).",
+      "Entity": "file:c:\\programdata\\cf\\rtcore64.sys",
+      "Evidence": {
+        "Path": "c:\\programdata\\cf\\rtcore64.sys",
+        "SeenIn": "AmcacheDriver",
+        "FirstSeen": "2026-11-12T06:04:04.793Z",
+        "LastSeen": "2026-11-12T06:04:04.793Z",
+        "Sha1": null,
+        "Publisher": null,
+        "Users": ""
+      },
+      "Recommendation": "Find the service that loaded it and when; enable the Microsoft vulnerable driver blocklist.",
+      "Host": "WS-APT",
+      "Time": "2026-11-12T06:04:04.793Z",
+      "Source": "artifacts",
+      "Occurrences": 1
+    },
+    {
       "Id": "ACT-MASS-MODIFY",
       "Title": "Mass file modification/renaming in user folders: 360 files within 10 minutes",
       "Severity": "High",
@@ -654,8 +754,8 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Entity": "activity:ACT-MASS-MODIFY",
       "Evidence": {
         "Files": 360,
-        "From": "2026-11-07T18:14:11.028Z",
-        "To": "2026-11-07T18:23:09.528Z",
+        "From": "2026-11-14T04:55:06.293Z",
+        "To": "2026-11-14T05:04:04.793Z",
         "Sample": [
           "C:\\Users\\analyst\\Documents\\Projects\\doc351.docx.lockd",
           "C:\\Users\\analyst\\Documents\\Projects\\doc352.docx.lockd",
@@ -671,7 +771,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Isolate the host if unexpected; check shadow copies/backups; correlate with process execution at that time.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T18:14:11.028Z",
+      "Time": "2026-11-14T04:55:06.293Z",
       "Source": "activity:burst",
       "Occurrences": 1
     },
@@ -696,7 +796,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "List rules (netsh interface portproxy show all) and remove unauthorized ones.",
       "Host": "WS-APT",
-      "Time": "2026-11-06T19:13:09.528Z",
+      "Time": "2026-11-13T05:54:04.793Z",
       "Source": "process",
       "Occurrences": 1
     },
@@ -715,13 +815,71 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Evidence": {
         "EventId": 4104,
         "Log": "Microsoft-Windows-PowerShell/Operational",
-        "Time": "2026-11-07T17:53:09.528Z",
+        "Time": "2026-11-14T04:34:04.793Z",
         "Details": "Set-PSReadLineOption -HistorySaveStyle SaveNothing; Remove-Item (Get-PSReadLineOption).HistorySavePath"
       },
       "Recommendation": "Treat subsequent PowerShell activity as under-logged; pull any history that remains.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T17:53:09.528Z",
+      "Time": "2026-11-14T04:34:04.793Z",
       "Source": "evt:Microsoft-Windows-PowerShell/Operational",
+      "Occurrences": 1
+    },
+    {
+      "Id": "ART-RISKY-DOWNLOAD",
+      "Title": "Risky download: Invoice_2026.iso",
+      "Severity": "High",
+      "Confidence": "Medium",
+      "Score": 8.0,
+      "Category": "Initial Access",
+      "Technique": [
+        "T1105",
+        "T1204.002"
+      ],
+      "Description": "An executable, script or disk-image file was downloaded (served from a bare IP address). This is how loaders and phishing payloads arrive.",
+      "Entity": "download:C:\\Users\\analyst\\Downloads\\Invoice_2026.iso",
+      "Evidence": {
+        "Artifact": "Download",
+        "Time": "2026-11-12T04:49:04.793Z",
+        "TimeKind": "Download started",
+        "Path": "C:\\Users\\analyst\\Downloads\\Invoice_2026.iso",
+        "Detail": "Edge download (complete); from https://203.0.113.50/d/Invoice_2026.iso",
+        "User": "analyst",
+        "Source": "synthetic",
+        "Url": "https://203.0.113.50/d/Invoice_2026.iso",
+        "Referrer": "https://mail.example.invalid/",
+        "Opened": true
+      },
+      "Recommendation": "Check whether it was opened or run (Amcache / Prefetch / ShimCache for the same name), hash it, and review the referrer and the source site.",
+      "Host": "WS-APT",
+      "Time": "2026-11-12T04:49:04.793Z",
+      "Source": "artifacts",
+      "Occurrences": 1
+    },
+    {
+      "Id": "ART-MASQUERADE",
+      "Title": "System program name in the wrong folder: c:\\users\\analyst\\appdata\\roaming\\microsoft\\svchost.exe",
+      "Severity": "High",
+      "Confidence": "Medium",
+      "Score": 8.0,
+      "Category": "Defense Evasion",
+      "Technique": [
+        "T1036.005"
+      ],
+      "Description": "svchost.exe is a Windows system program, but this copy ran outside the Windows system folders. Malware uses system names so it looks normal in a process list.",
+      "Entity": "file:c:\\users\\analyst\\appdata\\roaming\\microsoft\\svchost.exe",
+      "Evidence": {
+        "Path": "c:\\users\\analyst\\appdata\\roaming\\microsoft\\svchost.exe",
+        "SeenIn": "Amcache",
+        "FirstSeen": "2026-11-12T05:49:04.793Z",
+        "LastSeen": "2026-11-12T05:49:04.793Z",
+        "Sha1": "1122334455667788990011223344556677889900",
+        "Publisher": null,
+        "Users": "analyst"
+      },
+      "Recommendation": "Hash and inspect the file; check its parent process and persistence.",
+      "Host": "WS-APT",
+      "Time": "2026-11-12T05:49:04.793Z",
+      "Source": "artifacts",
       "Occurrences": 1
     },
     {
@@ -737,7 +895,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Description": "A file was created whose name matches the naming used by ransomware notes (decrypt / recover files / how to restore …).",
       "Entity": "activity:ACT-RANSOM-NOTE:C:\\Users\\analyst\\Desktop\\HOW_TO_RESTORE_FILES.txt",
       "Evidence": {
-        "Time": "2026-11-07T18:13:09.528Z",
+        "Time": "2026-11-14T04:54:04.793Z",
         "Action": "Created",
         "Target": "C:\\Users\\analyst\\Desktop\\HOW_TO_RESTORE_FILES.txt",
         "Detail": "file",
@@ -746,7 +904,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Open the file with a text viewer (do not run it); if it is a ransom note, isolate the host immediately.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T18:13:09.528Z",
+      "Time": "2026-11-14T04:54:04.793Z",
       "Source": "activity:NTFS change journal C:",
       "Occurrences": 1
     },
@@ -764,7 +922,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Entity": "event:4104:LOTL-PS-HISTORY-TAMPER:9f9f",
       "Evidence": {
         "EventId": 4104,
-        "Time": "2026-11-07T17:53:09.528Z",
+        "Time": "2026-11-14T04:34:04.793Z",
         "Image": "",
         "Command": "Set-PSReadLineOption -HistorySaveStyle SaveNothing; Remove-Item (Get-PSReadLineOption).HistorySavePath",
         "Parent": "",
@@ -772,7 +930,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Recover history from backups / EDR and review the session's other activity.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T17:53:09.528Z",
+      "Time": "2026-11-14T04:34:04.793Z",
       "Source": "evt:Microsoft-Windows-PowerShell/Operational",
       "Occurrences": 1
     },
@@ -791,12 +949,12 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Evidence": {
         "EventId": 104,
         "Log": "System",
-        "Time": "2026-11-07T18:09:09.528Z",
+        "Time": "2026-11-14T04:50:04.793Z",
         "Details": "analyst"
       },
       "Recommendation": "Confirm whether this was a sanctioned maintenance action.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T18:09:09.528Z",
+      "Time": "2026-11-14T04:50:04.793Z",
       "Source": "evt:System",
       "Occurrences": 1
     },
@@ -813,7 +971,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Description": "A file's creation time was changed (Sysmon 2) — used to hide new files among old ones. Some installers and browsers also do this.",
       "Entity": "activity:ACT-TIMESTOMP:C:\\Users\\analyst\\AppData\\Local\\Temp\\OneDriveUpdater.exe",
       "Evidence": {
-        "Time": "2026-11-07T17:33:09.528Z",
+        "Time": "2026-11-14T04:14:04.793Z",
         "Action": "File creation time changed (timestomp?)",
         "Target": "C:\\Users\\analyst\\AppData\\Local\\Temp\\OneDriveUpdater.exe",
         "Detail": "2026-11-04 10:00 → 2019-03-01 08:00",
@@ -822,7 +980,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Check the process that changed it (Actor) and the file.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T17:33:09.528Z",
+      "Time": "2026-11-14T04:14:04.793Z",
       "Source": "activity:Sysmon 2",
       "Occurrences": 1
     },
@@ -907,7 +1065,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Description": "The PSReadLine history file (record of typed PowerShell commands) was deleted.",
       "Entity": "activity:ACT-PSHISTORY-DELETED:C:\\Users\\analyst\\AppData\\Roaming\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ConsoleHost_history.txt",
       "Evidence": {
-        "Time": "2026-11-07T17:52:09.528Z",
+        "Time": "2026-11-14T04:33:04.793Z",
         "Action": "Deleted",
         "Target": "C:\\Users\\analyst\\AppData\\Roaming\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ConsoleHost_history.txt",
         "Detail": "file",
@@ -916,8 +1074,36 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Check other execution evidence (4104 script blocks, Prefetch) for the same period.",
       "Host": "WS-APT",
-      "Time": "2026-11-07T17:52:09.528Z",
+      "Time": "2026-11-14T04:33:04.793Z",
       "Source": "activity:NTFS change journal C:",
+      "Occurrences": 1
+    },
+    {
+      "Id": "ART-EXEC-STAGING-PATH",
+      "Title": "Program ran from a staging folder: c:\\users\\analyst\\appdata\\local\\temp\\onedriveupdater.exe",
+      "Severity": "Medium",
+      "Confidence": "Medium",
+      "Score": 4.0,
+      "Category": "Execution",
+      "Technique": [
+        "T1204.002",
+        "T1074.001"
+      ],
+      "Description": "Executables in Temp, Public, PerfLogs, the Recycle Bin or the root of ProgramData are where droppers and hands-on intruders stage tools. Seen in: Amcache.",
+      "Entity": "file:c:\\users\\analyst\\appdata\\local\\temp\\onedriveupdater.exe",
+      "Evidence": {
+        "Path": "c:\\users\\analyst\\appdata\\local\\temp\\onedriveupdater.exe",
+        "SeenIn": "Amcache",
+        "FirstSeen": "2026-11-12T05:44:04.793Z",
+        "LastSeen": "2026-11-12T05:44:04.793Z",
+        "Sha1": "9a8b7c6d5e4f30211203f4e5d6c7b8a990817263",
+        "Publisher": null,
+        "Users": "analyst"
+      },
+      "Recommendation": "Check the file hash and signer; find how it arrived (downloads, mail, archives) and what it started.",
+      "Host": "WS-APT",
+      "Time": "2026-11-12T05:44:04.793Z",
+      "Source": "artifacts",
       "Occurrences": 1
     },
     {
@@ -941,7 +1127,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Identify the remote endpoint and the exposed port.",
       "Host": "WS-APT",
-      "Time": "2026-11-06T19:23:09.528Z",
+      "Time": "2026-11-13T06:04:04.793Z",
       "Source": "process",
       "Occurrences": 1
     },
@@ -966,7 +1152,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Hash the file and check it against threat intelligence; confirm the publisher.",
       "Host": "WS-APT",
-      "Time": "2026-11-06T17:33:09.528Z",
+      "Time": "2026-11-13T04:14:04.793Z",
       "Source": "process",
       "Occurrences": 1
     },
@@ -991,7 +1177,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Hash the file and check it against threat intelligence; confirm the publisher.",
       "Host": "WS-APT",
-      "Time": "2026-11-06T20:53:09.528Z",
+      "Time": "2026-11-13T07:34:04.793Z",
       "Source": "process",
       "Occurrences": 1
     },
@@ -1033,7 +1219,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Description": "An outbound connection used a port commonly used by attack frameworks and reverse shells (e.g. 4444, 50050). Suggestive, not conclusive.",
       "Entity": "activity:ACT-C2-PORT:203.0.113.99:4444",
       "Evidence": {
-        "Time": "2026-11-06T18:33:09.528Z",
+        "Time": "2026-11-13T05:14:04.793Z",
         "Action": "Outbound connection",
         "Target": "203.0.113.99:4444",
         "Detail": "reverse shell test",
@@ -1042,8 +1228,62 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Identify the process (Actor) and the destination's reputation.",
       "Host": "WS-APT",
-      "Time": "2026-11-06T18:33:09.528Z",
+      "Time": "2026-11-13T05:14:04.793Z",
       "Source": "activity:Sysmon 3",
+      "Occurrences": 1
+    },
+    {
+      "Id": "ART-REMOVABLE-ACCESS",
+      "Title": "File opened from a removable drive: finance.zip",
+      "Severity": "Low",
+      "Confidence": "Medium",
+      "Score": 1.6,
+      "Category": "Collection",
+      "Technique": [],
+      "Description": "JumpList records E:\\exfil\\finance.zip on a removable drive labelled 'KINGSTON' (volume serial 1A2B3C4D). Useful for data-theft and USB-malware questions.",
+      "Entity": "usb:E:\\exfil\\finance.zip",
+      "Evidence": {
+        "Artifact": "JumpList",
+        "Time": "2026-11-13T07:54:04.793Z",
+        "TimeKind": "Last opened",
+        "Path": "E:\\exfil\\finance.zip",
+        "Detail": "7-Zip; Removable drive 'KINGSTON' serial 1A2B3C4D",
+        "User": "analyst",
+        "Source": "synthetic"
+      },
+      "Recommendation": "Match the volume serial with USB device history (Explore → USB history) to identify the device.",
+      "Host": "WS-APT",
+      "Time": "2026-11-13T07:54:04.793Z",
+      "Source": "artifacts",
+      "Occurrences": 1
+    },
+    {
+      "Id": "LOTL-PS-HIDDEN-WINDOW",
+      "Title": "PowerShell launched with a hidden window (in a shortcut)",
+      "Severity": "Low",
+      "Confidence": "Medium",
+      "Score": 1.6,
+      "Category": "Execution",
+      "Technique": [
+        "T1059.001",
+        "T1564.003"
+      ],
+      "Description": "PowerShell was asked to run with no visible window. Legitimate scheduled jobs do this, but so does most malicious PowerShell. The command is stored in a shortcut / Jump List entry (synthetic).",
+      "Entity": "shortcut:synthetic",
+      "Evidence": {
+        "Artifact": "Shortcut",
+        "Time": "2026-11-12T04:55:04.793Z",
+        "TimeKind": "Shortcut modified",
+        "Path": "C:\\Windows\\System32\\cmd.exe",
+        "Detail": "arguments: /c powershell -nop -w hidden -enc SQBFAFgA",
+        "User": "analyst",
+        "Source": "synthetic",
+        "Arguments": "/c powershell -nop -w hidden -enc SQBFAFgA"
+      },
+      "Recommendation": "Review the full command line and the parent process.",
+      "Host": "WS-APT",
+      "Time": "2026-11-12T04:55:04.793Z",
+      "Source": "artifacts",
       "Occurrences": 1
     },
     {
@@ -1111,7 +1351,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       },
       "Recommendation": "Confirm this RMM tool is sanctioned on this host and tied to a known administrator.",
       "Host": "WS-APT",
-      "Time": "2026-11-06T17:33:09.528Z",
+      "Time": "2026-11-13T04:14:04.793Z",
       "Source": "process",
       "Occurrences": 1
     },
@@ -1144,7 +1384,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
   ],
   "activity": [
     {
-      "Time": "2026-11-07T18:23:09.528Z",
+      "Time": "2026-11-14T05:04:04.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc360.docx.lockd",
@@ -1153,7 +1393,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:23:08.028Z",
+      "Time": "2026-11-14T05:04:03.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc359.docx.lockd",
@@ -1162,7 +1402,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:23:06.528Z",
+      "Time": "2026-11-14T05:04:01.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc358.docx.lockd",
@@ -1171,7 +1411,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:23:05.028Z",
+      "Time": "2026-11-14T05:04:00.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc357.docx.lockd",
@@ -1180,7 +1420,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:23:03.528Z",
+      "Time": "2026-11-14T05:03:58.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc356.docx.lockd",
@@ -1189,7 +1429,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:23:02.028Z",
+      "Time": "2026-11-14T05:03:57.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc355.docx.lockd",
@@ -1198,7 +1438,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:23:00.528Z",
+      "Time": "2026-11-14T05:03:55.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc354.docx.lockd",
@@ -1207,7 +1447,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:59.028Z",
+      "Time": "2026-11-14T05:03:54.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc353.docx.lockd",
@@ -1216,7 +1456,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:57.528Z",
+      "Time": "2026-11-14T05:03:52.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc352.docx.lockd",
@@ -1225,7 +1465,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:56.028Z",
+      "Time": "2026-11-14T05:03:51.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc351.docx.lockd",
@@ -1234,7 +1474,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:54.528Z",
+      "Time": "2026-11-14T05:03:49.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc350.docx.lockd",
@@ -1243,7 +1483,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:53.028Z",
+      "Time": "2026-11-14T05:03:48.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc349.docx.lockd",
@@ -1252,7 +1492,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:51.528Z",
+      "Time": "2026-11-14T05:03:46.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc348.docx.lockd",
@@ -1261,7 +1501,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:50.028Z",
+      "Time": "2026-11-14T05:03:45.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc347.docx.lockd",
@@ -1270,7 +1510,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:48.528Z",
+      "Time": "2026-11-14T05:03:43.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc346.docx.lockd",
@@ -1279,7 +1519,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:47.028Z",
+      "Time": "2026-11-14T05:03:42.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc345.docx.lockd",
@@ -1288,7 +1528,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:45.528Z",
+      "Time": "2026-11-14T05:03:40.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc344.docx.lockd",
@@ -1297,7 +1537,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:44.028Z",
+      "Time": "2026-11-14T05:03:39.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc343.docx.lockd",
@@ -1306,7 +1546,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:42.528Z",
+      "Time": "2026-11-14T05:03:37.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc342.docx.lockd",
@@ -1315,7 +1555,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:41.028Z",
+      "Time": "2026-11-14T05:03:36.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc341.docx.lockd",
@@ -1324,7 +1564,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:39.528Z",
+      "Time": "2026-11-14T05:03:34.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc340.docx.lockd",
@@ -1333,7 +1573,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:38.028Z",
+      "Time": "2026-11-14T05:03:33.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc339.docx.lockd",
@@ -1342,7 +1582,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:36.528Z",
+      "Time": "2026-11-14T05:03:31.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc338.docx.lockd",
@@ -1351,7 +1591,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:35.028Z",
+      "Time": "2026-11-14T05:03:30.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc337.docx.lockd",
@@ -1360,7 +1600,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:33.528Z",
+      "Time": "2026-11-14T05:03:28.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc336.docx.lockd",
@@ -1369,7 +1609,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:32.028Z",
+      "Time": "2026-11-14T05:03:27.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc335.docx.lockd",
@@ -1378,7 +1618,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:30.528Z",
+      "Time": "2026-11-14T05:03:25.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc334.docx.lockd",
@@ -1387,7 +1627,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:29.028Z",
+      "Time": "2026-11-14T05:03:24.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc333.docx.lockd",
@@ -1396,7 +1636,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:27.528Z",
+      "Time": "2026-11-14T05:03:22.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc332.docx.lockd",
@@ -1405,7 +1645,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:26.028Z",
+      "Time": "2026-11-14T05:03:21.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc331.docx.lockd",
@@ -1414,7 +1654,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:24.528Z",
+      "Time": "2026-11-14T05:03:19.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc330.docx.lockd",
@@ -1423,7 +1663,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:23.028Z",
+      "Time": "2026-11-14T05:03:18.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc329.docx.lockd",
@@ -1432,7 +1672,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:21.528Z",
+      "Time": "2026-11-14T05:03:16.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc328.docx.lockd",
@@ -1441,7 +1681,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:20.028Z",
+      "Time": "2026-11-14T05:03:15.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc327.docx.lockd",
@@ -1450,7 +1690,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:18.528Z",
+      "Time": "2026-11-14T05:03:13.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc326.docx.lockd",
@@ -1459,7 +1699,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:17.028Z",
+      "Time": "2026-11-14T05:03:12.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc325.docx.lockd",
@@ -1468,7 +1708,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:15.528Z",
+      "Time": "2026-11-14T05:03:10.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc324.docx.lockd",
@@ -1477,7 +1717,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:14.028Z",
+      "Time": "2026-11-14T05:03:09.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc323.docx.lockd",
@@ -1486,7 +1726,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:12.528Z",
+      "Time": "2026-11-14T05:03:07.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc322.docx.lockd",
@@ -1495,7 +1735,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:11.028Z",
+      "Time": "2026-11-14T05:03:06.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc321.docx.lockd",
@@ -1504,7 +1744,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:09.528Z",
+      "Time": "2026-11-14T05:03:04.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc320.docx.lockd",
@@ -1513,7 +1753,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:08.028Z",
+      "Time": "2026-11-14T05:03:03.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc319.docx.lockd",
@@ -1522,7 +1762,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:06.528Z",
+      "Time": "2026-11-14T05:03:01.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc318.docx.lockd",
@@ -1531,7 +1771,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:05.028Z",
+      "Time": "2026-11-14T05:03:00.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc317.docx.lockd",
@@ -1540,7 +1780,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:03.528Z",
+      "Time": "2026-11-14T05:02:58.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc316.docx.lockd",
@@ -1549,7 +1789,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:02.028Z",
+      "Time": "2026-11-14T05:02:57.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc315.docx.lockd",
@@ -1558,7 +1798,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:22:00.528Z",
+      "Time": "2026-11-14T05:02:55.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc314.docx.lockd",
@@ -1567,7 +1807,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:59.028Z",
+      "Time": "2026-11-14T05:02:54.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc313.docx.lockd",
@@ -1576,7 +1816,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:57.528Z",
+      "Time": "2026-11-14T05:02:52.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc312.docx.lockd",
@@ -1585,7 +1825,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:56.028Z",
+      "Time": "2026-11-14T05:02:51.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc311.docx.lockd",
@@ -1594,7 +1834,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:54.528Z",
+      "Time": "2026-11-14T05:02:49.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc310.docx.lockd",
@@ -1603,7 +1843,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:53.028Z",
+      "Time": "2026-11-14T05:02:48.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc309.docx.lockd",
@@ -1612,7 +1852,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:51.528Z",
+      "Time": "2026-11-14T05:02:46.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc308.docx.lockd",
@@ -1621,7 +1861,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:50.028Z",
+      "Time": "2026-11-14T05:02:45.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc307.docx.lockd",
@@ -1630,7 +1870,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:48.528Z",
+      "Time": "2026-11-14T05:02:43.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc306.docx.lockd",
@@ -1639,7 +1879,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:47.028Z",
+      "Time": "2026-11-14T05:02:42.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc305.docx.lockd",
@@ -1648,7 +1888,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:45.528Z",
+      "Time": "2026-11-14T05:02:40.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc304.docx.lockd",
@@ -1657,7 +1897,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:44.028Z",
+      "Time": "2026-11-14T05:02:39.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc303.docx.lockd",
@@ -1666,7 +1906,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:42.528Z",
+      "Time": "2026-11-14T05:02:37.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc302.docx.lockd",
@@ -1675,7 +1915,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:41.028Z",
+      "Time": "2026-11-14T05:02:36.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc301.docx.lockd",
@@ -1684,7 +1924,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:39.528Z",
+      "Time": "2026-11-14T05:02:34.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc300.docx.lockd",
@@ -1693,7 +1933,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:38.028Z",
+      "Time": "2026-11-14T05:02:33.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc299.docx.lockd",
@@ -1702,7 +1942,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:36.528Z",
+      "Time": "2026-11-14T05:02:31.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc298.docx.lockd",
@@ -1711,7 +1951,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:35.028Z",
+      "Time": "2026-11-14T05:02:30.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc297.docx.lockd",
@@ -1720,7 +1960,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:33.528Z",
+      "Time": "2026-11-14T05:02:28.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc296.docx.lockd",
@@ -1729,7 +1969,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:32.028Z",
+      "Time": "2026-11-14T05:02:27.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc295.docx.lockd",
@@ -1738,7 +1978,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:30.528Z",
+      "Time": "2026-11-14T05:02:25.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc294.docx.lockd",
@@ -1747,7 +1987,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:29.028Z",
+      "Time": "2026-11-14T05:02:24.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc293.docx.lockd",
@@ -1756,7 +1996,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:27.528Z",
+      "Time": "2026-11-14T05:02:22.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc292.docx.lockd",
@@ -1765,7 +2005,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:26.028Z",
+      "Time": "2026-11-14T05:02:21.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc291.docx.lockd",
@@ -1774,7 +2014,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:24.528Z",
+      "Time": "2026-11-14T05:02:19.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc290.docx.lockd",
@@ -1783,7 +2023,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:23.028Z",
+      "Time": "2026-11-14T05:02:18.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc289.docx.lockd",
@@ -1792,7 +2032,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:21.528Z",
+      "Time": "2026-11-14T05:02:16.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc288.docx.lockd",
@@ -1801,7 +2041,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:20.028Z",
+      "Time": "2026-11-14T05:02:15.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc287.docx.lockd",
@@ -1810,7 +2050,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:18.528Z",
+      "Time": "2026-11-14T05:02:13.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc286.docx.lockd",
@@ -1819,7 +2059,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:17.028Z",
+      "Time": "2026-11-14T05:02:12.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc285.docx.lockd",
@@ -1828,7 +2068,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:15.528Z",
+      "Time": "2026-11-14T05:02:10.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc284.docx.lockd",
@@ -1837,7 +2077,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:14.028Z",
+      "Time": "2026-11-14T05:02:09.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc283.docx.lockd",
@@ -1846,7 +2086,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:12.528Z",
+      "Time": "2026-11-14T05:02:07.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc282.docx.lockd",
@@ -1855,7 +2095,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:11.028Z",
+      "Time": "2026-11-14T05:02:06.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc281.docx.lockd",
@@ -1864,7 +2104,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:09.528Z",
+      "Time": "2026-11-14T05:02:04.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc280.docx.lockd",
@@ -1873,7 +2113,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:08.028Z",
+      "Time": "2026-11-14T05:02:03.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc279.docx.lockd",
@@ -1882,7 +2122,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:06.528Z",
+      "Time": "2026-11-14T05:02:01.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc278.docx.lockd",
@@ -1891,7 +2131,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:05.028Z",
+      "Time": "2026-11-14T05:02:00.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc277.docx.lockd",
@@ -1900,7 +2140,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:03.528Z",
+      "Time": "2026-11-14T05:01:58.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc276.docx.lockd",
@@ -1909,7 +2149,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:02.028Z",
+      "Time": "2026-11-14T05:01:57.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc275.docx.lockd",
@@ -1918,7 +2158,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:21:00.528Z",
+      "Time": "2026-11-14T05:01:55.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc274.docx.lockd",
@@ -1927,7 +2167,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:59.028Z",
+      "Time": "2026-11-14T05:01:54.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc273.docx.lockd",
@@ -1936,7 +2176,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:57.528Z",
+      "Time": "2026-11-14T05:01:52.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc272.docx.lockd",
@@ -1945,7 +2185,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:56.028Z",
+      "Time": "2026-11-14T05:01:51.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc271.docx.lockd",
@@ -1954,7 +2194,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:54.528Z",
+      "Time": "2026-11-14T05:01:49.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc270.docx.lockd",
@@ -1963,7 +2203,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:53.028Z",
+      "Time": "2026-11-14T05:01:48.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc269.docx.lockd",
@@ -1972,7 +2212,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:51.528Z",
+      "Time": "2026-11-14T05:01:46.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc268.docx.lockd",
@@ -1981,7 +2221,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:50.028Z",
+      "Time": "2026-11-14T05:01:45.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc267.docx.lockd",
@@ -1990,7 +2230,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:48.528Z",
+      "Time": "2026-11-14T05:01:43.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc266.docx.lockd",
@@ -1999,7 +2239,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:47.028Z",
+      "Time": "2026-11-14T05:01:42.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc265.docx.lockd",
@@ -2008,7 +2248,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:45.528Z",
+      "Time": "2026-11-14T05:01:40.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc264.docx.lockd",
@@ -2017,7 +2257,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:44.028Z",
+      "Time": "2026-11-14T05:01:39.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc263.docx.lockd",
@@ -2026,7 +2266,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:42.528Z",
+      "Time": "2026-11-14T05:01:37.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc262.docx.lockd",
@@ -2035,7 +2275,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:41.028Z",
+      "Time": "2026-11-14T05:01:36.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc261.docx.lockd",
@@ -2044,7 +2284,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:39.528Z",
+      "Time": "2026-11-14T05:01:34.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc260.docx.lockd",
@@ -2053,7 +2293,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:38.028Z",
+      "Time": "2026-11-14T05:01:33.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc259.docx.lockd",
@@ -2062,7 +2302,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:36.528Z",
+      "Time": "2026-11-14T05:01:31.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc258.docx.lockd",
@@ -2071,7 +2311,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:35.028Z",
+      "Time": "2026-11-14T05:01:30.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc257.docx.lockd",
@@ -2080,7 +2320,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:33.528Z",
+      "Time": "2026-11-14T05:01:28.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc256.docx.lockd",
@@ -2089,7 +2329,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:32.028Z",
+      "Time": "2026-11-14T05:01:27.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc255.docx.lockd",
@@ -2098,7 +2338,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:30.528Z",
+      "Time": "2026-11-14T05:01:25.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc254.docx.lockd",
@@ -2107,7 +2347,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:29.028Z",
+      "Time": "2026-11-14T05:01:24.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc253.docx.lockd",
@@ -2116,7 +2356,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:27.528Z",
+      "Time": "2026-11-14T05:01:22.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc252.docx.lockd",
@@ -2125,7 +2365,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:26.028Z",
+      "Time": "2026-11-14T05:01:21.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc251.docx.lockd",
@@ -2134,7 +2374,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:24.528Z",
+      "Time": "2026-11-14T05:01:19.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc250.docx.lockd",
@@ -2143,7 +2383,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:23.028Z",
+      "Time": "2026-11-14T05:01:18.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc249.docx.lockd",
@@ -2152,7 +2392,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:21.528Z",
+      "Time": "2026-11-14T05:01:16.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc248.docx.lockd",
@@ -2161,7 +2401,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:20.028Z",
+      "Time": "2026-11-14T05:01:15.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc247.docx.lockd",
@@ -2170,7 +2410,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:18.528Z",
+      "Time": "2026-11-14T05:01:13.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc246.docx.lockd",
@@ -2179,7 +2419,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:17.028Z",
+      "Time": "2026-11-14T05:01:12.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc245.docx.lockd",
@@ -2188,7 +2428,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:15.528Z",
+      "Time": "2026-11-14T05:01:10.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc244.docx.lockd",
@@ -2197,7 +2437,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:14.028Z",
+      "Time": "2026-11-14T05:01:09.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc243.docx.lockd",
@@ -2206,7 +2446,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:12.528Z",
+      "Time": "2026-11-14T05:01:07.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc242.docx.lockd",
@@ -2215,7 +2455,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:11.028Z",
+      "Time": "2026-11-14T05:01:06.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc241.docx.lockd",
@@ -2224,7 +2464,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:09.528Z",
+      "Time": "2026-11-14T05:01:04.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc240.docx.lockd",
@@ -2233,7 +2473,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:08.028Z",
+      "Time": "2026-11-14T05:01:03.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc239.docx.lockd",
@@ -2242,7 +2482,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:06.528Z",
+      "Time": "2026-11-14T05:01:01.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc238.docx.lockd",
@@ -2251,7 +2491,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:05.028Z",
+      "Time": "2026-11-14T05:01:00.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc237.docx.lockd",
@@ -2260,7 +2500,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:03.528Z",
+      "Time": "2026-11-14T05:00:58.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc236.docx.lockd",
@@ -2269,7 +2509,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:02.028Z",
+      "Time": "2026-11-14T05:00:57.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc235.docx.lockd",
@@ -2278,7 +2518,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:20:00.528Z",
+      "Time": "2026-11-14T05:00:55.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc234.docx.lockd",
@@ -2287,7 +2527,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:59.028Z",
+      "Time": "2026-11-14T05:00:54.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc233.docx.lockd",
@@ -2296,7 +2536,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:57.528Z",
+      "Time": "2026-11-14T05:00:52.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc232.docx.lockd",
@@ -2305,7 +2545,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:56.028Z",
+      "Time": "2026-11-14T05:00:51.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc231.docx.lockd",
@@ -2314,7 +2554,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:54.528Z",
+      "Time": "2026-11-14T05:00:49.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc230.docx.lockd",
@@ -2323,7 +2563,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:53.028Z",
+      "Time": "2026-11-14T05:00:48.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc229.docx.lockd",
@@ -2332,7 +2572,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:51.528Z",
+      "Time": "2026-11-14T05:00:46.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc228.docx.lockd",
@@ -2341,7 +2581,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:50.028Z",
+      "Time": "2026-11-14T05:00:45.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc227.docx.lockd",
@@ -2350,7 +2590,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:48.528Z",
+      "Time": "2026-11-14T05:00:43.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc226.docx.lockd",
@@ -2359,7 +2599,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:47.028Z",
+      "Time": "2026-11-14T05:00:42.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc225.docx.lockd",
@@ -2368,7 +2608,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:45.528Z",
+      "Time": "2026-11-14T05:00:40.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc224.docx.lockd",
@@ -2377,7 +2617,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:44.028Z",
+      "Time": "2026-11-14T05:00:39.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc223.docx.lockd",
@@ -2386,7 +2626,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:42.528Z",
+      "Time": "2026-11-14T05:00:37.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc222.docx.lockd",
@@ -2395,7 +2635,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:41.028Z",
+      "Time": "2026-11-14T05:00:36.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc221.docx.lockd",
@@ -2404,7 +2644,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:39.528Z",
+      "Time": "2026-11-14T05:00:34.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc220.docx.lockd",
@@ -2413,7 +2653,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:38.028Z",
+      "Time": "2026-11-14T05:00:33.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc219.docx.lockd",
@@ -2422,7 +2662,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:36.528Z",
+      "Time": "2026-11-14T05:00:31.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc218.docx.lockd",
@@ -2431,7 +2671,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:35.028Z",
+      "Time": "2026-11-14T05:00:30.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc217.docx.lockd",
@@ -2440,7 +2680,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:33.528Z",
+      "Time": "2026-11-14T05:00:28.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc216.docx.lockd",
@@ -2449,7 +2689,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:32.028Z",
+      "Time": "2026-11-14T05:00:27.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc215.docx.lockd",
@@ -2458,7 +2698,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:30.528Z",
+      "Time": "2026-11-14T05:00:25.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc214.docx.lockd",
@@ -2467,7 +2707,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:29.028Z",
+      "Time": "2026-11-14T05:00:24.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc213.docx.lockd",
@@ -2476,7 +2716,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:27.528Z",
+      "Time": "2026-11-14T05:00:22.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc212.docx.lockd",
@@ -2485,7 +2725,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:26.028Z",
+      "Time": "2026-11-14T05:00:21.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc211.docx.lockd",
@@ -2494,7 +2734,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:24.528Z",
+      "Time": "2026-11-14T05:00:19.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc210.docx.lockd",
@@ -2503,7 +2743,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:23.028Z",
+      "Time": "2026-11-14T05:00:18.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc209.docx.lockd",
@@ -2512,7 +2752,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:21.528Z",
+      "Time": "2026-11-14T05:00:16.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc208.docx.lockd",
@@ -2521,7 +2761,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:20.028Z",
+      "Time": "2026-11-14T05:00:15.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc207.docx.lockd",
@@ -2530,7 +2770,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:18.528Z",
+      "Time": "2026-11-14T05:00:13.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc206.docx.lockd",
@@ -2539,7 +2779,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:17.028Z",
+      "Time": "2026-11-14T05:00:12.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc205.docx.lockd",
@@ -2548,7 +2788,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:15.528Z",
+      "Time": "2026-11-14T05:00:10.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc204.docx.lockd",
@@ -2557,7 +2797,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:14.028Z",
+      "Time": "2026-11-14T05:00:09.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc203.docx.lockd",
@@ -2566,7 +2806,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:12.528Z",
+      "Time": "2026-11-14T05:00:07.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc202.docx.lockd",
@@ -2575,7 +2815,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:11.028Z",
+      "Time": "2026-11-14T05:00:06.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc201.docx.lockd",
@@ -2584,7 +2824,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:09.528Z",
+      "Time": "2026-11-14T05:00:04.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc200.docx.lockd",
@@ -2593,7 +2833,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:08.028Z",
+      "Time": "2026-11-14T05:00:03.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc199.docx.lockd",
@@ -2602,7 +2842,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:06.528Z",
+      "Time": "2026-11-14T05:00:01.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc198.docx.lockd",
@@ -2611,7 +2851,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:05.028Z",
+      "Time": "2026-11-14T05:00:00.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc197.docx.lockd",
@@ -2620,7 +2860,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:03.528Z",
+      "Time": "2026-11-14T04:59:58.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc196.docx.lockd",
@@ -2629,7 +2869,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:02.028Z",
+      "Time": "2026-11-14T04:59:57.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc195.docx.lockd",
@@ -2638,7 +2878,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:19:00.528Z",
+      "Time": "2026-11-14T04:59:55.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc194.docx.lockd",
@@ -2647,7 +2887,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:59.028Z",
+      "Time": "2026-11-14T04:59:54.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc193.docx.lockd",
@@ -2656,7 +2896,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:57.528Z",
+      "Time": "2026-11-14T04:59:52.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc192.docx.lockd",
@@ -2665,7 +2905,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:56.028Z",
+      "Time": "2026-11-14T04:59:51.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc191.docx.lockd",
@@ -2674,7 +2914,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:54.528Z",
+      "Time": "2026-11-14T04:59:49.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc190.docx.lockd",
@@ -2683,7 +2923,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:53.028Z",
+      "Time": "2026-11-14T04:59:48.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc189.docx.lockd",
@@ -2692,7 +2932,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:51.528Z",
+      "Time": "2026-11-14T04:59:46.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc188.docx.lockd",
@@ -2701,7 +2941,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:50.028Z",
+      "Time": "2026-11-14T04:59:45.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc187.docx.lockd",
@@ -2710,7 +2950,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:48.528Z",
+      "Time": "2026-11-14T04:59:43.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc186.docx.lockd",
@@ -2719,7 +2959,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:47.028Z",
+      "Time": "2026-11-14T04:59:42.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc185.docx.lockd",
@@ -2728,7 +2968,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:45.528Z",
+      "Time": "2026-11-14T04:59:40.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc184.docx.lockd",
@@ -2737,7 +2977,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:44.028Z",
+      "Time": "2026-11-14T04:59:39.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc183.docx.lockd",
@@ -2746,7 +2986,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:42.528Z",
+      "Time": "2026-11-14T04:59:37.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc182.docx.lockd",
@@ -2755,7 +2995,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:41.028Z",
+      "Time": "2026-11-14T04:59:36.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc181.docx.lockd",
@@ -2764,7 +3004,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:39.528Z",
+      "Time": "2026-11-14T04:59:34.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc180.docx.lockd",
@@ -2773,7 +3013,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:38.028Z",
+      "Time": "2026-11-14T04:59:33.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc179.docx.lockd",
@@ -2782,7 +3022,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:36.528Z",
+      "Time": "2026-11-14T04:59:31.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc178.docx.lockd",
@@ -2791,7 +3031,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:35.028Z",
+      "Time": "2026-11-14T04:59:30.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc177.docx.lockd",
@@ -2800,7 +3040,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:33.528Z",
+      "Time": "2026-11-14T04:59:28.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc176.docx.lockd",
@@ -2809,7 +3049,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:32.028Z",
+      "Time": "2026-11-14T04:59:27.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc175.docx.lockd",
@@ -2818,7 +3058,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:30.528Z",
+      "Time": "2026-11-14T04:59:25.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc174.docx.lockd",
@@ -2827,7 +3067,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:29.028Z",
+      "Time": "2026-11-14T04:59:24.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc173.docx.lockd",
@@ -2836,7 +3076,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:27.528Z",
+      "Time": "2026-11-14T04:59:22.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc172.docx.lockd",
@@ -2845,7 +3085,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:26.028Z",
+      "Time": "2026-11-14T04:59:21.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc171.docx.lockd",
@@ -2854,7 +3094,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:24.528Z",
+      "Time": "2026-11-14T04:59:19.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc170.docx.lockd",
@@ -2863,7 +3103,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:23.028Z",
+      "Time": "2026-11-14T04:59:18.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc169.docx.lockd",
@@ -2872,7 +3112,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:21.528Z",
+      "Time": "2026-11-14T04:59:16.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc168.docx.lockd",
@@ -2881,7 +3121,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:20.028Z",
+      "Time": "2026-11-14T04:59:15.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc167.docx.lockd",
@@ -2890,7 +3130,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:18.528Z",
+      "Time": "2026-11-14T04:59:13.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc166.docx.lockd",
@@ -2899,7 +3139,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:17.028Z",
+      "Time": "2026-11-14T04:59:12.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc165.docx.lockd",
@@ -2908,7 +3148,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:15.528Z",
+      "Time": "2026-11-14T04:59:10.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc164.docx.lockd",
@@ -2917,7 +3157,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:14.028Z",
+      "Time": "2026-11-14T04:59:09.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc163.docx.lockd",
@@ -2926,7 +3166,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:12.528Z",
+      "Time": "2026-11-14T04:59:07.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc162.docx.lockd",
@@ -2935,7 +3175,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:11.028Z",
+      "Time": "2026-11-14T04:59:06.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc161.docx.lockd",
@@ -2944,7 +3184,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:09.528Z",
+      "Time": "2026-11-14T04:59:04.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc160.docx.lockd",
@@ -2953,7 +3193,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:08.028Z",
+      "Time": "2026-11-14T04:59:03.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc159.docx.lockd",
@@ -2962,7 +3202,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:06.528Z",
+      "Time": "2026-11-14T04:59:01.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc158.docx.lockd",
@@ -2971,7 +3211,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:05.028Z",
+      "Time": "2026-11-14T04:59:00.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc157.docx.lockd",
@@ -2980,7 +3220,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:03.528Z",
+      "Time": "2026-11-14T04:58:58.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc156.docx.lockd",
@@ -2989,7 +3229,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:02.028Z",
+      "Time": "2026-11-14T04:58:57.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc155.docx.lockd",
@@ -2998,7 +3238,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:18:00.528Z",
+      "Time": "2026-11-14T04:58:55.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc154.docx.lockd",
@@ -3007,7 +3247,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:59.028Z",
+      "Time": "2026-11-14T04:58:54.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc153.docx.lockd",
@@ -3016,7 +3256,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:57.528Z",
+      "Time": "2026-11-14T04:58:52.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc152.docx.lockd",
@@ -3025,7 +3265,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:56.028Z",
+      "Time": "2026-11-14T04:58:51.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc151.docx.lockd",
@@ -3034,7 +3274,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:54.528Z",
+      "Time": "2026-11-14T04:58:49.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc150.docx.lockd",
@@ -3043,7 +3283,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:53.028Z",
+      "Time": "2026-11-14T04:58:48.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc149.docx.lockd",
@@ -3052,7 +3292,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:51.528Z",
+      "Time": "2026-11-14T04:58:46.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc148.docx.lockd",
@@ -3061,7 +3301,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:50.028Z",
+      "Time": "2026-11-14T04:58:45.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc147.docx.lockd",
@@ -3070,7 +3310,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:48.528Z",
+      "Time": "2026-11-14T04:58:43.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc146.docx.lockd",
@@ -3079,7 +3319,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:47.028Z",
+      "Time": "2026-11-14T04:58:42.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc145.docx.lockd",
@@ -3088,7 +3328,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:45.528Z",
+      "Time": "2026-11-14T04:58:40.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc144.docx.lockd",
@@ -3097,7 +3337,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:44.028Z",
+      "Time": "2026-11-14T04:58:39.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc143.docx.lockd",
@@ -3106,7 +3346,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:42.528Z",
+      "Time": "2026-11-14T04:58:37.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc142.docx.lockd",
@@ -3115,7 +3355,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:41.028Z",
+      "Time": "2026-11-14T04:58:36.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc141.docx.lockd",
@@ -3124,7 +3364,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:39.528Z",
+      "Time": "2026-11-14T04:58:34.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc140.docx.lockd",
@@ -3133,7 +3373,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:38.028Z",
+      "Time": "2026-11-14T04:58:33.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc139.docx.lockd",
@@ -3142,7 +3382,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:36.528Z",
+      "Time": "2026-11-14T04:58:31.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc138.docx.lockd",
@@ -3151,7 +3391,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:35.028Z",
+      "Time": "2026-11-14T04:58:30.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc137.docx.lockd",
@@ -3160,7 +3400,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:33.528Z",
+      "Time": "2026-11-14T04:58:28.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc136.docx.lockd",
@@ -3169,7 +3409,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:32.028Z",
+      "Time": "2026-11-14T04:58:27.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc135.docx.lockd",
@@ -3178,7 +3418,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:30.528Z",
+      "Time": "2026-11-14T04:58:25.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc134.docx.lockd",
@@ -3187,7 +3427,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:29.028Z",
+      "Time": "2026-11-14T04:58:24.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc133.docx.lockd",
@@ -3196,7 +3436,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:27.528Z",
+      "Time": "2026-11-14T04:58:22.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc132.docx.lockd",
@@ -3205,7 +3445,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:26.028Z",
+      "Time": "2026-11-14T04:58:21.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc131.docx.lockd",
@@ -3214,7 +3454,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:24.528Z",
+      "Time": "2026-11-14T04:58:19.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc130.docx.lockd",
@@ -3223,7 +3463,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:23.028Z",
+      "Time": "2026-11-14T04:58:18.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc129.docx.lockd",
@@ -3232,7 +3472,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:21.528Z",
+      "Time": "2026-11-14T04:58:16.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc128.docx.lockd",
@@ -3241,7 +3481,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:20.028Z",
+      "Time": "2026-11-14T04:58:15.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc127.docx.lockd",
@@ -3250,7 +3490,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:18.528Z",
+      "Time": "2026-11-14T04:58:13.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc126.docx.lockd",
@@ -3259,7 +3499,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:17.028Z",
+      "Time": "2026-11-14T04:58:12.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc125.docx.lockd",
@@ -3268,7 +3508,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:15.528Z",
+      "Time": "2026-11-14T04:58:10.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc124.docx.lockd",
@@ -3277,7 +3517,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:14.028Z",
+      "Time": "2026-11-14T04:58:09.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc123.docx.lockd",
@@ -3286,7 +3526,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:12.528Z",
+      "Time": "2026-11-14T04:58:07.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc122.docx.lockd",
@@ -3295,7 +3535,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:11.028Z",
+      "Time": "2026-11-14T04:58:06.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc121.docx.lockd",
@@ -3304,7 +3544,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:09.528Z",
+      "Time": "2026-11-14T04:58:04.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc120.docx.lockd",
@@ -3313,7 +3553,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:08.028Z",
+      "Time": "2026-11-14T04:58:03.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc119.docx.lockd",
@@ -3322,7 +3562,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:06.528Z",
+      "Time": "2026-11-14T04:58:01.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc118.docx.lockd",
@@ -3331,7 +3571,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:05.028Z",
+      "Time": "2026-11-14T04:58:00.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc117.docx.lockd",
@@ -3340,7 +3580,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:03.528Z",
+      "Time": "2026-11-14T04:57:58.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc116.docx.lockd",
@@ -3349,7 +3589,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:02.028Z",
+      "Time": "2026-11-14T04:57:57.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc115.docx.lockd",
@@ -3358,7 +3598,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:17:00.528Z",
+      "Time": "2026-11-14T04:57:55.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc114.docx.lockd",
@@ -3367,7 +3607,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:59.028Z",
+      "Time": "2026-11-14T04:57:54.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc113.docx.lockd",
@@ -3376,7 +3616,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:57.528Z",
+      "Time": "2026-11-14T04:57:52.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc112.docx.lockd",
@@ -3385,7 +3625,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:56.028Z",
+      "Time": "2026-11-14T04:57:51.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc111.docx.lockd",
@@ -3394,7 +3634,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:54.528Z",
+      "Time": "2026-11-14T04:57:49.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc110.docx.lockd",
@@ -3403,7 +3643,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:53.028Z",
+      "Time": "2026-11-14T04:57:48.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc109.docx.lockd",
@@ -3412,7 +3652,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:51.528Z",
+      "Time": "2026-11-14T04:57:46.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc108.docx.lockd",
@@ -3421,7 +3661,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:50.028Z",
+      "Time": "2026-11-14T04:57:45.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc107.docx.lockd",
@@ -3430,7 +3670,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:48.528Z",
+      "Time": "2026-11-14T04:57:43.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc106.docx.lockd",
@@ -3439,7 +3679,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:47.028Z",
+      "Time": "2026-11-14T04:57:42.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc105.docx.lockd",
@@ -3448,7 +3688,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:45.528Z",
+      "Time": "2026-11-14T04:57:40.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc104.docx.lockd",
@@ -3457,7 +3697,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:44.028Z",
+      "Time": "2026-11-14T04:57:39.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc103.docx.lockd",
@@ -3466,7 +3706,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:42.528Z",
+      "Time": "2026-11-14T04:57:37.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc102.docx.lockd",
@@ -3475,7 +3715,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:41.028Z",
+      "Time": "2026-11-14T04:57:36.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc101.docx.lockd",
@@ -3484,7 +3724,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:39.528Z",
+      "Time": "2026-11-14T04:57:34.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc100.docx.lockd",
@@ -3493,7 +3733,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:38.028Z",
+      "Time": "2026-11-14T04:57:33.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc99.docx.lockd",
@@ -3502,7 +3742,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:36.528Z",
+      "Time": "2026-11-14T04:57:31.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc98.docx.lockd",
@@ -3511,7 +3751,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:35.028Z",
+      "Time": "2026-11-14T04:57:30.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc97.docx.lockd",
@@ -3520,7 +3760,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:33.528Z",
+      "Time": "2026-11-14T04:57:28.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc96.docx.lockd",
@@ -3529,7 +3769,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:32.028Z",
+      "Time": "2026-11-14T04:57:27.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc95.docx.lockd",
@@ -3538,7 +3778,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:30.528Z",
+      "Time": "2026-11-14T04:57:25.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc94.docx.lockd",
@@ -3547,7 +3787,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:29.028Z",
+      "Time": "2026-11-14T04:57:24.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc93.docx.lockd",
@@ -3556,7 +3796,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:27.528Z",
+      "Time": "2026-11-14T04:57:22.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc92.docx.lockd",
@@ -3565,7 +3805,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:26.028Z",
+      "Time": "2026-11-14T04:57:21.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc91.docx.lockd",
@@ -3574,7 +3814,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:24.528Z",
+      "Time": "2026-11-14T04:57:19.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc90.docx.lockd",
@@ -3583,7 +3823,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:23.028Z",
+      "Time": "2026-11-14T04:57:18.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc89.docx.lockd",
@@ -3592,7 +3832,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:21.528Z",
+      "Time": "2026-11-14T04:57:16.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc88.docx.lockd",
@@ -3601,7 +3841,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:20.028Z",
+      "Time": "2026-11-14T04:57:15.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc87.docx.lockd",
@@ -3610,7 +3850,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:18.528Z",
+      "Time": "2026-11-14T04:57:13.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc86.docx.lockd",
@@ -3619,7 +3859,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:17.028Z",
+      "Time": "2026-11-14T04:57:12.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc85.docx.lockd",
@@ -3628,7 +3868,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:15.528Z",
+      "Time": "2026-11-14T04:57:10.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc84.docx.lockd",
@@ -3637,7 +3877,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:14.028Z",
+      "Time": "2026-11-14T04:57:09.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc83.docx.lockd",
@@ -3646,7 +3886,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:12.528Z",
+      "Time": "2026-11-14T04:57:07.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc82.docx.lockd",
@@ -3655,7 +3895,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:11.028Z",
+      "Time": "2026-11-14T04:57:06.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc81.docx.lockd",
@@ -3664,7 +3904,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:09.528Z",
+      "Time": "2026-11-14T04:57:04.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc80.docx.lockd",
@@ -3673,7 +3913,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:08.028Z",
+      "Time": "2026-11-14T04:57:03.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc79.docx.lockd",
@@ -3682,7 +3922,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:06.528Z",
+      "Time": "2026-11-14T04:57:01.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc78.docx.lockd",
@@ -3691,7 +3931,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:05.028Z",
+      "Time": "2026-11-14T04:57:00.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc77.docx.lockd",
@@ -3700,7 +3940,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:03.528Z",
+      "Time": "2026-11-14T04:56:58.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc76.docx.lockd",
@@ -3709,7 +3949,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:02.028Z",
+      "Time": "2026-11-14T04:56:57.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc75.docx.lockd",
@@ -3718,7 +3958,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:16:00.528Z",
+      "Time": "2026-11-14T04:56:55.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc74.docx.lockd",
@@ -3727,7 +3967,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:59.028Z",
+      "Time": "2026-11-14T04:56:54.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc73.docx.lockd",
@@ -3736,7 +3976,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:57.528Z",
+      "Time": "2026-11-14T04:56:52.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc72.docx.lockd",
@@ -3745,7 +3985,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:56.028Z",
+      "Time": "2026-11-14T04:56:51.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc71.docx.lockd",
@@ -3754,7 +3994,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:54.528Z",
+      "Time": "2026-11-14T04:56:49.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc70.docx.lockd",
@@ -3763,7 +4003,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:53.028Z",
+      "Time": "2026-11-14T04:56:48.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc69.docx.lockd",
@@ -3772,7 +4012,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:51.528Z",
+      "Time": "2026-11-14T04:56:46.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc68.docx.lockd",
@@ -3781,7 +4021,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:50.028Z",
+      "Time": "2026-11-14T04:56:45.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc67.docx.lockd",
@@ -3790,7 +4030,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:48.528Z",
+      "Time": "2026-11-14T04:56:43.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc66.docx.lockd",
@@ -3799,7 +4039,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:47.028Z",
+      "Time": "2026-11-14T04:56:42.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc65.docx.lockd",
@@ -3808,7 +4048,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:45.528Z",
+      "Time": "2026-11-14T04:56:40.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc64.docx.lockd",
@@ -3817,7 +4057,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:44.028Z",
+      "Time": "2026-11-14T04:56:39.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc63.docx.lockd",
@@ -3826,7 +4066,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:42.528Z",
+      "Time": "2026-11-14T04:56:37.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc62.docx.lockd",
@@ -3835,7 +4075,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:41.028Z",
+      "Time": "2026-11-14T04:56:36.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc61.docx.lockd",
@@ -3844,7 +4084,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:39.528Z",
+      "Time": "2026-11-14T04:56:34.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc60.docx.lockd",
@@ -3853,7 +4093,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:38.028Z",
+      "Time": "2026-11-14T04:56:33.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc59.docx.lockd",
@@ -3862,7 +4102,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:36.528Z",
+      "Time": "2026-11-14T04:56:31.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc58.docx.lockd",
@@ -3871,7 +4111,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:35.028Z",
+      "Time": "2026-11-14T04:56:30.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc57.docx.lockd",
@@ -3880,7 +4120,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:33.528Z",
+      "Time": "2026-11-14T04:56:28.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc56.docx.lockd",
@@ -3889,7 +4129,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:32.028Z",
+      "Time": "2026-11-14T04:56:27.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc55.docx.lockd",
@@ -3898,7 +4138,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:30.528Z",
+      "Time": "2026-11-14T04:56:25.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc54.docx.lockd",
@@ -3907,7 +4147,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:29.028Z",
+      "Time": "2026-11-14T04:56:24.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc53.docx.lockd",
@@ -3916,7 +4156,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:27.528Z",
+      "Time": "2026-11-14T04:56:22.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc52.docx.lockd",
@@ -3925,7 +4165,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:26.028Z",
+      "Time": "2026-11-14T04:56:21.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc51.docx.lockd",
@@ -3934,7 +4174,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:24.528Z",
+      "Time": "2026-11-14T04:56:19.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc50.docx.lockd",
@@ -3943,7 +4183,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:23.028Z",
+      "Time": "2026-11-14T04:56:18.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc49.docx.lockd",
@@ -3952,7 +4192,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:21.528Z",
+      "Time": "2026-11-14T04:56:16.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc48.docx.lockd",
@@ -3961,7 +4201,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:20.028Z",
+      "Time": "2026-11-14T04:56:15.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc47.docx.lockd",
@@ -3970,7 +4210,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:18.528Z",
+      "Time": "2026-11-14T04:56:13.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc46.docx.lockd",
@@ -3979,7 +4219,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:17.028Z",
+      "Time": "2026-11-14T04:56:12.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc45.docx.lockd",
@@ -3988,7 +4228,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:15.528Z",
+      "Time": "2026-11-14T04:56:10.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc44.docx.lockd",
@@ -3997,7 +4237,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:14.028Z",
+      "Time": "2026-11-14T04:56:09.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc43.docx.lockd",
@@ -4006,7 +4246,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:12.528Z",
+      "Time": "2026-11-14T04:56:07.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc42.docx.lockd",
@@ -4015,7 +4255,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:11.028Z",
+      "Time": "2026-11-14T04:56:06.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc41.docx.lockd",
@@ -4024,7 +4264,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:09.528Z",
+      "Time": "2026-11-14T04:56:04.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc40.docx.lockd",
@@ -4033,7 +4273,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:08.028Z",
+      "Time": "2026-11-14T04:56:03.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc39.docx.lockd",
@@ -4042,7 +4282,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:06.528Z",
+      "Time": "2026-11-14T04:56:01.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc38.docx.lockd",
@@ -4051,7 +4291,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:05.028Z",
+      "Time": "2026-11-14T04:56:00.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc37.docx.lockd",
@@ -4060,7 +4300,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:03.528Z",
+      "Time": "2026-11-14T04:55:58.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc36.docx.lockd",
@@ -4069,7 +4309,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:02.028Z",
+      "Time": "2026-11-14T04:55:57.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc35.docx.lockd",
@@ -4078,7 +4318,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:15:00.528Z",
+      "Time": "2026-11-14T04:55:55.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc34.docx.lockd",
@@ -4087,7 +4327,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:59.028Z",
+      "Time": "2026-11-14T04:55:54.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc33.docx.lockd",
@@ -4096,7 +4336,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:57.528Z",
+      "Time": "2026-11-14T04:55:52.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc32.docx.lockd",
@@ -4105,7 +4345,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:56.028Z",
+      "Time": "2026-11-14T04:55:51.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc31.docx.lockd",
@@ -4114,7 +4354,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:54.528Z",
+      "Time": "2026-11-14T04:55:49.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc30.docx.lockd",
@@ -4123,7 +4363,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:53.028Z",
+      "Time": "2026-11-14T04:55:48.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc29.docx.lockd",
@@ -4132,7 +4372,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:51.528Z",
+      "Time": "2026-11-14T04:55:46.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc28.docx.lockd",
@@ -4141,7 +4381,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:50.028Z",
+      "Time": "2026-11-14T04:55:45.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc27.docx.lockd",
@@ -4150,7 +4390,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:48.528Z",
+      "Time": "2026-11-14T04:55:43.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc26.docx.lockd",
@@ -4159,7 +4399,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:47.028Z",
+      "Time": "2026-11-14T04:55:42.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc25.docx.lockd",
@@ -4168,7 +4408,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:45.528Z",
+      "Time": "2026-11-14T04:55:40.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc24.docx.lockd",
@@ -4177,7 +4417,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:44.028Z",
+      "Time": "2026-11-14T04:55:39.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc23.docx.lockd",
@@ -4186,7 +4426,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:42.528Z",
+      "Time": "2026-11-14T04:55:37.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc22.docx.lockd",
@@ -4195,7 +4435,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:41.028Z",
+      "Time": "2026-11-14T04:55:36.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc21.docx.lockd",
@@ -4204,7 +4444,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:39.528Z",
+      "Time": "2026-11-14T04:55:34.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc20.docx.lockd",
@@ -4213,7 +4453,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:38.028Z",
+      "Time": "2026-11-14T04:55:33.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc19.docx.lockd",
@@ -4222,7 +4462,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:36.528Z",
+      "Time": "2026-11-14T04:55:31.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc18.docx.lockd",
@@ -4231,7 +4471,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:35.028Z",
+      "Time": "2026-11-14T04:55:30.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc17.docx.lockd",
@@ -4240,7 +4480,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:33.528Z",
+      "Time": "2026-11-14T04:55:28.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc16.docx.lockd",
@@ -4249,7 +4489,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:32.028Z",
+      "Time": "2026-11-14T04:55:27.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc15.docx.lockd",
@@ -4258,7 +4498,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:30.528Z",
+      "Time": "2026-11-14T04:55:25.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc14.docx.lockd",
@@ -4267,7 +4507,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:29.028Z",
+      "Time": "2026-11-14T04:55:24.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc13.docx.lockd",
@@ -4276,7 +4516,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:27.528Z",
+      "Time": "2026-11-14T04:55:22.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc12.docx.lockd",
@@ -4285,7 +4525,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:26.028Z",
+      "Time": "2026-11-14T04:55:21.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc11.docx.lockd",
@@ -4294,7 +4534,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:24.528Z",
+      "Time": "2026-11-14T04:55:19.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc10.docx.lockd",
@@ -4303,7 +4543,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:23.028Z",
+      "Time": "2026-11-14T04:55:18.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc9.docx.lockd",
@@ -4312,7 +4552,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:21.528Z",
+      "Time": "2026-11-14T04:55:16.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc8.docx.lockd",
@@ -4321,7 +4561,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:20.028Z",
+      "Time": "2026-11-14T04:55:15.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc7.docx.lockd",
@@ -4330,7 +4570,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:18.528Z",
+      "Time": "2026-11-14T04:55:13.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc6.docx.lockd",
@@ -4339,7 +4579,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:17.028Z",
+      "Time": "2026-11-14T04:55:12.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc5.docx.lockd",
@@ -4348,7 +4588,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:15.528Z",
+      "Time": "2026-11-14T04:55:10.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc4.docx.lockd",
@@ -4357,7 +4597,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:14.028Z",
+      "Time": "2026-11-14T04:55:09.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc3.docx.lockd",
@@ -4366,7 +4606,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:12.528Z",
+      "Time": "2026-11-14T04:55:07.793Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc2.docx.lockd",
@@ -4375,7 +4615,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:14:11.028Z",
+      "Time": "2026-11-14T04:55:06.293Z",
       "Category": "File",
       "Action": "Renamed",
       "Target": "C:\\Users\\analyst\\Documents\\Projects\\doc1.docx.lockd",
@@ -4384,7 +4624,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:13:09.528Z",
+      "Time": "2026-11-14T04:54:04.793Z",
       "Category": "File",
       "Action": "Created",
       "Target": "C:\\Users\\analyst\\Desktop\\HOW_TO_RESTORE_FILES.txt",
@@ -4393,7 +4633,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:10:09.528Z",
+      "Time": "2026-11-14T04:51:04.793Z",
       "Category": "File",
       "Action": "Deleted",
       "Target": "C:\\Windows\\System32\\winevt\\Logs\\Microsoft-Windows-Sysmon%4Operational.evtx",
@@ -4402,7 +4642,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T18:08:09.528Z",
+      "Time": "2026-11-14T04:49:04.793Z",
       "Category": "Logging",
       "Action": "Security log cleared",
       "Target": "CORP\\analyst",
@@ -4411,7 +4651,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "Security 1102"
     },
     {
-      "Time": "2026-11-07T17:52:09.528Z",
+      "Time": "2026-11-14T04:33:04.793Z",
       "Category": "File",
       "Action": "Deleted",
       "Target": "C:\\Users\\analyst\\AppData\\Roaming\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ConsoleHost_history.txt",
@@ -4420,7 +4660,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T17:33:09.528Z",
+      "Time": "2026-11-14T04:14:04.793Z",
       "Category": "File",
       "Action": "File creation time changed (timestomp?)",
       "Target": "C:\\Users\\analyst\\AppData\\Local\\Temp\\OneDriveUpdater.exe",
@@ -4429,7 +4669,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "Sysmon 2"
     },
     {
-      "Time": "2026-11-07T15:13:09.528Z",
+      "Time": "2026-11-14T01:54:04.793Z",
       "Category": "Network",
       "Action": "Outbound connection allowed",
       "Target": "142.250.74.100:443",
@@ -4438,7 +4678,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "Security 5156 (WFP)"
     },
     {
-      "Time": "2026-11-07T15:03:09.528Z",
+      "Time": "2026-11-14T01:44:04.793Z",
       "Category": "File",
       "Action": "Deleted to Recycle Bin",
       "Target": "C:\\Users\\analyst\\Desktop\\old notes.txt",
@@ -4447,7 +4687,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "Recycle Bin $I1"
     },
     {
-      "Time": "2026-11-07T14:53:09.528Z",
+      "Time": "2026-11-14T01:34:04.793Z",
       "Category": "File",
       "Action": "Created",
       "Target": "C:\\Users\\analyst\\Documents\\Q3 budget.xlsx",
@@ -4456,7 +4696,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-07T14:43:09.528Z",
+      "Time": "2026-11-14T01:24:04.793Z",
       "Category": "Execution",
       "Action": "Program ran (Prefetch)",
       "Target": "CHROME.EXE",
@@ -4465,7 +4705,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "Prefetch"
     },
     {
-      "Time": "2026-11-07T14:33:09.528Z",
+      "Time": "2026-11-14T01:14:04.793Z",
       "Category": "Software",
       "Action": "Software installed",
       "Target": "Product: Microsoft Edge -- Installation completed successfully.",
@@ -4474,7 +4714,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "Application 11707"
     },
     {
-      "Time": "2026-11-06T18:33:09.528Z",
+      "Time": "2026-11-13T05:14:04.793Z",
       "Category": "Network",
       "Action": "Outbound connection",
       "Target": "203.0.113.99:4444",
@@ -4483,7 +4723,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "Sysmon 3"
     },
     {
-      "Time": "2026-11-06T18:23:09.528Z",
+      "Time": "2026-11-13T05:04:04.793Z",
       "Category": "Network",
       "Action": "Outbound connection",
       "Target": "198.51.100.200:22",
@@ -4492,7 +4732,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "Sysmon 3"
     },
     {
-      "Time": "2026-11-05T19:33:09.528Z",
+      "Time": "2026-11-12T06:14:04.793Z",
       "Category": "File",
       "Action": "Created",
       "Target": "C:\\Users\\analyst\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OneDrive Sync.lnk",
@@ -4501,7 +4741,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-05T19:23:09.528Z",
+      "Time": "2026-11-12T06:04:04.793Z",
       "Category": "Software",
       "Action": "Kernel driver loaded",
       "Target": "RTCore64.sys",
@@ -4510,7 +4750,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "System 6 (FilterManager)"
     },
     {
-      "Time": "2026-11-05T19:13:09.528Z",
+      "Time": "2026-11-12T05:54:04.793Z",
       "Category": "Registry",
       "Action": "Hijack key written",
       "Target": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\sethc.exe",
@@ -4519,7 +4759,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "registry key last-write time"
     },
     {
-      "Time": "2026-11-05T19:03:09.528Z",
+      "Time": "2026-11-12T05:44:04.793Z",
       "Category": "File",
       "Action": "Created",
       "Target": "C:\\Users\\analyst\\AppData\\Local\\Temp\\OneDriveUpdater.exe",
@@ -4528,7 +4768,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-05T19:03:09.528Z",
+      "Time": "2026-11-12T05:44:04.793Z",
       "Category": "File",
       "Action": "Created",
       "Target": "C:\\Users\\analyst\\AppData\\Local\\Temp\\\u003c/script\u003e\u003cimg src=x onerror=alert(1)\u003e.dll",
@@ -4537,7 +4777,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Source": "NTFS change journal C:"
     },
     {
-      "Time": "2026-11-05T18:13:09.528Z",
+      "Time": "2026-11-12T04:54:04.793Z",
       "Category": "File",
       "Action": "Created",
       "Target": "C:\\Users\\analyst\\Downloads\\Invoice_2026.iso",
@@ -4553,6 +4793,24 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Name": "Masquerading",
       "Tactic": "Defense Evasion",
       "Url": "https://attack.mitre.org/techniques/T1036/"
+    },
+    {
+      "Id": "T1036.005",
+      "Name": "Masquerading: Match Legitimate Resource Name or Location",
+      "Tactic": "Defense Evasion",
+      "Url": "https://attack.mitre.org/techniques/T1036/005/"
+    },
+    {
+      "Id": "T1048",
+      "Name": "",
+      "Tactic": "",
+      "Url": "https://attack.mitre.org/techniques/T1048/"
+    },
+    {
+      "Id": "T1059.001",
+      "Name": "Command and Scripting Interpreter: PowerShell",
+      "Tactic": "Execution",
+      "Url": "https://attack.mitre.org/techniques/T1059/001/"
     },
     {
       "Id": "T1068",
@@ -4585,16 +4843,34 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Url": "https://attack.mitre.org/techniques/T1071/004/"
     },
     {
+      "Id": "T1074.001",
+      "Name": "",
+      "Tactic": "",
+      "Url": "https://attack.mitre.org/techniques/T1074/001/"
+    },
+    {
       "Id": "T1090",
       "Name": "Proxy",
       "Tactic": "Command and Control",
       "Url": "https://attack.mitre.org/techniques/T1090/"
     },
     {
+      "Id": "T1105",
+      "Name": "Ingress Tool Transfer",
+      "Tactic": "Command and Control",
+      "Url": "https://attack.mitre.org/techniques/T1105/"
+    },
+    {
       "Id": "T1133",
       "Name": "External Remote Services",
       "Tactic": "Initial Access",
       "Url": "https://attack.mitre.org/techniques/T1133/"
+    },
+    {
+      "Id": "T1204.002",
+      "Name": "User Execution: Malicious File",
+      "Tactic": "Execution",
+      "Url": "https://attack.mitre.org/techniques/T1204/002/"
     },
     {
       "Id": "T1219",
@@ -4651,6 +4927,18 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Url": "https://attack.mitre.org/techniques/T1562/002/"
     },
     {
+      "Id": "T1564.003",
+      "Name": "Hide Artifacts: Hidden Window",
+      "Tactic": "Defense Evasion",
+      "Url": "https://attack.mitre.org/techniques/T1564/003/"
+    },
+    {
+      "Id": "T1567.002",
+      "Name": "Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      "Tactic": "Exfiltration",
+      "Url": "https://attack.mitre.org/techniques/T1567/002/"
+    },
+    {
       "Id": "T1568.002",
       "Name": "Dynamic Resolution: Domain Generation Algorithms",
       "Tactic": "Command and Control",
@@ -4669,6 +4957,410 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
       "Url": "https://attack.mitre.org/techniques/T1572/"
     }
   ],
+  "incidents": [
+    {
+      "Severity": "Critical",
+      "Start": "2026-11-14T04:44:04.793Z",
+      "End": "2026-11-14T04:49:04.793Z",
+      "Tactics": [
+        "Defense Evasion",
+        "Impact"
+      ],
+      "Entities": [
+        "file:vssadmin.exe",
+        "user:analyst"
+      ],
+      "Count": 5,
+      "Score": 70.0,
+      "Findings": [
+        {
+          "Id": "LOTL-SHADOW-DELETE",
+          "Title": "Backups / shadow copies deleted or recovery disabled",
+          "Severity": "Critical",
+          "Time": "2026-11-14T04:44:04.793Z",
+          "Entity": "process:10600:vssadmin.exe"
+        },
+        {
+          "Id": "LOTL-SHADOW-DELETE",
+          "Title": "Backups / shadow copies deleted or recovery disabled (event 1)",
+          "Severity": "Critical",
+          "Time": "2026-11-14T04:44:04.793Z",
+          "Entity": "event:1:LOTL-SHADOW-DELETE:"
+        },
+        {
+          "Id": "LOTL-LOG-CLEAR",
+          "Title": "Event log cleared from the command line",
+          "Severity": "High",
+          "Time": "2026-11-14T04:46:04.793Z",
+          "Entity": "process:10650:wevtutil.exe"
+        },
+        {
+          "Id": "EVT-1102-CLEARED",
+          "Title": "Security event log cleared",
+          "Severity": "High",
+          "Time": "2026-11-14T04:49:04.793Z",
+          "Entity": "event:EVT-1102-CLEARED:analyst"
+        },
+        {
+          "Id": "ACT-LOGGING-TAMPER",
+          "Title": "Security log cleared",
+          "Severity": "High",
+          "Time": "2026-11-14T04:49:04.793Z",
+          "Entity": "activity:ACT-LOGGING-TAMPER:CORP\\analyst"
+        }
+      ],
+      "Links": [
+        "high-severity burst",
+        "shared file:vssadmin.exe"
+      ],
+      "Id": "INC-01"
+    },
+    {
+      "Severity": "High",
+      "Start": "2026-11-12T04:49:04.793Z",
+      "End": "2026-11-12T06:14:04.793Z",
+      "Tactics": [
+        "Execution",
+        "Persistence",
+        "Privilege Escalation",
+        "Defense Evasion",
+        "Command and Control"
+      ],
+      "Entities": [
+        "user:analyst",
+        "file:rtcore64.sys",
+        "file:onedriveupdater.exe",
+        "file:sethc.exe",
+        "ip:203.0.113.50",
+        "file:invoice_2026.iso"
+      ],
+      "Count": 7,
+      "Score": 45.6,
+      "Findings": [
+        {
+          "Id": "ART-RISKY-DOWNLOAD",
+          "Title": "Risky download: Invoice_2026.iso",
+          "Severity": "High",
+          "Time": "2026-11-12T04:49:04.793Z",
+          "Entity": "download:C:\\Users\\analyst\\Downloads\\Invoice_2026.iso"
+        },
+        {
+          "Id": "LOTL-PS-HIDDEN-WINDOW",
+          "Title": "PowerShell launched with a hidden window (in a shortcut)",
+          "Severity": "Low",
+          "Time": "2026-11-12T04:55:04.793Z",
+          "Entity": "shortcut:synthetic"
+        },
+        {
+          "Id": "ART-EXEC-STAGING-PATH",
+          "Title": "Program ran from a staging folder: c:\\users\\analyst\\appdata\\local\\temp\\onedriveupdater.exe",
+          "Severity": "Medium",
+          "Time": "2026-11-12T05:44:04.793Z",
+          "Entity": "file:c:\\users\\analyst\\appdata\\local\\temp\\onedriveupdater.exe"
+        },
+        {
+          "Id": "ART-MASQUERADE",
+          "Title": "System program name in the wrong folder: c:\\users\\analyst\\appdata\\roaming\\microsoft\\svchost.exe",
+          "Severity": "High",
+          "Time": "2026-11-12T05:49:04.793Z",
+          "Entity": "file:c:\\users\\analyst\\appdata\\roaming\\microsoft\\svchost.exe"
+        },
+        {
+          "Id": "ACT-HIJACK-KEY-CHANGED",
+          "Title": "Execution-hijack registry key changed: sethc.exe",
+          "Severity": "High",
+          "Time": "2026-11-12T05:54:04.793Z",
+          "Entity": "activity:ACT-HIJACK-KEY-CHANGED:HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\sethc.exe"
+        },
+        {
+          "Id": "ART-VULNERABLE-DRIVER",
+          "Title": "Known-vulnerable driver recorded: rtcore64.sys",
+          "Severity": "High",
+          "Time": "2026-11-12T06:04:04.793Z",
+          "Entity": "file:c:\\programdata\\cf\\rtcore64.sys"
+        },
+        {
+          "Id": "ACT-STARTUP-DROP",
+          "Title": "File placed in a Startup folder: OneDrive Sync.lnk",
+          "Severity": "High",
+          "Time": "2026-11-12T06:14:04.793Z",
+          "Entity": "activity:ACT-STARTUP-DROP:C:\\Users\\analyst\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OneDrive Sync.lnk"
+        }
+      ],
+      "Links": [
+        "shared user:analyst",
+        "high-severity burst"
+      ],
+      "Id": "INC-02"
+    },
+    {
+      "Severity": "High",
+      "Start": "2026-11-14T04:51:04.793Z",
+      "End": "2026-11-14T04:55:06.293Z",
+      "Tactics": [
+        "Defense Evasion",
+        "Impact"
+      ],
+      "Entities": [
+        "file:doc354.docx",
+        "file:doc359.docx",
+        "file:how_to_restore_files.txt",
+        "file:doc351.docx",
+        "file:doc353.docx",
+        "file:doc357.docx"
+      ],
+      "Count": 3,
+      "Score": 21.0,
+      "Findings": [
+        {
+          "Id": "ACT-EVTX-DELETED",
+          "Title": "Event log file deleted: Microsoft-Windows-Sysmon%4Operational.evtx",
+          "Severity": "High",
+          "Time": "2026-11-14T04:51:04.793Z",
+          "Entity": "activity:ACT-EVTX-DELETED:C:\\Windows\\System32\\winevt\\Logs\\Microsoft-Windows-Sysmon%4Operational.evtx"
+        },
+        {
+          "Id": "ACT-RANSOM-NOTE",
+          "Title": "Possible ransom note created: HOW_TO_RESTORE_FILES.txt",
+          "Severity": "High",
+          "Time": "2026-11-14T04:54:04.793Z",
+          "Entity": "activity:ACT-RANSOM-NOTE:C:\\Users\\analyst\\Desktop\\HOW_TO_RESTORE_FILES.txt"
+        },
+        {
+          "Id": "ACT-MASS-MODIFY",
+          "Title": "Mass file modification/renaming in user folders: 360 files within 10 minutes",
+          "Severity": "High",
+          "Time": "2026-11-14T04:55:06.293Z",
+          "Entity": "activity:ACT-MASS-MODIFY"
+        }
+      ],
+      "Links": [
+        "high-severity burst"
+      ],
+      "Id": "INC-03"
+    },
+    {
+      "Severity": "High",
+      "Start": "2026-11-13T07:34:04.793Z",
+      "End": "2026-11-13T07:54:04.793Z",
+      "Tactics": [
+        "Exfiltration"
+      ],
+      "Entities": [
+        "user:analyst",
+        "file:finance.zip"
+      ],
+      "Count": 2,
+      "Score": 9.6,
+      "Findings": [
+        {
+          "Id": "ART-EXFIL-TOOL",
+          "Title": "Data-transfer tool ran: rclone.exe",
+          "Severity": "High",
+          "Time": "2026-11-13T07:34:04.793Z",
+          "Entity": "file:RCLONE.EXE"
+        },
+        {
+          "Id": "ART-REMOVABLE-ACCESS",
+          "Title": "File opened from a removable drive: finance.zip",
+          "Severity": "Low",
+          "Time": "2026-11-13T07:54:04.793Z",
+          "Entity": "usb:E:\\exfil\\finance.zip"
+        }
+      ],
+      "Links": [
+        "shared user:analyst"
+      ],
+      "Id": "INC-04"
+    },
+    {
+      "Severity": "Medium",
+      "Start": "2026-11-13T04:14:04.793Z",
+      "End": "2026-11-13T04:14:04.793Z",
+      "Tactics": [
+        "Defense Evasion",
+        "Command and Control"
+      ],
+      "Entities": [
+        "file:cloudflared.exe"
+      ],
+      "Count": 2,
+      "Score": 5.0,
+      "Findings": [
+        {
+          "Id": "PROC-UNSIGNED-USERPATH",
+          "Title": "Unsigned process running from a user-writable folder: cloudflared.exe",
+          "Severity": "Medium",
+          "Time": "2026-11-13T04:14:04.793Z",
+          "Entity": "process:10200:cloudflared.exe"
+        },
+        {
+          "Id": "PROC-RMM-TOOL",
+          "Title": "Remote-management tool running: cloudflared.exe",
+          "Severity": "Low",
+          "Time": "2026-11-13T04:14:04.793Z",
+          "Entity": "process:10200:cloudflared.exe"
+        }
+      ],
+      "Links": [
+        "shared file:cloudflared.exe"
+      ],
+      "Id": "INC-05"
+    }
+  ],
+  "artifacts": [
+    {
+      "Artifact": "Prefetch",
+      "Time": "2026-11-13T22:34:04.793Z",
+      "TimeKind": "Last run",
+      "Evidence": "Execution",
+      "Path": "CHROME.EXE",
+      "User": "analyst",
+      "Sha1": "",
+      "Detail": "first run about 2026-01-04"
+    },
+    {
+      "Artifact": "JumpList",
+      "Time": "2026-11-13T20:54:04.793Z",
+      "TimeKind": "Last opened",
+      "Evidence": "Access",
+      "Path": "C:\\Users\\analyst\\Documents\\Q3 budget.xlsx",
+      "User": "analyst",
+      "Sha1": "",
+      "Detail": "Microsoft Excel; opened 4 time(s)"
+    },
+    {
+      "Artifact": "ShellBag",
+      "Time": "2026-11-13T19:14:04.793Z",
+      "TimeKind": "Folder view updated",
+      "Evidence": "Access",
+      "Path": "C:\\Users\\analyst\\Documents\\Projects",
+      "User": "analyst",
+      "Sha1": "",
+      "Detail": "Folder"
+    },
+    {
+      "Artifact": "JumpList",
+      "Time": "2026-11-13T07:54:04.793Z",
+      "TimeKind": "Last opened",
+      "Evidence": "Access",
+      "Path": "E:\\exfil\\finance.zip",
+      "User": "analyst",
+      "Sha1": "",
+      "Detail": "7-Zip; Removable drive 'KINGSTON' serial 1A2B3C4D"
+    },
+    {
+      "Artifact": "DefenderLog",
+      "Time": "2026-11-13T07:39:04.793Z",
+      "TimeKind": "Detected",
+      "Evidence": "Detection",
+      "Path": "C:\\ProgramData\\cf\\x.exe",
+      "User": "",
+      "Sha1": "",
+      "Detail": "DETECTIONEVENT: Backdoor:Win64/CobaltStrike.NP!dha (file)"
+    },
+    {
+      "Artifact": "Prefetch",
+      "Time": "2026-11-13T07:34:04.793Z",
+      "TimeKind": "Last run",
+      "Evidence": "Execution",
+      "Path": "RCLONE.EXE",
+      "User": "analyst",
+      "Sha1": "",
+      "Detail": "first run about 1 day ago"
+    },
+    {
+      "Artifact": "AmcacheDriver",
+      "Time": "2026-11-12T06:04:04.793Z",
+      "TimeKind": "Recorded",
+      "Evidence": "Presence",
+      "Path": "c:\\programdata\\cf\\rtcore64.sys",
+      "User": "",
+      "Sha1": "",
+      "Detail": "Micro-Star · RTCore64"
+    },
+    {
+      "Artifact": "Amcache",
+      "Time": "2026-11-12T05:49:04.793Z",
+      "TimeKind": "Recorded",
+      "Evidence": "Execution",
+      "Path": "c:\\users\\analyst\\appdata\\roaming\\microsoft\\svchost.exe",
+      "User": "analyst",
+      "Sha1": "1122334455667788990011223344556677889900",
+      "Detail": ""
+    },
+    {
+      "Artifact": "Amcache",
+      "Time": "2026-11-12T05:44:04.793Z",
+      "TimeKind": "Recorded",
+      "Evidence": "Execution",
+      "Path": "c:\\users\\analyst\\appdata\\local\\temp\\onedriveupdater.exe",
+      "User": "analyst",
+      "Sha1": "9a8b7c6d5e4f30211203f4e5d6c7b8a990817263",
+      "Detail": ""
+    },
+    {
+      "Artifact": "Shortcut",
+      "Time": "2026-11-12T04:55:04.793Z",
+      "TimeKind": "Shortcut modified",
+      "Evidence": "Access",
+      "Path": "C:\\Windows\\System32\\cmd.exe",
+      "User": "analyst",
+      "Sha1": "",
+      "Detail": "arguments: /c powershell -nop -w hidden -enc SQBFAFgA"
+    },
+    {
+      "Artifact": "Download",
+      "Time": "2026-11-12T04:49:04.793Z",
+      "TimeKind": "Download started",
+      "Evidence": "Download",
+      "Path": "C:\\Users\\analyst\\Downloads\\Invoice_2026.iso",
+      "User": "analyst",
+      "Sha1": "",
+      "Detail": "Edge download (complete); from https://203.0.113.50/d/Invoice_2026.iso"
+    },
+    {
+      "Artifact": "Download",
+      "Time": "2026-11-12T03:14:04.793Z",
+      "TimeKind": "Download started",
+      "Evidence": "Download",
+      "Path": "C:\\Users\\analyst\\Downloads\\VSCodeUserSetup-x64-1.95.3.exe",
+      "User": "analyst",
+      "Sha1": "",
+      "Detail": "Chrome download (complete); from https://update.code.visualstudio.com/latest/win32-x64-user/stable"
+    },
+    {
+      "Artifact": "Amcache",
+      "Time": "2026-11-08T15:54:04.793Z",
+      "TimeKind": "Recorded",
+      "Evidence": "Execution",
+      "Path": "c:\\programdata\\microsoft\\windows defender\\platform\\4.18.24090.11-0\\msmpeng.exe",
+      "User": "",
+      "Sha1": "",
+      "Detail": "Microsoft Corporation"
+    },
+    {
+      "Artifact": "Amcache",
+      "Time": "2026-11-07T23:14:04.793Z",
+      "TimeKind": "Recorded",
+      "Evidence": "Execution",
+      "Path": "c:\\program files\\google\\chrome\\application\\chrome.exe",
+      "User": "analyst",
+      "Sha1": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+      "Detail": "Google LLC · Google Chrome"
+    },
+    {
+      "Artifact": "ShimCache",
+      "Time": "",
+      "TimeKind": "File modified",
+      "Evidence": "Presence",
+      "Path": "C:\\Windows\\System32\\notepad.exe",
+      "User": "analyst",
+      "Sha1": "",
+      "Detail": "Cache position 3"
+    }
+  ],
+  "artifactTotal": 15,
   "gaps": [],
   "limits": [
     "Findings are LEADS for an analyst, not verdicts. A finding means \"look here,\" not \"this host is compromised.\"",
@@ -4679,7 +5371,9 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
     "Only loaded user registry hives (logged-on users) are inspected; event collection is capped per query and caps are reported as gaps.",
     "Administrator rights are recommended; without them some data is unavailable (recorded as gaps). Remote mode needs WinRM enabled on the target.",
     "It will not extract, decrypt, or dump secrets - that is a deliberate boundary, not a missing feature.",
-    "The manifest is not signed: record its SHA-256 (printed at the end of each run) out-of-band to make the case tamper-evident."
+    "The manifest is not signed: record its SHA-256 (printed at the end of each run) out-of-band to make the case tamper-evident.",
+    "Artifacts: Amcache.hve is locked on a running system (collect it with a raw-copy tool and use -ArtifactPath); dirty hives are repaired from .LOG1/.LOG2 only when the logs continue the hive; browser rows still in the -wal file and compressed Prefetch contents are not read (Prefetch gives name and times).",
+    "Sigma: rules run only on the event logs and IDs the tool collects (rules can add Security/System IDs they need); aggregations and correlation rules are skipped and counted as a gap. YARA needs a yara executable you provide."
   ]
 }</script>
 <script>
@@ -4765,6 +5459,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
     ['Accounts involved', Object.keys(accounts).length ? esc(Object.keys(accounts).slice(0, 4).join(', ')) + (Object.keys(accounts).length > 4 ? ' and ' + (Object.keys(accounts).length - 4) + ' more' : '') : '<span class="muted">none identified</span>'],
     ['External addresses', '<span id="f-ext">0</span>'],
     ['Changes recorded', esc(D.activityTotal || A.length || 0)],
+    ['Execution artifacts', (D.artifactTotal || (D.artifacts || []).length) ? '<a href="#execution">' + esc(D.artifactTotal || D.artifacts.length) + '</a>' : '0'],
     ['Sources not visible', (D.gaps || []).length ? '<a href="#visibility">' + (D.gaps || []).length + '</a>' : '0']
   ];
   $('facts').innerHTML = facts.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('');
@@ -4789,7 +5484,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
     (s.match(/\b(?:HKLM|HKCU|HKU|HKCR|HKEY_[A-Z_]+)\\[^\r\n"'<>|]+/g) || []).forEach(function (r) { addI('Registry key', r.trim(), f); });
     (s.match(/(?:\b[A-Za-z]:|\\\\[\w.$-]+)\\[^\r\n"'<>|*?]*?\.(?:exe|dll|sys|ps1|bat|cmd|vbs|vbe|js|jse|wsf|hta|lnk|scr|msi|iso|img|cpl|jar|sct|aspx?|php|jsp|dmp|dit|docm|xlsm)\b/gi) || []).forEach(function (p) { addI('File', p, f); });
     var noUrls = s.replace(/\b(?:hxxps?|https?|ftp):\/\/[^\s"'<>]+/gi, ' ');
-    (noUrls.match(/\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}\b/g) || []).forEach(function (d) {
+    (noUrls.match(/(?:^|[^\/\\:@\w.-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}\b(?![!\w-])/g) || []).map(function (d) { return d.replace(/^[^a-z0-9]/, ''); }).forEach(function (d) {
       var tld = d.split('.').pop();
       if (FILEEXT.test(tld) || /^(system|microsoft|io|net|ws|mshtml|scrobj|comsvcs|wscript|shell32|kernel32)\./.test(d)) return;
       if (/^\d+(\.\d+)+$/.test(d)) return;
@@ -4948,6 +5643,44 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
   };
   $('aq').oninput = renderA; $('acat').onchange = renderA; renderA();
 
+  /* incidents */
+  var N = D.incidents || [];
+  $('n-n').textContent = N.length || '';
+  var fIndex = {}; F.forEach(function (f) { fIndex[f.Id + '|' + f.Entity] = f._i; });
+  var entLabel = function (k) { var p = String(k).split(':'); var kind = p.shift(); return '<span class="kind">' + esc({ file: 'file', user: 'account', ip: 'address' }[kind] || kind) + '</span> ' + esc(p.join(':')); };
+  $('nbox').innerHTML = N.length ? '<div class="tbl"><table><thead><tr><th>Incident</th><th>When</th><th>Severity</th><th>Stages</th><th>Involving</th><th>Findings</th></tr></thead><tbody>' + N.map(function (n) {
+    var s = dt(n.Start), e = dt(n.End);
+    var fl = (n.Findings || []).map(function (x) { var i = fIndex[x.Id + '|' + x.Entity]; return '<div>' + sevHtml(x.Severity).replace(/>\w+<\/span>$/, '></span>') + ' ' + (i === undefined ? esc(x.Title) : '<a href="#f' + i + '" data-open="' + i + '">' + esc(x.Title) + '</a>') + '</div>'; });
+    return '<tr><td class="nw"><b>' + esc(n.Id) + '</b><div class="small">' + esc(n.Count) + ' findings</div></td><td class="t">' + esc(fmt(s)) + (e && s && e - s > 60000 ? '<div class="small">to ' + esc(fmt(e)) + '</div>' : '') + '</td><td>' + sevHtml(n.Severity) + '</td><td>' +
+      esc((n.Tactics || []).join(' \u2192 ') || 'Other') + '</td><td>' + (n.Entities || []).slice(0, 5).map(function (k) { return '<div>' + entLabel(k) + '</div>'; }).join('') + '</td><td>' + fl.slice(0, 6).join('') + (fl.length > 6 ? '<div class="small">and ' + (fl.length - 6) + ' more</div>' : '') +
+      ((n.Links || []).length ? '<div class="small">Grouped by: ' + esc(n.Links.slice(0, 4).join('; ')) + '</div>' : '') + '</td></tr>';
+  }).join('') + '</tbody></table></div>' : '<div class="empty">No related findings to group. Single findings are listed under Findings.</div>';
+
+  /* execution evidence */
+  var E = (D.artifacts || []).map(function (a) { a._d = dt(a.Time); return a; });
+  $('n-e').textContent = D.artifactTotal || E.length || '';
+  if (D.artifactTotal > E.length) $('esub').textContent += ' Showing the newest ' + E.length + ' of ' + D.artifactTotal + '; all are in raw\\bundle.json.';
+  var pathSev = {};
+  var pkey = function (p) { return String(p || '').toLowerCase().replace(/^\(volume\)/, '').replace(/^[a-z]:/, ''); };
+  attackF.forEach(function (f) { var e = f.Evidence || {}; ['Path', 'Image', 'File', 'Target'].forEach(function (k) { if (e[k]) { var key = pkey(e[k]); if (!pathSev[key] || RANK[f.Severity] < RANK[pathSev[key].s]) pathSev[key] = { s: f.Severity, i: f._i }; } }); });
+  var eArts = [], eEvs = []; E.forEach(function (a) { if (eArts.indexOf(a.Artifact) < 0) eArts.push(a.Artifact); if (eEvs.indexOf(a.Evidence) < 0) eEvs.push(a.Evidence); });
+  eArts.sort(); eEvs.sort();
+  $('eart').innerHTML = '<option value="">All artifacts</option>' + eArts.map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('');
+  $('eev').innerHTML = '<option value="">All evidence</option>' + eEvs.map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('');
+  var eRows = function () {
+    var q = $('eq').value.toLowerCase(), ar = $('eart').value, ev = $('eev').value, fo = $('eflag').checked;
+    return E.filter(function (a) { return (!ar || a.Artifact === ar) && (!ev || a.Evidence === ev) && (!fo || pathSev[pkey(a.Path)]) && (!q || (a.Path + ' ' + a.User + ' ' + a.Sha1 + ' ' + a.Detail).toLowerCase().indexOf(q) >= 0); });
+  };
+  var renderE = function () {
+    if (!E.length) { $('ebox').innerHTML = '<div class="empty">No execution artifacts in this case (an older bundle, event logs only, or not collected).</div>'; return; }
+    var rows = eRows();
+    $('ebox').innerHTML = '<div class="tbl"><table><thead><tr><th></th><th>Time</th><th>Artifact</th><th>Path</th><th>User</th><th>Detail</th></tr></thead><tbody>' +
+      rows.slice(0, 1500).map(function (a) { var ps = pathSev[pkey(a.Path)]; return '<tr><td class="nw">' + (ps ? '<a href="#f' + ps.i + '" data-open="' + ps.i + '" title="' + esc(ps.s) + ' finding">' + sevHtml(ps.s) + '</a>' : '') + '</td><td class="t">' + (a._d ? esc(fmt(a._d)) : '<span class="muted">no time</span>') + (a.TimeKind ? '<div class="small">' + esc(a.TimeKind) + '</div>' : '') + '</td><td class="nw">' + esc(a.Artifact) + '<div class="small">' + esc(a.Evidence) + '</div></td><td class="m">' + esc(a.Path) + (a.Sha1 ? '<div class="small mono" title="SHA-1 ' + esc(a.Sha1) + '">sha1 ' + esc(String(a.Sha1).slice(0, 16)) + '\u2026</div>' : '') + '</td><td class="nw">' + esc(a.User || '') + '</td><td>' + esc(a.Detail || '') + '</td></tr>'; }).join('') +
+      '</tbody></table></div><div class="count">' + rows.length + ' of ' + E.length + ' shown' + (rows.length > 1500 ? '; first 1,500 rendered' : '') + '.</div>';
+  };
+  $('eq').oninput = renderE; $('eart').onchange = renderE; $('eev').onchange = renderE; $('eflag').onchange = renderE; renderE();
+  $('e-csv').onclick = function () { download('execution_' + (D.hostName || 'host') + '.csv', csv([['time_utc', 'time_meaning', 'artifact', 'evidence', 'path', 'user', 'sha1', 'detail', 'flag']].concat(eRows().map(function (a) { var ps = pathSev[pkey(a.Path)]; return [a.Time || '', a.TimeKind || '', a.Artifact, a.Evidence, a.Path, a.User || '', a.Sha1 || '', a.Detail || '', ps ? ps.s : '']; }))), 'text/csv'); };
+
   /* ATT&CK matrix + Navigator layer */
   var techMax = {}, techFind = {};
   F.forEach(function (f) { (f.Technique || []).forEach(function (t) { if (!TID.test(t)) return; if (techMax[t] === undefined || RANK[f.Severity] < RANK[techMax[t]]) techMax[t] = f.Severity; (techFind[t] = techFind[t] || []).push(f); }); });
@@ -4988,7 +5721,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
   /* section highlight in the top bar */
   var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
   var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); });
-  var onScroll = function () { var y = window.scrollY + 70, cur = 0; secs.forEach(function (s, i) { if (s && s.offsetTop <= y) cur = i; }); links.forEach(function (a, i) { a.classList.toggle('on', i === cur); }); };
+  var onScroll = function () { var y = window.scrollY + 70, cur = 0; secs.forEach(function (s, i) { if (s && s.offsetTop <= y) cur = i; }); links.forEach(function (a, i) { a.classList.toggle('on', i === cur); }); var nav = $('nav'), on = links[cur]; if (on && (on.offsetLeft < nav.scrollLeft || on.offsetLeft + on.offsetWidth > nav.scrollLeft + nav.clientWidth)) nav.scrollLeft = on.offsetLeft - 20; };
   window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
 })();
 </script>

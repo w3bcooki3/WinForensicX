@@ -1,5 +1,40 @@
 # Changelog
 
+## 3.0.0 — evidence of execution, Sigma, YARA, incidents and exports
+
+### Added
+- **Execution and user-activity artifacts** (`Get-WfxArtifact`, `Invoke-WfxTriage -ArtifactPath`,
+  `Invoke-WfxHunt -ArtifactPath`): Amcache (files with SHA-1, programs, drivers), ShimCache (Windows 7 – 11),
+  Prefetch, BAM, UserAssist, PCA (Windows 11), ShellBags, Jump Lists (automatic and custom), shortcut files,
+  RunMRU, typed paths, Explorer searches, Chromium and Firefox download history, and Defender support logs.
+  Read from the live host, or from a folder of collected files (KAPE, Velociraptor, a mounted image).
+  Files are recognised by content. Dirty hives are repaired in memory from their `.LOG1/.LOG2`.
+- Parsers written from the specifications in plain PowerShell: registry hive (regf), compound file (CFB),
+  shell link, shell items and SQLite. Nothing is loaded into the registry or executed.
+- **Artifact detections:** offensive, exfiltration and remote-management tools, system-name masquerading,
+  execution from staging folders, known-vulnerable drivers, Defender detections from support logs, risky and
+  offensive downloads, admin-share and removable-drive access, sensitive searches. Shortcut and Jump List
+  arguments and Run-dialog commands go through the command-line rules.
+- **Sigma** (`-SigmaPath`, `WFX_SIGMA`, menu Settings): a rule compiler for Sigma YAML, with field modifiers,
+  full conditions, 4688-to-Sysmon field mapping and literal pre-filters. Rules extend event collection with
+  the IDs they need. Rules that cannot run are listed as a gap with the reason.
+- **YARA** (`-YaraRules`, `WFX_YARA`): runs your own `yara` executable over process, autostart, file and
+  artifact paths, or over an `-ArtifactPath` folder.
+- **Incidents:** findings grouped by shared files, accounts and addresses in time, with the reason for each
+  link. New report section.
+- **Report:** *Incidents* and *Evidence of execution* sections (filters, CSV, links to findings).
+- **Explore:** new *Evidence of execution* group (what ran, user activity, browser downloads, Defender logs):
+  57 views.
+- **`Export-WfxCase`:** Timesketch CSV, Elastic Common Schema NDJSON, STIX 2.1 bundle (deterministic ids,
+  validated with the OASIS validator) and indicator CSV.
+- **`New-WfxFleetReport`:** one offline page across many cases.
+- Menu: evidence-folder triage, artifact parsing and hunting, export, fleet report, Sigma and YARA settings.
+- Field guide: three new walk-throughs (what ran, a KAPE collection, many hosts).
+
+### Fixed
+- Collection gaps could be nested arrays in `result.json`.
+- Secret scrubbing is about ten times faster on large collections (a pre-filter before the full patterns).
+
 ## 2.6.0 — case report redesign
 
 ### Changed

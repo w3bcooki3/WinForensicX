@@ -1,10 +1,12 @@
-# WinForensicX
+﻿# WinForensicX
 
 **Read-only incident triage and investigation for Windows, in plain PowerShell.**
 
 One command collects the state of a Windows host, checks it against detection rules mapped to MITRE ATT&CK,
 and writes a case report you can hand to a colleague. Around that core is a toolkit for the rest of the job:
-53 live views of the machine, IOC hunting, file triage, payload decoding, timelines and case diffing.
+57 live views of the machine, execution artifacts (Amcache, ShimCache, Jump Lists, ShellBags …) from the
+live host or a KAPE folder, Sigma and YARA, incident grouping, IOC hunting, file triage, payload decoding,
+timelines, case diffing, and exports to Timesketch, Elastic (ECS) and STIX 2.1.
 
 No install, no external modules, no network traffic of its own. Windows PowerShell 5.1 or PowerShell 7+.
 
@@ -19,8 +21,10 @@ No install, no external modules, no network traffic of its own. Windows PowerShe
 - [Quick start](#quick-start)
 - [The case report](#the-case-report)
 - [Explore: live views with flags](#explore-live-views-with-flags)
+- [Evidence of execution](#evidence-of-execution)
 - [Commands](#commands)
 - [What it detects](#what-it-detects)
+- [Sigma, YARA and exports](#sigma-yara-and-exports)
 - [Case folder and chain of custody](#case-folder-and-chain-of-custody)
 - [Safety boundaries](#safety-boundaries)
 - [Tuning](#tuning)
@@ -38,7 +42,7 @@ No install, no external modules, no network traffic of its own. Windows PowerShe
 3. **Start it from that window:**
 
    ```powershell
-   cd "$HOME\Downloads\WinForensicX-2.6.0"
+   cd "$HOME\Downloads\WinForensicX-3.0.0"
    .\Start-WinForensicX.ps1
    ```
 
@@ -54,7 +58,7 @@ No install, no external modules, no network traffic of its own. Windows PowerShe
 
    ```
      1  Investigate this computer    triage: find signs of compromise and get a report
-     2  Explore this computer        53 live views: what changed recently, users, software, network, USB...
+     2  Explore this computer        57 live views: what changed recently, users, software, network, USB...
      3  Hunt & analyze               IOC hunting, file triage, decode payloads
      4  Cases & evidence             open reports, verify, timeline, compare
      5  Live monitor                 watch new processes / connections as they happen
@@ -82,8 +86,10 @@ analysis machine.
 | Section | What you get |
 |---|---|
 | **Summary** | A verdict in words, a numbered *Do first* list with the action for each item, the suspicious-activity window, accounts involved, external addresses, compromise risk and hardening scores. |
+| **Incidents** | Findings that share a file, account or address within hours (or a burst of high-severity findings) grouped into one story, with the ATT&CK stages it covers and why each finding was joined. |
 | **Attack path** | Findings placed on the ATT&CK lifecycle, earliest stage first, with the time each stage was first seen. |
 | **Findings** | Sortable and filterable by severity, stage and area. Each row opens to show why it matters, what to do, the evidence, the rule and source, and **everything else that happened within 30 minutes**. |
+| **Evidence of execution** | Amcache, ShimCache, Prefetch, BAM, Jump Lists, shortcuts, ShellBags, browser downloads and Defender logs, filterable by artifact and evidence kind, with flagged rows linked to their finding. CSV export. |
 | **Indicators** | IPs, domains, URLs, hashes, files, registry keys and accounts pulled from attacker-related findings. Defang for sharing, copy, or download as CSV. |
 | **Timeline / Changes** | Findings and recent changes grouped by day; CSV export. |
 | **ATT&CK** | Technique matrix, with a layer you can load into MITRE ATT&CK Navigator. |
@@ -93,6 +99,8 @@ analysis machine.
 Dark mode, phone width and print are supported. CSV exports neutralise spreadsheet formulas.
 
 ![A finding opened: evidence and related events](docs/img/report-finding.png)
+
+![Incidents: related findings grouped into one story](docs/img/report-incidents.png)
 
 ---
 
@@ -108,6 +116,7 @@ Views that can show attacker activity run the same analyzers as triage over each
 
 | Group | Views |
 |---|---|
+| **Evidence of execution** | What ran (Amcache, ShimCache, Prefetch, BAM, UserAssist, PCA, with SHA-1 where recorded); user activity (Jump Lists, shortcuts, ShellBags, RunMRU, typed paths, Explorer searches); browser downloads with source URL; Defender support logs |
 | **Recent changes** | Combined timeline; registry writes in persistence and security keys; NTFS change journal (created, deleted, modified, renamed, alternate streams, timestamps); deleted files (Recycle Bin, Sysmon); software and driver installs; programs that ran (Prefetch, BAM, UserAssist); connection history; security configuration changes |
 | System | Overview, updates, software, users, privileged groups, sessions, profiles, shares, USB history, drives and BitLocker |
 | Processes | All processes (signer, owner, parent, command line), process tree, unsigned or user-folder programs |
@@ -125,6 +134,39 @@ firewall log) are reported as gaps.
 
 ---
 
+## Evidence of execution
+
+`Get-WfxArtifact` parses the artifacts investigators reach for first and returns one normalised record per
+entry: **Artifact, Time, TimeKind** (what the time actually means), **Evidence** (Execution, Presence,
+Access, Download, Detection, Install), **Path, Name, Sha1, User, Detail, Source**.
+
+| Artifact | Source | Proves |
+|---|---|---|
+| Amcache | `Amcache.hve`: files (SHA-1), programs, drivers | Presence, often execution; the hash identifies the binary even after it is deleted |
+| ShimCache | `SYSTEM` AppCompatCache (Win7 – 11) | Presence on disk; order and last-modified time |
+| Prefetch, BAM, UserAssist, PCA | Prefetch folder, `SYSTEM`, `NTUSER.DAT`, `C:\Windows\appcompat\pca` | Execution, with last-run times and counts |
+| Jump Lists, shortcuts | `AutomaticDestinations`, `CustomDestinations`, `Recent\*.lnk` | Files and folders opened, with target times, volume serial, machine and **arguments** |
+| ShellBags | `UsrClass.dat`, `NTUSER.DAT` | Folders browsed, including removable drives, network and admin shares |
+| RunMRU, typed paths, searches | `NTUSER.DAT` | Commands typed in Run (checked by the command-line rules), Explorer paths and searches |
+| Browser downloads | Chrome, Edge, Brave, Opera, Vivaldi `History`; Firefox `places.sqlite` | What was downloaded, from where (URL chain and referrer), and where it went |
+| Defender logs | `MPLog-*.log`, `MPDetection-*.log` | Detections and the files Defender saw, even after the event log was cleared |
+
+```powershell
+Get-WfxArtifact -Flag | Where-Object Flag                          # this computer (administrator)
+Get-WfxArtifact -Path D:\kape\C -Flag | Export-Csv art.csv         # a KAPE / Velociraptor collection or mounted image
+Invoke-WfxTriage -ArtifactPath D:\kape\C -CaseName ctf-01          # full case report from a collection
+Invoke-WfxHunt -ArtifactPath D:\kape\C -Ioc 'e3b0c442…'            # hashes, URLs and paths across the artifacts
+```
+
+The parsers are written from the file-format specifications in plain PowerShell: registry hives (with
+`.LOG1/.LOG2` transaction-log replay in memory), compound files, shell links, shell items and SQLite. Files
+are recognised by content, so renamed hives work. Nothing is loaded into the registry, executed or modified.
+Every record is checked by the triage rules: offensive, exfiltration and remote-management tools, system-name
+masquerading, execution from staging folders, known-vulnerable drivers, risky downloads, admin-share and
+removable-drive access, encoded or LOLBin arguments in shortcuts and Run history, sensitive searches.
+
+---
+
 ## Commands
 
 | Command | Purpose |
@@ -132,12 +174,15 @@ firewall log) are reported as gaps.
 | `Invoke-WfxTriage` | Collect → analyze → score → report. **Local**, **remote** (`-ComputerName`, WinRM), **offline** (`-EvtxPath`) or **re-analyze** (`-InputPath`). |
 | `Save-WfxEvidence` | Collect a hashed evidence bundle now; analyze later, anywhere. |
 | `Invoke-WfxAnalyze` | Run every analyzer over a bundle. Runs on Windows, Linux and macOS. |
-| `Get-WfxInsight` / `Save-WfxInsight` | The 53 live views / export them all as a hashed inventory report. |
+| `Get-WfxArtifact` | Execution and user-activity artifacts from this computer or a folder of collected files. |
+| `Get-WfxInsight` / `Save-WfxInsight` | The 57 live views / export them all as a hashed inventory report. |
 | `Get-WfxActivity` | What changed recently; `-Journal` adds the NTFS change journal. |
 | `Invoke-WfxHunt` | Sweep a host or saved case for IOCs (hashes, IPs, domains and subdomains, strings), including event logs. Accepts defanged values and IOC files. |
 | `Get-WfxFileTriage` | "What is this file?" Hashes, true type vs. extension, entropy, download URL (Mark of the Web), alternate streams, signer, PE facts, strings and IOCs. Never executes it. |
 | `ConvertFrom-WfxEncodedCommand` | Decode `-EncodedCommand`, Base64, gzip and nested `FromBase64String` payloads, then run the rules over the result. |
-| `Export-WfxTimeline` | UTC super-timeline of a case to CSV or JSON. |
+| `Export-WfxTimeline` | UTC super-timeline of a case (findings, events, changes and artifacts) to CSV or JSON. |
+| `Export-WfxCase` | A case as Timesketch CSV, Elastic Common Schema NDJSON, STIX 2.1 bundle or an indicator CSV. |
+| `New-WfxFleetReport` | One HTML report across many cases: hosts by risk, findings seen on several hosts, shared indicators, ATT&CK stages. |
 | `Compare-WfxCase` | Diff two cases: new processes, autostarts, services, listeners, DNS names, findings. |
 | `New-WfxFileBaseline` / `Compare-WfxFileBaseline` | File-integrity baseline for chosen folders. |
 | `Test-WfxCase` | Re-hash a case against its manifest: changed, missing or added files. |
@@ -149,12 +194,16 @@ Invoke-WfxTriage -OutputPath E:\cases                              # triage this
 Invoke-WfxTriage -FileScan -ExposureScan -OutputPath E:\cases      # plus web roots, drop folders, exposed secrets
 Invoke-WfxTriage -ComputerName srv01,srv02 -Credential (Get-Credential)
 Invoke-WfxTriage -EvtxPath D:\evidence\logs                        # exported .evtx only
+Invoke-WfxTriage -ArtifactPath D:\kape\C                           # collected hives, Amcache, Jump Lists, browsers, .evtx
+Invoke-WfxTriage -SigmaPath D:\sigma\rules\windows -YaraRules D:\yara\rules
 Invoke-WfxTriage -InputPath .\WFX_PC01_20261103-101500Z -AllowlistPath .\allowlist.json
 
 Invoke-WfxHunt -Ioc 'evil[.]example','203.0.113.7' -InputPath .\case
 Get-ChildItem $env:USERPROFILE\Downloads -File | Get-WfxFileTriage | Where-Object ExtensionMismatch
 ConvertFrom-WfxEncodedCommand 'powershell -nop -enc VwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIAAnAGgAaQAnAA=='
 Compare-WfxCase -Baseline .\golden -Current .\today | Where-Object Change -eq 'Added'
+Export-WfxCase -InputPath .\case -Format All                       # Timesketch, ECS, STIX 2.1, indicators
+New-WfxFleetReport -Path E:\cases                                  # every host's latest case on one page
 ```
 
 ---
@@ -171,11 +220,38 @@ Compare-WfxCase -Baseline .\golden -Current .\today | Where-Object Change -eq 'A
 | **Files** (`-FileScan`) | Web shells, double extensions, downloaded executables, packed binaries, ransom notes, mass encryption |
 | **Exposed secrets** (`-ExposureScan`) | GPP passwords, unattend files, readable SAM/SYSTEM (HiveNightmare), cloud and API keys, unencrypted SSH keys. Reported redacted to *type + length*. |
 | **Recent activity** | Defender exclusions, hijack keys, weakened LSA/WDigest, timestomping, time changes, mass deletion or modification bursts |
+| **Execution artifacts** | Offensive, exfiltration and remote-management tools by name or Amcache hash, masquerading, staging-folder execution, vulnerable drivers, risky downloads, admin-share and USB access, encoded arguments in shortcuts, Jump Lists and Run history, Defender detections from support logs |
 | **Posture** | AV state, tamper protection, auditing, Sysmon, firewall, RDP without NLA, LSASS protection |
 
 **Two scores.** *Compromise risk* comes only from evidence of attacker activity; *posture* comes from
 hardening and visibility gaps. A clean but unhardened host shows low risk, not "compromised". Both use
 `1 − Π(1 − wᵢ/40)`, so a pile of weak leads cannot add up to a critical.
+
+**Incidents.** Findings that share a file, account or public address within six hours, or High/Critical
+findings within twenty minutes of each other, are grouped into incidents. Every link records why it was made.
+
+---
+
+## Sigma, YARA and exports
+
+- **Sigma.** Point `-SigmaPath` (or `WFX_SIGMA`, or Settings in the menu) at a folder of Sigma rules, for
+  example `rules/windows` from SigmaHQ. Rules are read as data and compiled to the tool's own matcher: field
+  modifiers (`contains`, `startswith`, `endswith`, `re`, `all`, `cidr`, `base64`, `base64offset`, `windash`,
+  `exists`), full conditions (`1 of selection_*`, `all of them`, `not`, parentheses). Rules add the
+  Security and System event IDs they need to collection. 4688 events are mapped to Sysmon field names. Of the
+  2,427 SigmaHQ Windows rules, 2,229 load; the rest (aggregations, correlations, unsupported log sources)
+  are listed as a gap with the reason. Matches become `SIGMA-…` findings with the rule's level and ATT&CK tags.
+- **YARA** (optional). `-YaraRules` (or `WFX_YARA`) runs a `yara` executable *you* installed (`-YaraExe`,
+  `WFX_YARA_EXE` or PATH) over running programs, autostarts, flagged files and artifact paths — or over the
+  whole `-ArtifactPath` folder. Matches become `YARA-<rule>` findings. Without yara, a gap says so.
+- **Exports.** `Export-WfxCase -Format Timesketch|Ecs|Stix|Indicators|All` writes next to the case:
+  `*-timesketch.csv` (import into Timesketch), `*-ecs.ndjson` (Elastic / OpenSearch bulk-ready, ECS fields),
+  `*-stix.json` (STIX 2.1 bundle: indicators with patterns, ATT&CK attack-patterns, a report; ids are
+  deterministic so re-exports match) and `*-indicators.csv`. The case manifest is not touched, so
+  `Test-WfxCase` still verifies.
+- **Fleet.** `New-WfxFleetReport -Path <folder of cases>` reads each host's latest case (`-AllCases` for all)
+  and writes one offline HTML page: hosts ranked by risk, findings and indicators seen on more than one host,
+  and which ATT&CK stages appeared where.
 
 ---
 
@@ -253,7 +329,7 @@ Nothing in it runs. If you only want to use the tool, take the main package.
 ## Testing
 
 ```powershell
-Invoke-Pester ./tests                                                # 120 tests, including the scenario suite
+Invoke-Pester ./tests                                                # 143 tests, including the scenario suite
 pwsh -File tools/Invoke-WfxScenarioSuite.ps1 -OutputPath .\results   # add -SingleFile to test dist\WinForensicX.ps1
 Invoke-ScriptAnalyzer -Path ./WinForensicX -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
 pwsh -File tools/build.ps1                                           # builds dist\WinForensicX.ps1
@@ -263,9 +339,14 @@ pwsh -File tools/build-guide.ps1                                     # builds do
 The **scenario suite** feeds synthetic evidence for ten scenarios through every workflow: a clean and a busy
 admin workstation (false-positive controls), phishing malware, a LOLBin chain, a hands-on-keyboard intrusion,
 credential theft, a multi-day APT ending in ransomware, malware-free lateral movement, ClickFix and AI-tool
-abuse, and malformed or hostile evidence. It also runs 42 evasion variants against 15 benign look-alikes:
-328 checks in all. It checks the report, manifest, tamper detection, timeline, hunt and Explore flags.
+abuse, and malformed or hostile evidence, now with execution artifacts in each. It also runs 42 evasion
+variants against 15 benign look-alikes: 339 checks in all. It checks the report, manifest, tamper detection, timeline, hunt and Explore flags.
 Nothing is executed; the evidence is data.
+
+The artifact parsers are tested against hives, Jump Lists, shortcuts, compound files and SQLite databases
+built byte by byte in the tests, and were cross-checked during development against independent parsers on
+public test data (ShimCache and Amcache against regipy, shortcuts against LnkParse3). The STIX export is
+checked with the OASIS validator.
 
 Collectors need real Windows. `Invoke-WfxSandboxEmulation.ps1` (shipped separately) plants harmless
 look-alike artefacts **inside Windows Sandbox only**, checks each is flagged, and reverts them.
@@ -277,11 +358,16 @@ look-alike artefacts **inside Windows Sandbox only**, checks each is flagged, an
 - Findings are **leads, not verdicts**. Read them with the *Not visible* section: without process auditing or
   Sysmon, "nothing found" often means "nothing could be seen".
 - **Triage, not imaging.** No disk or memory acquisition, no carving of deleted files.
-- Only loaded user hives (logged-on users) are inspected. Event collection is capped per query, and a cap
+- Live: Amcache is locked by Windows and is reported as a gap (collect it with KAPE or a VSS copy and use
+  `-ArtifactPath`); Prefetch is read for names and times only (its compressed contents are not decoded).
+  SRUM (an ESE database) and `$MFT` parsing are not included.
+- Explore views inspect only loaded user hives (logged-on users); `-ArtifactPath` reads every `NTUSER.DAT`
+  and `UsrClass.dat` it is given. Event collection is capped per query, and a cap
   that is hit is reported as a gap.
 - Detection is heuristic. Expect some false positives and false negatives; tune with the allowlist and
   custom rules.
-- Live collection targets Windows 10/11 and Server 2016+. Analysis, hunting, timelines, diffs and decoding
+- Live collection targets Windows 10/11 and Server 2016+. The 3.0 artifact collectors are verified with the
+  Windows Sandbox script; parsing collected files is tested on every platform. Analysis, hunting, timelines, diffs and decoding
   also run on Linux and macOS with PowerShell 7.
 
 ## License

@@ -54,11 +54,11 @@ function Add-WfxFlag {
     <#
     .SYNOPSIS Pipeline step: runs the triage analyzer for a record type over ALL piped records (so cross-record
     rules like parent/child still work) and attaches Flag / Why / Technique to the records the findings are about.
-    .PARAMETER Kind Process | Network | Dns | Autostart | Activity
+    .PARAMETER Kind Process | Network | Dns | Autostart | Activity | Artifact
     .PARAMETER DnsMap  IP → names, for network records (connections to tunnels / AI APIs).
     #>
     param(
-        [Parameter(Mandatory, Position = 0)][ValidateSet('Process', 'Network', 'Dns', 'Autostart', 'Activity')][string]$Kind,
+        [Parameter(Mandatory, Position = 0)][ValidateSet('Process', 'Network', 'Dns', 'Autostart', 'Activity', 'Artifact')][string]$Kind,
         [Parameter(ValueFromPipeline)]$InputObject,
         [hashtable]$DnsMap = @{}
     )
@@ -76,6 +76,7 @@ function Add-WfxFlag {
                 'Dns' { Invoke-WfxDnsAnalyzer -DnsEntry $recs }
                 'Autostart' { Invoke-WfxPersistenceAnalyzer -Autostart $recs }
                 'Activity' { Invoke-WfxActivityAnalyzer -Activity $recs }
+                'Artifact' { Invoke-WfxArtifactAnalyzer -Artifacts $recs }
             }
             $findings = @($findings | Expand-WfxRecord)
             $allow = Get-WfxSessionAllowlist
@@ -98,6 +99,11 @@ function Add-WfxFlag {
                 }
                 'Dns' { if ($e -match '^dns:(.+)$') { & $add "dns:$($Matches[1])" $f } }
                 'Autostart' { if ($e -match '^autostart:') { & $add $e.ToLowerInvariant() $f } }
+                'Artifact' {
+                    $ev = $f.Evidence
+                    if ($ev -and $ev.Path) { & $add ('art:' + (ConvertTo-WfxArtifactKey $ev.Path)) $f }
+                    if ($ev -and $ev.Source -and $e -match '^shortcut:') { & $add ('src:' + ([string]$ev.Source).ToLowerInvariant()) $f }
+                }
                 'Activity' {
                     $ev = $f.Evidence
                     # Keyed by action + target (not time): the analyzer dedupes repeats, but every matching row is flagged.
@@ -116,11 +122,18 @@ function Add-WfxFlag {
                 'Dns' { 'dns:' + ([string]$r.Name).Trim('.').ToLowerInvariant() }
                 'Autostart' { ("autostart:{0}:{1}" -f $r.Kind, $r.Name).ToLowerInvariant() }
                 'Activity' { "act:{0}|{1}" -f $r.Action, [string]$r.Target }
+                'Artifact' { 'art:' + (ConvertTo-WfxArtifactKey $r.Path); if ($r.Source) { 'src:' + ([string]$r.Source).ToLowerInvariant() } }
             }
             foreach ($k in @($keys)) { if ($by.ContainsKey($k)) { Add-WfxFindingVerdict -InputObject $r -Finding $by[$k].ToArray() } }
         }
         $recs
     }
+}
+
+function ConvertTo-WfxArtifactKey {
+    <# Path key that ignores case and the drive / volume prefix, so C:\x, c:\x and (volume)\x match. #>
+    param([AllowEmptyString()][string]$Path)
+    ([string]$Path).ToLowerInvariant() -replace '^\(volume\)', '' -replace '^[a-z]:', ''
 }
 
 function Add-WfxViewPattern {

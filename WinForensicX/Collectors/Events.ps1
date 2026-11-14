@@ -36,7 +36,7 @@ function Get-WfxEventData {
     $out = New-Object System.Collections.Generic.List[object]
 
     if ($EvtxFile.Count) {
-        $ids = @($script:WfxEventQuery | ForEach-Object { $_.Ids } | Sort-Object -Unique)
+        $ids = @(@($script:WfxEventQuery) + @($script:WfxSigmaEventQuery | Where-Object { $_ }) | ForEach-Object { $_.Ids } | Sort-Object -Unique)
         foreach ($f in $EvtxFile) {
             $leaf = Get-WfxLeaf $f
             Invoke-WfxStep "events:evtx:$leaf" {
@@ -55,7 +55,7 @@ function Get-WfxEventData {
     }
 
     $start = (Get-Date).AddHours(-[Math]::Abs($Hours))
-    foreach ($q in $script:WfxEventQuery) {
+    foreach ($q in @(@($script:WfxEventQuery) + @($script:WfxSigmaEventQuery | Where-Object { $_ }))) {
         Invoke-WfxStep "events:$($q.Log):$($q.Ids -join ',')" {
             $ev = $null
             try { $ev = @(Get-WinEvent -FilterHashtable @{ LogName = $q.Log; Id = $q.Ids; StartTime = $start } -MaxEvents $q.Max -ErrorAction Stop) }

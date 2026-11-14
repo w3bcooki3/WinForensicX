@@ -2,7 +2,7 @@
 # Structure: main menu → section submenus → actions. Every screen says what each option does, inputs are
 # validated, B goes back, Q quits from anywhere. Everything it runs is read-only.
 
-$script:WfxMenu = @{ OutputPath = ''; Hours = 72; Days = 0; Allowlist = ''; RulesPath = ''; LastCase = '' }
+$script:WfxMenu = @{ OutputPath = ''; Hours = 72; Days = 0; Allowlist = ''; RulesPath = ''; LastCase = ''; Sigma = ''; Yara = '' }
 
 function Read-WfxMenuChoice {
     <# Reads one menu choice; repeats until it is one of $Valid (case-insensitive). Returns it upper-cased. #>
@@ -86,6 +86,8 @@ function Invoke-WfxMenuAction {
 function Get-WfxTriageArgs {
     $a = @{ OutputPath = $script:WfxMenu.OutputPath; Hours = $script:WfxMenu.Hours }
     if ($script:WfxMenu.Allowlist) { $a.AllowlistPath = $script:WfxMenu.Allowlist }
+    if ($script:WfxMenu.Sigma) { $a.SigmaPath = @($script:WfxMenu.Sigma) }
+    if ($script:WfxMenu.Yara) { $a.YaraRules = @($script:WfxMenu.Yara) }
     $a
 }
 
@@ -102,8 +104,9 @@ function Show-WfxMenuTriage {
         Write-WfxMenuItem '4' 'Remote computer(s) over WinRM' 'collect from other machines, analyze here'
         Write-WfxMenuItem '5' 'Offline event logs (.evtx)' 'analyze exported logs from another machine'
         Write-WfxMenuItem '6' 'Re-analyze a saved case' 're-run detections over old evidence'
+        Write-WfxMenuItem '7' 'Collected evidence folder (KAPE, image, CTF)' 'hives, Amcache, Jump Lists, .lnk, browsers, .evtx'
         Write-WfxMenuFooter
-        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', 'B', 'Q'
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', 'B', 'Q'
         switch ($c) {
             'B' { return }
             'Q' { return 'Q' }
@@ -121,6 +124,11 @@ function Show-WfxMenuTriage {
             }
             '5' { $p = Read-WfxMenuPath 'Folder or .evtx file'; if ($p) { $a = Get-WfxTriageArgs; Invoke-WfxMenuAction { Invoke-WfxTriage @a -EvtxPath $p | Out-Null; Write-WfxMenuOpenReport } } }
             '6' { $p = Select-WfxMenuCase; if ($p) { $a = Get-WfxTriageArgs; $a.Remove('Hours'); Invoke-WfxMenuAction { Invoke-WfxTriage @a -InputPath $p | Out-Null; Write-WfxMenuOpenReport } } }
+            '7' {
+                Write-WfxConsole '  A folder of files copied from another system: registry hives (SYSTEM, Amcache.hve, NTUSER.DAT, UsrClass.dat), Jump Lists, .lnk, browser History / places.sqlite, Prefetch, PCA and Defender logs, .evtx. Files are only read.' -Kind Dim
+                $p = Read-WfxMenuPath 'Evidence folder or file'
+                if ($p) { $a = Get-WfxTriageArgs; $a.Remove('Hours'); Invoke-WfxMenuAction { Invoke-WfxTriage @a -ArtifactPath $p | Out-Null; Write-WfxMenuOpenReport } }
+            }
         }
     }
 }
@@ -262,7 +270,7 @@ function Show-WfxMenuExplore {
     $gdesc = @{ 'Recent changes' = 'what attackers change: registry, files, installs, executions, connections, config'; System = 'OS, updates, software, users, groups, sessions, shares, USB, drives'; Processes = 'running programs, process tree, unsigned programs'
         Network = 'listening ports, connections, DNS, adapters, routes, ARP, hosts, proxy, Wi-Fi, firewall, SMB'; Persistence = 'autostarts, services, drivers, scheduled tasks, WMI'
         Events = 'logons, failed logons, RDP, account changes, new services, log clears, reboots, PowerShell, Defender'; Files = 'downloads, new programs, Prefetch, recent files, PS history, Run box'
-        Security = 'security posture checklist with fixes' }
+        Security = 'security posture checklist with fixes'; 'Evidence of execution' = 'Amcache, ShimCache, Prefetch, BAM, ShellBags, Jump Lists, browser downloads, Defender logs' }
     while ($true) {
         Write-WfxMenuHeader 'Explore this computer (live, read-only views)'
         $i = 0; $keys = @()
@@ -325,8 +333,11 @@ function Show-WfxMenuHunt {
         Write-WfxConsole ''
         Write-WfxMenuItem '6' 'Take a file-integrity baseline' 'hash folders now, to detect changes later'
         Write-WfxMenuItem '7' 'Compare with a baseline' 'added / deleted / content-changed / timestamp-only files'
+        Write-WfxConsole ''
+        Write-WfxMenuItem '8' 'Parse artifacts from a folder or file' 'Amcache, ShimCache, ShellBags, Jump Lists, .lnk, browser history... as a flagged table'
+        Write-WfxMenuItem '9' 'Hunt IOCs in a collected evidence folder' 'Amcache SHA-1 matches programs that were deleted'
         Write-WfxMenuFooter
-        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', 'B', 'Q'
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', '8', '9', 'B', 'Q'
         switch ($c) {
             'B' { return }
             'Q' { return 'Q' }
@@ -366,6 +377,25 @@ function Show-WfxMenuHunt {
                 Write-WfxConsole '  Folders to baseline, comma-separated (e.g. C:\inetpub\wwwroot, C:\Windows\System32\drivers\etc).' -Kind Dim
                 $t = Read-WfxMenuText 'Folders (Enter = cancel)'
                 if ($t) { $paths = @($t -split '\s*,\s*' | ForEach-Object { $_.Trim('"') } | Where-Object { $_ }); Invoke-WfxMenuAction { New-WfxFileBaseline -Path $paths | Out-Null } }
+            }
+            '8' {
+                $p = Read-WfxMenuPath 'Evidence folder or file (hive, Jump List, .lnk, History...)'
+                if ($p) { Invoke-WfxMenuAction -NoPause {
+                        Clear-WfxGap
+                        $rows = @(Get-WfxArtifact -Path $p -Flag -WarningAction SilentlyContinue | Sort-Object @{ e = { -$script:WfxFlagRank[[string]$_.Flag] } }, @{ e = { [string]$_.Time }; Descending = $true } |
+                            Select-Object Flag, Why, Technique, Rule, Time, TimeKind, Artifact, Path, User, Sha1, Detail, Source)
+                        $null = Show-WfxMenuInsightTable -Rows $rows -Title "Artifacts in $p" -Key 'artifacts' -Note @(Get-WfxGap | Expand-WfxRecord)
+                    } }
+            }
+            '9' {
+                $i = Read-WfxMenuText 'IOCs (comma-separated) or IOC file (Enter = cancel)'
+                if (-not $i) { break }
+                $p = Read-WfxMenuPath 'Evidence folder'
+                if ($p) {
+                    $hp = @{ OutputPath = $script:WfxMenu.OutputPath; ArtifactPath = $p }
+                    $iv = $i.Trim('"'); if (Test-Path -LiteralPath $iv -PathType Leaf) { $hp.IocFile = $iv } else { $hp.Ioc = @($i -split '\s*,\s*' | Where-Object { $_ }) }
+                    Invoke-WfxMenuAction { Invoke-WfxHunt @hp | Out-Null }
+                }
             }
             '7' {
                 $p = Read-WfxMenuPath 'Baseline .json file' -Kind File
@@ -408,8 +438,10 @@ function Show-WfxMenuCases {
         Write-WfxMenuItem '3' 'Verify a case (chain of custody)' 're-hash every file against its manifest'
         Write-WfxMenuItem '4' 'Export a case timeline (CSV)' 'one UTC-sorted list of everything with a time'
         Write-WfxMenuItem '5' 'Compare two cases' 'what is new or gone since a baseline'
+        Write-WfxMenuItem '6' 'Export a case for other tools' 'Timesketch CSV, Elastic/Splunk ECS, STIX 2.1, indicator list'
+        Write-WfxMenuItem '7' 'Fleet report (many hosts)' 'patient zero, spread, shared indicators across all cases in a folder'
         Write-WfxMenuFooter
-        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', 'B', 'Q'
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', 'B', 'Q'
         switch ($c) {
             'B' { return }
             'Q' { return 'Q' }
@@ -423,6 +455,12 @@ function Show-WfxMenuCases {
                 Write-WfxConsole '  Now the CURRENT case:' -Kind Dim; $b = Select-WfxMenuCase
                 if ($b) { Invoke-WfxMenuAction -NoPause { $d = @(Compare-WfxCase -Baseline $a -Current $b); $null = Show-WfxMenuInsightTable -Rows $d -Title 'Case comparison' -Key 'compare' } }
             }
+            '6' { $p = Select-WfxMenuCase; if ($p) { Invoke-WfxMenuAction { Export-WfxCase -InputPath $p | Out-Null } } }
+            '7' {
+                $p = Read-WfxMenuPath "Folder holding the case folders (Enter = $(Get-WfxCaseRoot))" -Kind Folder
+                if (-not $p) { $p = Get-WfxCaseRoot }
+                Invoke-WfxMenuAction { $f = New-WfxFleetReport -Path $p -PassThru; if ($f) { Open-WfxPath $f } }
+            }
         }
     }
 }
@@ -435,8 +473,10 @@ function Show-WfxMenuSettings {
         Write-WfxMenuItem '3' 'Look-back for live views (days)' $(if ($script:WfxMenu.Days) { [string]$script:WfxMenu.Days } else { 'per view default' })
         Write-WfxMenuItem '4' 'Allowlist file' $(if ($script:WfxMenu.Allowlist) { $script:WfxMenu.Allowlist } else { '(none)' })
         Write-WfxMenuItem '5' 'Custom rules folder' $(if ($script:WfxMenu.RulesPath) { $script:WfxMenu.RulesPath } else { '(built-in only)' })
+        Write-WfxMenuItem '6' 'Sigma rules folder' $(if ($script:WfxMenu.Sigma) { $script:WfxMenu.Sigma } elseif ($env:WFX_SIGMA) { "$env:WFX_SIGMA (WFX_SIGMA)" } else { '(none)' })
+        Write-WfxMenuItem '7' 'YARA rules folder' $(if ($script:WfxMenu.Yara) { $script:WfxMenu.Yara } elseif ($env:WFX_YARA) { "$env:WFX_YARA (WFX_YARA)" } else { '(none)' })
         Write-WfxMenuFooter
-        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', 'B', 'Q'
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', 'B', 'Q'
         switch ($c) {
             'B' { return }
             'Q' { return 'Q' }
@@ -448,6 +488,11 @@ function Show-WfxMenuSettings {
             '3' { $v = 0; $t = Read-WfxMenuText 'Days (1-3650, 0 = per view default)' ([string]$script:WfxMenu.Days); if ([int]::TryParse($t, [ref]$v) -and $v -ge 0 -and $v -le 3650) { $script:WfxMenu.Days = $v } else { Write-WfxConsole '  Enter a number from 0 to 3650.' -Kind Warn; Wait-WfxMenu } }
             '4' { $p = Read-WfxMenuPath 'Allowlist JSON (see examples\allowlist.example.json)' -Kind File; $script:WfxMenu.Allowlist = [string]$p }
             '5' { $p = Read-WfxMenuPath 'Folder with <pack>.<name>.json rule files' -Kind Folder; $script:WfxMenu.RulesPath = [string]$p; Set-WfxRulePath ([string]$p) }
+            '6' { $p = Read-WfxMenuPath 'Folder of Sigma .yml rules (e.g. sigma\rules\windows)' -Kind Folder; $script:WfxMenu.Sigma = [string]$p }
+            '7' {
+                $p = Read-WfxMenuPath 'Folder or file of YARA rules (.yar)'; $script:WfxMenu.Yara = [string]$p
+                if ($p -and -not (Find-WfxYaraExe)) { Write-WfxConsole '  No yara executable found on PATH. Install YARA or set WFX_YARA_EXE; scans are skipped (and noted) until then.' -Kind Warn; Wait-WfxMenu }
+            }
         }
     }
 }
@@ -472,11 +517,11 @@ function Show-WfxMenu {
         Write-WfxMenuHeader 'Main menu'
         if ($missing.Count) { Write-WfxConsole "  ! Rule pack(s) missing: $($missing -join ', ') — restore them from the release (antivirus may have quarantined them)." -Kind Bad; Write-WfxConsole '' }
         Write-WfxMenuItem '1' 'Investigate this computer' 'triage: find signs of compromise and get a report'
-        Write-WfxMenuItem '2' 'Explore this computer' '53 live views: what changed recently, users, software, network, USB...'
-        Write-WfxMenuItem '3' 'Hunt & analyze' 'IOC hunting, file triage, decode payloads'
-        Write-WfxMenuItem '4' 'Cases & evidence' 'open reports, verify, timeline, compare'
+        Write-WfxMenuItem '2' 'Explore this computer' '57 live views: what ran, what changed, users, software, network, USB...'
+        Write-WfxMenuItem '3' 'Hunt & analyze' 'IOC hunting, artifact parsing, file triage, decode payloads'
+        Write-WfxMenuItem '4' 'Cases & evidence' 'reports, verify, timeline, compare, export, fleet report'
         Write-WfxMenuItem '5' 'Live monitor' 'watch new processes / connections as they happen'
-        Write-WfxMenuItem '6' 'Settings' 'output folder, look-back, allowlist, custom rules'
+        Write-WfxMenuItem '6' 'Settings' 'output folder, look-back, allowlist, custom / Sigma / YARA rules'
         Write-WfxMenuItem 'H' 'Help & guide' 'what everything does, in a browser page'
         Write-WfxMenuFooter -NoBack
         $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', 'H', 'Q'

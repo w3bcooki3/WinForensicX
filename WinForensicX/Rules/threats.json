@@ -101,6 +101,20 @@
     "\\downloads\\",
     "\\perflogs\\"
   ],
+  "exfilTools": [
+    "rclone.exe",
+    "megasync.exe",
+    "megacmdserver.exe",
+    "megacmd.exe",
+    "restic.exe",
+    "croc.exe",
+    "rcloneview.exe",
+    "filezilla_portable.exe",
+    "freefilesync.exe",
+    "gdrive.exe",
+    "dropbox_uploader.exe"
+  ],
+  "exfilNote": "Data-transfer tools seen in exfiltration before ransomware. Several have legitimate uses; a finding means look at what was copied, not that it was malicious.",
   "vulnerableDrivers": [
     "rtcore64.sys",
     "gdrv.sys",

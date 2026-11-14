@@ -15,14 +15,14 @@ function Get-WfxCollectionBundle {
         [int]$Hours = 72,
         [switch]$FileScan,
         [switch]$ExposureScan,
-        [ValidateSet('Host', 'Process', 'Network', 'Dns', 'Persistence', 'Events', 'Activity', 'Files', 'Exposure', 'Security')]
-        [string[]]$Sections = @('Host', 'Process', 'Network', 'Dns', 'Persistence', 'Events', 'Activity', 'Files', 'Exposure', 'Security')
+        [ValidateSet('Host', 'Process', 'Network', 'Dns', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security')]
+        [string[]]$Sections = @('Host', 'Process', 'Network', 'Dns', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security')
     )
     $want = @{}; foreach ($s in $Sections) { $want[$s] = $true }
     Clear-WfxGap
     $script:WfxSigCache = @{}
     $started = Get-WfxUtcNow
-    $steps = @('Host', 'Dns', 'Network', 'Process', 'Persistence', 'Events', 'Activity', 'Files', 'Exposure', 'Security') | Where-Object { $want[$_] -and ($_ -ne 'Files' -or $FileScan) }
+    $steps = @('Host', 'Dns', 'Network', 'Process', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security') | Where-Object { $want[$_] -and ($_ -ne 'Files' -or $FileScan) }
     $script:WfxProgress = @{ N = 0; Total = @($steps).Count }
     $stage = {
         param([string]$Label, [scriptblock]$Body)
@@ -52,6 +52,9 @@ function Get-WfxCollectionBundle {
     $days = [int][Math]::Max(1, [Math]::Ceiling($Hours / 24.0))
     if ($want.Activity) { $activity = @(& $stage "Recent changes (last $days d$(if ($FileScan) { ', incl. NTFS journal' }))" { Get-WfxActivityData -Days $days -Journal:$FileScan }) }
 
+    $artifacts = @()
+    if ($want.Artifacts) { $artifacts = @(& $stage 'Execution & user-activity artifacts' { Get-WfxArtifactData }) }
+
     $files = @(); $ransom = [pscustomobject]@{ Note = @(); RecentFile = @() }
     if ($want.Files -and $FileScan) {
         $files = @(& $stage 'File scan (web roots, drops, ransomware)' { $script:WfxRansomTmp = Get-WfxRansomwareData; Get-WfxFileData })
@@ -77,11 +80,12 @@ function Get-WfxCollectionBundle {
         Persistence = $persist
         Events      = $events
         Activity    = $activity
+        Artifacts   = $artifacts
         Files       = $files
         Ransom      = $ransom
         Exposure    = $exposure
         Security    = $security
-        Gaps        = @(Get-WfxGap)
+        Gaps        = @(Get-WfxGap | Expand-WfxRecord)
         Meta        = [pscustomobject]@{ Mode = 'live'; Hours = $Hours; FileScan = [bool]$FileScan; ExposureScan = [bool]$ExposureScan; Sections = @($Sections) }
     }
 }
@@ -106,10 +110,41 @@ function Get-WfxOfflineBundle {
         Collected   = (Get-WfxUtcNow)
         HostName    = $hostName
         Host        = [pscustomobject]@{ HostName = $hostName; Fqdn = $hn; Os = '(offline event logs)'; Collected = (Get-WfxUtcNow); Admin = $null; Operator = [Environment]::UserName }
+        Process     = @(); Network = @(); Dns = @(); Persistence = @(); Activity = @(); Artifacts = @(); Files = @(); Exposure = @(); Security = $null
+        Ransom      = [pscustomobject]@{ Note = @(); RecentFile = @() }
+        Events      = $events
+        Gaps        = @(Get-WfxGap | Expand-WfxRecord)
+        Meta        = [pscustomobject]@{ Mode = 'offline'; EvtxPath = $EvtxPath; EvtxFiles = @($files) }
+    }
+}
+
+function Get-WfxArtifactBundle {
+    <#
+    .SYNOPSIS Builds a bundle from a folder of collected evidence (KAPE / Velociraptor output, a mounted image,
+    CTF files): registry hives, Jump Lists, shortcuts, browser databases, PCA / Defender logs, Prefetch and any
+    .evtx files found. Nothing is collected from the machine running the tool.
+    #>
+    param([Parameter(Mandatory)][string]$Path, [int]$MaxPerLog = 50000)
+    Clear-WfxGap
+    $script:WfxImportHost = $null; $script:WfxImportOs = $null
+    $arts = @(Import-WfxArtifact -Path $Path)
+    $evtx = @($script:WfxImportEvtx)
+    $events = if ($evtx.Count) { @(Get-WfxEventData -EvtxFile $evtx -MaxPerLog $MaxPerLog) } else { @() }
+    $hn = $script:WfxImportHost
+    if (-not $hn) { $hn = @($events | ForEach-Object { [string]$_.Computer } | Where-Object { $_ } | Group-Object | Sort-Object Count -Descending | Select-Object -First 1).Name; if ($hn) { $hn = ($hn -split '\.')[0] } }
+    if (-not $hn) { $hn = 'unknown-offline-host' }
+    [pscustomobject]@{
+        Schema      = 'winforensicx.bundle/2'
+        ToolVersion = $script:WfxVersion
+        Started     = (Get-WfxUtcNow)
+        Collected   = (Get-WfxUtcNow)
+        HostName    = $hn
+        Host        = [pscustomobject]@{ HostName = $hn; Os = $(if ($script:WfxImportOs) { $script:WfxImportOs } else { '(collected artifacts)' }); Collected = (Get-WfxUtcNow); Admin = $null; Operator = [Environment]::UserName }
         Process     = @(); Network = @(); Dns = @(); Persistence = @(); Activity = @(); Files = @(); Exposure = @(); Security = $null
         Ransom      = [pscustomobject]@{ Note = @(); RecentFile = @() }
         Events      = $events
-        Gaps        = @(Get-WfxGap)
-        Meta        = [pscustomobject]@{ Mode = 'offline'; EvtxPath = $EvtxPath; EvtxFiles = @($files) }
+        Artifacts   = $arts
+        Gaps        = @(Get-WfxGap | Expand-WfxRecord)
+        Meta        = [pscustomobject]@{ Mode = 'artifacts'; ArtifactPath = $Path; EvtxFiles = $evtx; ArtifactCount = $arts.Count }
     }
 }

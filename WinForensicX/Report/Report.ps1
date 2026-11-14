@@ -28,6 +28,9 @@
         activity      = @(Get-WfxValue $Result 'Activity' @())
         activityTotal = (ConvertTo-WfxInt (Get-WfxValue $Result 'ActivityTotal' 0))
         coverage      = @(Get-WfxValue $Result 'AttackCoverage' @())
+        incidents     = @(Get-WfxValue $Result 'Incidents' @())
+        artifacts     = @(@(Get-WfxValue $Result 'Artifacts' @()) | Select-Object -First 3000 | ForEach-Object { [ordered]@{ Artifact = $_.Artifact; Time = $_.Time; TimeKind = $_.TimeKind; Evidence = $_.Evidence; Path = $_.Path; User = $_.User; Sha1 = $_.Sha1; Detail = $_.Detail } })
+        artifactTotal = (ConvertTo-WfxInt (Get-WfxValue $Result 'ArtifactTotal' 0))
         gaps          = @(Get-WfxValue $Result 'Gaps' @())
         limits        = @($help.Limits)
     }
@@ -83,7 +86,7 @@ code,.mono{font-family:var(--mono);font-size:12.5px}
 .brand span{color:var(--ink3);font-weight:400}
 .nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1}
 .nav::-webkit-scrollbar{display:none}
-.nav a{color:var(--ink2);padding:13px 9px 12px;white-space:nowrap;border-bottom:2px solid transparent}
+.nav a{color:var(--ink2);padding:13px 7px 12px;white-space:nowrap;border-bottom:2px solid transparent}
 .nav a:hover{color:var(--ink);text-decoration:none}
 .nav a.on{color:var(--ink);border-bottom-color:var(--ink)}
 .nav a .n{color:var(--ink3);margin-left:4px;font-size:12px}
@@ -204,7 +207,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
 @media (max-width:640px){.brand span{display:none}.tools .btn.hide-s{display:none}.tb input[type=search]{min-width:0;max-width:none;width:100%}#ftbl .c-tac,#ftbl .c-cnt,#ftbl .c-time{display:none}dl.facts dd{text-align:left}dl.facts{grid-template-columns:1fr}dl.facts dt{border-bottom:0;padding-bottom:0}}
 @media print{
   .bar,.tb,.btn,.toast{display:none!important}
-  #abox,#tbox tr.chg{display:none}
+  #abox,#ebox,#tbox tr.chg{display:none}
   .pnote{display:block!important;color:#555;margin:4px 0 8px}
   body{font-size:11.5px}section{break-inside:auto;padding-top:18px}
   tr.detail{display:table-row!important}tr.row{break-inside:avoid}
@@ -219,7 +222,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
 <header class="bar"><div class="wrap">
   <div class="brand">__WFX_HOST__ <span>case report</span></div>
   <nav class="nav" id="nav" aria-label="Sections">
-    <a href="#summary">Summary</a><a href="#path">Attack path<span class="n" id="n-p"></span></a><a href="#findings">Findings<span class="n" id="n-f"></span></a><a href="#iocs">Indicators<span class="n" id="n-i"></span></a><a href="#timeline">Timeline<span class="n" id="n-t"></span></a><a href="#activity">Changes<span class="n" id="n-a"></span></a><a href="#attack">ATT&amp;CK<span class="n" id="n-x"></span></a><a href="#visibility">Not visible<span class="n" id="n-g"></span></a><a href="#custody">Custody</a>
+    <a href="#summary">Summary</a><a href="#incidents">Incidents<span class="n" id="n-n"></span></a><a href="#path">Path<span class="n" id="n-p"></span></a><a href="#findings">Findings<span class="n" id="n-f"></span></a><a href="#iocs">IOCs<span class="n" id="n-i"></span></a><a href="#timeline">Timeline<span class="n" id="n-t"></span></a><a href="#activity">Changes<span class="n" id="n-a"></span></a><a href="#execution">Execution<span class="n" id="n-e"></span></a><a href="#attack">ATT&amp;CK<span class="n" id="n-x"></span></a><a href="#visibility">Gaps<span class="n" id="n-g"></span></a><a href="#custody">Custody</a>
   </nav>
   <div class="tools"><button class="btn hide-s" id="theme" type="button">Dark</button><button class="btn" id="print" type="button">Print</button></div>
 </div></header>
@@ -238,6 +241,12 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
     <dl class="facts" id="facts"></dl>
   </div>
 </div>
+
+<section id="incidents">
+  <h2>Incidents</h2>
+  <p class="desc">Findings grouped into incidents: findings that share a file, account or address and happen close together, or high-severity findings within minutes of each other. Each row is one story to investigate; the links say why findings were grouped.</p>
+  <div id="nbox"></div>
+</section>
 
 <section id="path">
   <h2>Attack path</h2>
@@ -293,6 +302,19 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
   </div>
   <p class="pnote" hidden>Left out of the printed copy; see the timeline CSV or raw/bundle.json.</p>
   <div id="abox"></div>
+</section>
+
+<section id="execution">
+  <div class="head"><div><h2>Evidence of execution and user activity</h2><p class="desc" id="esub">Programs that ran or existed (Amcache, ShimCache, Prefetch, BAM, UserAssist, PCA), what users opened (ShellBags, Jump Lists, shortcuts, Run box, searches), browser downloads and Defender's own logs. These records outlive the files they describe. A severity mark means a finding refers to that path.</p></div>
+    <div class="tools"><button class="btn" id="e-csv" type="button">Download CSV</button></div></div>
+  <div class="tb">
+    <input type="search" id="eq" placeholder="Search paths, users, hashes" aria-label="Search execution evidence">
+    <select id="eart" aria-label="Artifact"></select>
+    <select id="eev" aria-label="Evidence type"></select>
+    <label><input type="checkbox" id="eflag"> Flagged only</label>
+  </div>
+  <p class="pnote" hidden>Left out of the printed copy; see the CSV or raw/bundle.json.</p>
+  <div id="ebox"></div>
 </section>
 
 <section id="attack">
@@ -401,6 +423,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
     ['Accounts involved', Object.keys(accounts).length ? esc(Object.keys(accounts).slice(0, 4).join(', ')) + (Object.keys(accounts).length > 4 ? ' and ' + (Object.keys(accounts).length - 4) + ' more' : '') : '<span class="muted">none identified</span>'],
     ['External addresses', '<span id="f-ext">0</span>'],
     ['Changes recorded', esc(D.activityTotal || A.length || 0)],
+    ['Execution artifacts', (D.artifactTotal || (D.artifacts || []).length) ? '<a href="#execution">' + esc(D.artifactTotal || D.artifacts.length) + '</a>' : '0'],
     ['Sources not visible', (D.gaps || []).length ? '<a href="#visibility">' + (D.gaps || []).length + '</a>' : '0']
   ];
   $('facts').innerHTML = facts.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('');
@@ -425,7 +448,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
     (s.match(/\b(?:HKLM|HKCU|HKU|HKCR|HKEY_[A-Z_]+)\\[^\r\n"'<>|]+/g) || []).forEach(function (r) { addI('Registry key', r.trim(), f); });
     (s.match(/(?:\b[A-Za-z]:|\\\\[\w.$-]+)\\[^\r\n"'<>|*?]*?\.(?:exe|dll|sys|ps1|bat|cmd|vbs|vbe|js|jse|wsf|hta|lnk|scr|msi|iso|img|cpl|jar|sct|aspx?|php|jsp|dmp|dit|docm|xlsm)\b/gi) || []).forEach(function (p) { addI('File', p, f); });
     var noUrls = s.replace(/\b(?:hxxps?|https?|ftp):\/\/[^\s"'<>]+/gi, ' ');
-    (noUrls.match(/\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}\b/g) || []).forEach(function (d) {
+    (noUrls.match(/(?:^|[^\/\\:@\w.-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}\b(?![!\w-])/g) || []).map(function (d) { return d.replace(/^[^a-z0-9]/, ''); }).forEach(function (d) {
       var tld = d.split('.').pop();
       if (FILEEXT.test(tld) || /^(system|microsoft|io|net|ws|mshtml|scrobj|comsvcs|wscript|shell32|kernel32)\./.test(d)) return;
       if (/^\d+(\.\d+)+$/.test(d)) return;
@@ -584,6 +607,44 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
   };
   $('aq').oninput = renderA; $('acat').onchange = renderA; renderA();
 
+  /* incidents */
+  var N = D.incidents || [];
+  $('n-n').textContent = N.length || '';
+  var fIndex = {}; F.forEach(function (f) { fIndex[f.Id + '|' + f.Entity] = f._i; });
+  var entLabel = function (k) { var p = String(k).split(':'); var kind = p.shift(); return '<span class="kind">' + esc({ file: 'file', user: 'account', ip: 'address' }[kind] || kind) + '</span> ' + esc(p.join(':')); };
+  $('nbox').innerHTML = N.length ? '<div class="tbl"><table><thead><tr><th>Incident</th><th>When</th><th>Severity</th><th>Stages</th><th>Involving</th><th>Findings</th></tr></thead><tbody>' + N.map(function (n) {
+    var s = dt(n.Start), e = dt(n.End);
+    var fl = (n.Findings || []).map(function (x) { var i = fIndex[x.Id + '|' + x.Entity]; return '<div>' + sevHtml(x.Severity).replace(/>\w+<\/span>$/, '></span>') + ' ' + (i === undefined ? esc(x.Title) : '<a href="#f' + i + '" data-open="' + i + '">' + esc(x.Title) + '</a>') + '</div>'; });
+    return '<tr><td class="nw"><b>' + esc(n.Id) + '</b><div class="small">' + esc(n.Count) + ' findings</div></td><td class="t">' + esc(fmt(s)) + (e && s && e - s > 60000 ? '<div class="small">to ' + esc(fmt(e)) + '</div>' : '') + '</td><td>' + sevHtml(n.Severity) + '</td><td>' +
+      esc((n.Tactics || []).join(' \u2192 ') || 'Other') + '</td><td>' + (n.Entities || []).slice(0, 5).map(function (k) { return '<div>' + entLabel(k) + '</div>'; }).join('') + '</td><td>' + fl.slice(0, 6).join('') + (fl.length > 6 ? '<div class="small">and ' + (fl.length - 6) + ' more</div>' : '') +
+      ((n.Links || []).length ? '<div class="small">Grouped by: ' + esc(n.Links.slice(0, 4).join('; ')) + '</div>' : '') + '</td></tr>';
+  }).join('') + '</tbody></table></div>' : '<div class="empty">No related findings to group. Single findings are listed under Findings.</div>';
+
+  /* execution evidence */
+  var E = (D.artifacts || []).map(function (a) { a._d = dt(a.Time); return a; });
+  $('n-e').textContent = D.artifactTotal || E.length || '';
+  if (D.artifactTotal > E.length) $('esub').textContent += ' Showing the newest ' + E.length + ' of ' + D.artifactTotal + '; all are in raw\\bundle.json.';
+  var pathSev = {};
+  var pkey = function (p) { return String(p || '').toLowerCase().replace(/^\(volume\)/, '').replace(/^[a-z]:/, ''); };
+  attackF.forEach(function (f) { var e = f.Evidence || {}; ['Path', 'Image', 'File', 'Target'].forEach(function (k) { if (e[k]) { var key = pkey(e[k]); if (!pathSev[key] || RANK[f.Severity] < RANK[pathSev[key].s]) pathSev[key] = { s: f.Severity, i: f._i }; } }); });
+  var eArts = [], eEvs = []; E.forEach(function (a) { if (eArts.indexOf(a.Artifact) < 0) eArts.push(a.Artifact); if (eEvs.indexOf(a.Evidence) < 0) eEvs.push(a.Evidence); });
+  eArts.sort(); eEvs.sort();
+  $('eart').innerHTML = '<option value="">All artifacts</option>' + eArts.map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('');
+  $('eev').innerHTML = '<option value="">All evidence</option>' + eEvs.map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('');
+  var eRows = function () {
+    var q = $('eq').value.toLowerCase(), ar = $('eart').value, ev = $('eev').value, fo = $('eflag').checked;
+    return E.filter(function (a) { return (!ar || a.Artifact === ar) && (!ev || a.Evidence === ev) && (!fo || pathSev[pkey(a.Path)]) && (!q || (a.Path + ' ' + a.User + ' ' + a.Sha1 + ' ' + a.Detail).toLowerCase().indexOf(q) >= 0); });
+  };
+  var renderE = function () {
+    if (!E.length) { $('ebox').innerHTML = '<div class="empty">No execution artifacts in this case (an older bundle, event logs only, or not collected).</div>'; return; }
+    var rows = eRows();
+    $('ebox').innerHTML = '<div class="tbl"><table><thead><tr><th></th><th>Time</th><th>Artifact</th><th>Path</th><th>User</th><th>Detail</th></tr></thead><tbody>' +
+      rows.slice(0, 1500).map(function (a) { var ps = pathSev[pkey(a.Path)]; return '<tr><td class="nw">' + (ps ? '<a href="#f' + ps.i + '" data-open="' + ps.i + '" title="' + esc(ps.s) + ' finding">' + sevHtml(ps.s) + '</a>' : '') + '</td><td class="t">' + (a._d ? esc(fmt(a._d)) : '<span class="muted">no time</span>') + (a.TimeKind ? '<div class="small">' + esc(a.TimeKind) + '</div>' : '') + '</td><td class="nw">' + esc(a.Artifact) + '<div class="small">' + esc(a.Evidence) + '</div></td><td class="m">' + esc(a.Path) + (a.Sha1 ? '<div class="small mono" title="SHA-1 ' + esc(a.Sha1) + '">sha1 ' + esc(String(a.Sha1).slice(0, 16)) + '\u2026</div>' : '') + '</td><td class="nw">' + esc(a.User || '') + '</td><td>' + esc(a.Detail || '') + '</td></tr>'; }).join('') +
+      '</tbody></table></div><div class="count">' + rows.length + ' of ' + E.length + ' shown' + (rows.length > 1500 ? '; first 1,500 rendered' : '') + '.</div>';
+  };
+  $('eq').oninput = renderE; $('eart').onchange = renderE; $('eev').onchange = renderE; $('eflag').onchange = renderE; renderE();
+  $('e-csv').onclick = function () { download('execution_' + (D.hostName || 'host') + '.csv', csv([['time_utc', 'time_meaning', 'artifact', 'evidence', 'path', 'user', 'sha1', 'detail', 'flag']].concat(eRows().map(function (a) { var ps = pathSev[pkey(a.Path)]; return [a.Time || '', a.TimeKind || '', a.Artifact, a.Evidence, a.Path, a.User || '', a.Sha1 || '', a.Detail || '', ps ? ps.s : '']; }))), 'text/csv'); };
+
   /* ATT&CK matrix + Navigator layer */
   var techMax = {}, techFind = {};
   F.forEach(function (f) { (f.Technique || []).forEach(function (t) { if (!TID.test(t)) return; if (techMax[t] === undefined || RANK[f.Severity] < RANK[techMax[t]]) techMax[t] = f.Severity; (techFind[t] = techFind[t] || []).push(f); }); });
@@ -624,7 +685,7 @@ footer{padding:26px 0 40px;color:var(--ink3);font-size:12.5px}
   /* section highlight in the top bar */
   var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
   var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); });
-  var onScroll = function () { var y = window.scrollY + 70, cur = 0; secs.forEach(function (s, i) { if (s && s.offsetTop <= y) cur = i; }); links.forEach(function (a, i) { a.classList.toggle('on', i === cur); }); };
+  var onScroll = function () { var y = window.scrollY + 70, cur = 0; secs.forEach(function (s, i) { if (s && s.offsetTop <= y) cur = i; }); links.forEach(function (a, i) { a.classList.toggle('on', i === cur); }); var nav = $('nav'), on = links[cur]; if (on && (on.offsetLeft < nav.scrollLeft || on.offsetLeft + on.offsetWidth > nav.scrollLeft + nav.clientWidth)) nav.scrollLeft = on.offsetLeft - 20; };
   window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
 })();
 </script>

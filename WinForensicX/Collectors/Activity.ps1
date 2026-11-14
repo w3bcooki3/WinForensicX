@@ -64,6 +64,14 @@ function Get-WfxRegKeyTime {
     return $null
 }
 
+function Get-WfxRegKeyObjectTime {
+    <# Last-write time (UTC) of an open Microsoft.Win32.RegistryKey, or $null. #>
+    param($Key)
+    if (-not $Key -or -not (Initialize-WfxRegTime)) { return $null }
+    try { $ft = [WfxRegTime]::LastWrite($Key.Handle.DangerousGetHandle()); if ($ft -gt 0) { return [DateTime]::FromFileTimeUtc($ft) } } catch { }
+    $null
+}
+
 function New-WfxActivity {
     param($Time, [string]$Category, [string]$Action, [string]$Target, [string]$Detail = '', [string]$Actor = '', [string]$Source = '')
     [pscustomobject]@{ Time = (ConvertTo-WfxUtcString $Time); Category = $Category; Action = $Action; Target = (Protect-WfxText $Target); Detail = (Protect-WfxText $(if ($Detail.Length -gt 600) { $Detail.Substring(0, 600) + ' …' } else { $Detail })); Actor = $Actor; Source = $Source }

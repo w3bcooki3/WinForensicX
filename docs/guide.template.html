@@ -167,9 +167,9 @@ footer{color:var(--slate);font-size:13.5px;border-top:1px solid var(--rule);padd
 
   ── Main menu ──────────────────────────────────
    <span class="key">1</span>  Investigate this computer  <span class="dim">triage and report</span>
-   <span class="key">2</span>  Explore this computer      <span class="dim">53 live views</span>
-   <span class="key">3</span>  Hunt &amp; analyze             <span class="dim">IOCs, files, payloads</span>
-   <span class="key">4</span>  Cases &amp; evidence           <span class="dim">reports, verify</span>
+   <span class="key">2</span>  Explore this computer      <span class="dim">57 live views</span>
+   <span class="key">3</span>  Hunt &amp; analyze             <span class="dim">IOCs, artifacts, files</span>
+   <span class="key">4</span>  Cases &amp; evidence           <span class="dim">reports, export, fleet</span>
    <span class="key">5</span>  Live monitor
    <span class="key">6</span>  Settings
    <span class="key">H</span>  Help &amp; guide
@@ -193,12 +193,12 @@ footer{color:var(--slate);font-size:13.5px;border-top:1px solid var(--rule);padd
   <p>Every task in this guide is labelled with the keys that reach it, like <span class="tag"><kbd>2</kbd><span class="sep">›</span><kbd>1</kbd><span class="sep">›</span><kbd>1</kbd></span>: Explore, Recent changes, Everything that changed. <kbd>B</kbd> goes back one level and <kbd>Q</kbd> quits from anywhere.</p>
   <table class="tbl">
     <tr><th>Key</th><th>Menu</th><th>Use it to</th></tr>
-    <tr><td><span class="tag"><kbd>1</kbd></span></td><td>Investigate</td><td>Run a quick or full triage of this computer, collect evidence only, triage remote computers over WinRM, analyze exported <code>.evtx</code> logs, or re-analyze a saved case. Produces the HTML report.</td></tr>
-    <tr><td><span class="tag"><kbd>2</kbd></span></td><td>Explore</td><td>Browse 53 live views in eight groups, from <em>Recent changes</em> to <em>Security posture</em>. Suspicious rows are flagged. <kbd>A</kbd> exports every view into one hashed inventory report.</td></tr>
-    <tr><td><span class="tag"><kbd>3</kbd></span></td><td>Hunt &amp; analyze</td><td>Sweep for IOCs, triage a file or a whole folder, decode encoded commands, and take or compare a file-integrity baseline.</td></tr>
-    <tr><td><span class="tag"><kbd>4</kbd></span></td><td>Cases &amp; evidence</td><td>Open a report or case folder, verify a case against its manifest, export a UTC timeline, compare two cases.</td></tr>
+    <tr><td><span class="tag"><kbd>1</kbd></span></td><td>Investigate</td><td>Run a quick or full triage of this computer, collect evidence only, triage remote computers over WinRM, analyze exported <code>.evtx</code> logs, re-analyze a saved case, or analyze a folder of evidence collected from another system. Produces the HTML report.</td></tr>
+    <tr><td><span class="tag"><kbd>2</kbd></span></td><td>Explore</td><td>Browse 57 live views in nine groups, from <em>Recent changes</em> and <em>Evidence of execution</em> to <em>Security posture</em>. Suspicious rows are flagged. <kbd>A</kbd> exports every view into one hashed inventory report.</td></tr>
+    <tr><td><span class="tag"><kbd>3</kbd></span></td><td>Hunt &amp; analyze</td><td>Sweep for IOCs, triage a file or a whole folder, decode encoded commands, take or compare a file-integrity baseline, and parse artifacts (hives, Jump Lists, shortcuts, browser history) from a folder.</td></tr>
+    <tr><td><span class="tag"><kbd>4</kbd></span></td><td>Cases &amp; evidence</td><td>Open a report or case folder, verify a case against its manifest, export a UTC timeline, compare two cases, export for Timesketch / Elastic / Splunk / MISP, and build a fleet report across many hosts.</td></tr>
     <tr><td><span class="tag"><kbd>5</kbd></span></td><td>Live monitor</td><td>Take a baseline, then report new suspicious processes, connections and beacons as they appear.</td></tr>
-    <tr><td><span class="tag"><kbd>6</kbd></span></td><td>Settings</td><td>Output folder, look-back windows, allowlist file and custom rule folder for this session.</td></tr>
+    <tr><td><span class="tag"><kbd>6</kbd></span></td><td>Settings</td><td>Output folder, look-back windows, allowlist file, custom rule folder, and Sigma and YARA rule folders for this session.</td></tr>
   </table>
   <p>Inside any view: <kbd>S</kbd> shows suspicious rows only, <kbd>F</kbd> filters by text, <kbd>L</kbd> lists every column, <kbd>G</kbd> opens the view as a sortable page in your browser, <kbd>E</kbd> saves it as CSV and <kbd>R</kbd> refreshes it.</p>
 </section>
@@ -234,7 +234,7 @@ footer{color:var(--slate);font-size:13.5px;border-top:1px solid var(--rule);padd
 
 <section id="cases">
   <h2>Investigations</h2>
-  <p class="lede">Seven situations investigators and CTF players meet most, each with the keys to press and what to look at first. The sample output is synthetic, produced by this version of the tool from planted test data.</p>
+  <p class="lede">Ten situations investigators and CTF players meet most, each with the keys to press and what to look at first. The sample output is synthetic, produced by this version of the tool from planted test data.</p>
 
   <div class="case" id="case-compromise">
     <h3>Is this PC compromised? <span class="tag"><kbd>1</kbd><span class="sep">›</span><kbd>1</kbd></span></h3>
@@ -272,7 +272,7 @@ Flag   Why                                              Time                 Act
       <img alt="The same timeline opened in a browser: severity badges in the first column, the reasons, ATT&amp;CK technique and rule ID beside each row, and a Suspicious only checkbox above the table." src="img/flagged-view.png" width="1180" height="520">
       <figcaption>Key <kbd>G</kbd> on the same view. Synthetic data.</figcaption>
     </figure>
-    <p class="next"><b>Then:</b> for a flagged program, triage the file itself with <span class="tag"><kbd>3</kbd><span class="sep">›</span><kbd>3</kbd></span>; for a flagged task or service, open <span class="tag"><kbd>2</kbd><span class="sep">›</span><kbd>5</kbd></span> Persistence.</p>
+    <p class="next"><b>Then:</b> for a flagged program, triage the file itself with <span class="tag"><kbd>3</kbd><span class="sep">›</span><kbd>3</kbd></span>; for a flagged task or service, open <span class="tag"><kbd>2</kbd><span class="sep">›</span><kbd>6</kbd></span> Persistence.</p>
   </div>
 
   <div class="case" id="case-deleted">
@@ -316,6 +316,39 @@ Flag   Why                                              Time                 Act
 <pre class="console"><span class="ps">PS&gt;</span> Invoke-WfxHunt -IocFile .\iocs.txt -FileScan
 <span class="ps">PS&gt;</span> Invoke-WfxTriage -ComputerName srv01,srv02 -Credential (Get-Credential)</pre>
     <p class="next"><b>Then:</b> for several machines, collect from each over WinRM with <span class="tag"><kbd>1</kbd><span class="sep">›</span><kbd>4</kbd></span> and hunt in the saved cases.</p>
+  </div>
+
+  <div class="case" id="case-ran">
+    <h3>Did this program ever run? <span class="tag"><kbd>2</kbd><span class="sep">›</span><kbd>2</kbd><span class="sep">›</span><kbd>1</kbd></span></h3>
+    <p class="when">A tool was used and deleted, or you need to prove a program ran, when and as whom.</p>
+    <p><em>Programs that ran or existed</em> merges every execution artifact Windows keeps: Amcache (with the program's SHA-1, publisher and first-seen time), ShimCache, Prefetch, BAM, UserAssist and, on Windows 11, the Program Compatibility Assistant. One program usually appears in several of them; the triage report joins them into one finding per file and lists where it was seen. These records stay after the program is deleted.</p>
+    <p>Flags point at attack and exfiltration tools (Mimikatz, PsExec, Rclone, MEGAsync...), programs in staging folders such as <code>Temp</code>, <code>Users\Public</code> or the root of <code>ProgramData</code>, and Windows program names in the wrong folder.</p>
+<pre class="console"><span class="ps">PS&gt;</span> Get-WfxArtifact -Artifact Amcache, Prefetch, ShimCache -Flag | Where-Object Flag | Format-Table Flag, Why, Path, Time
+<span class="ps">PS&gt;</span> Get-WfxArtifact -Artifact Amcache | Where-Object Sha1 -eq '<i>sha1 from a threat report</i>'</pre>
+    <p>Live Amcache is locked by Windows; the view says so. Copy <code>C:\Windows\appcompat\Programs\Amcache.hve</code> with a raw-copy tool (KAPE, FTK Imager) and parse the copy.</p>
+    <p class="next"><b>Then:</b> <em>Folders and files users opened</em> <span class="tag"><kbd>2</kbd><span class="sep">›</span><kbd>2</kbd><span class="sep">›</span><kbd>2</kbd></span> shows what the same user browsed and opened around that time, including USB drives and network shares.</p>
+  </div>
+
+  <div class="case" id="case-kape">
+    <h3>Evidence from another computer (KAPE, image, CTF) <span class="tag"><kbd>1</kbd><span class="sep">›</span><kbd>7</kbd></span></h3>
+    <p class="when">You have files, not the machine: a KAPE or Velociraptor collection, a mounted disk image, or the evidence folder of a forensics challenge.</p>
+    <p>Point the triage at the folder. Files are recognised by content, so renamed hives still work: <code>SYSTEM</code> (ShimCache, BAM, computer name), <code>SOFTWARE</code> (Windows version), <code>Amcache.hve</code>, <code>NTUSER.DAT</code> (UserAssist, RunMRU, typed paths, Explorer searches, ShellBags), <code>UsrClass.dat</code> (ShellBags), Jump Lists, <code>.lnk</code> files, Chromium <code>History</code> and Firefox <code>places.sqlite</code>, Prefetch, PCA and Defender logs, and every <code>.evtx</code> file. You get the same report as a live triage, with incidents, the attack path and an <em>Execution</em> section.</p>
+<pre class="console"><span class="ps">PS&gt;</span> Invoke-WfxTriage -ArtifactPath D:\kape\C -CaseName ctf-01
+<span class="ps">PS&gt;</span> Invoke-WfxHunt -IocFile .\iocs.txt -ArtifactPath D:\kape\C</pre>
+    <p>Hives copied from a running system are often "dirty". Copy each hive's <code>.LOG1</code> and <code>.LOG2</code> with it: the tool replays them in memory, and says so when it cannot. Nothing in the folder is changed.</p>
+    <p class="next"><b>Then:</b> run your Sigma rules over the event logs in the same folder with <code>-SigmaPath</code>, or scan the folder with your YARA rules with <code>-YaraRules</code>.</p>
+  </div>
+
+  <div class="case" id="case-fleet">
+    <h3>Many computers: where did it start? <span class="tag"><kbd>4</kbd><span class="sep">›</span><kbd>7</kbd></span></h3>
+    <p class="when">More than one host is involved and you need patient zero, the spread, and what the hosts have in common.</p>
+    <ol>
+      <li>Triage every host into the same folder: locally on each, or over WinRM with <span class="tag"><kbd>1</kbd><span class="sep">›</span><kbd>4</kbd></span>.</li>
+      <li>Build the fleet report. It ranks hosts by risk, orders them by their first attacker activity, lists indicators and findings that appear on two or more hosts, and shows the ATT&amp;CK stages seen on each.</li>
+      <li>Export what other teams need with <span class="tag"><kbd>4</kbd><span class="sep">›</span><kbd>6</kbd></span>: a Timesketch CSV for the timeline, ECS JSON lines for Elastic, Splunk or Sentinel, and a STIX 2.1 bundle of indicators for MISP or OpenCTI. Exports go next to the case, so the hashed case folder is not changed.</li>
+    </ol>
+<pre class="console"><span class="ps">PS&gt;</span> New-WfxFleetReport -Path E:\ir-cases
+<span class="ps">PS&gt;</span> Export-WfxCase -InputPath E:\ir-cases\WFX_PC-0412_20261107-140211Z -Format Stix, Ecs</pre>
   </div>
 
   <div class="case" id="case-handover">

@@ -1,0 +1,39 @@
+WinForensicX 3.0.0: evidence of execution, Sigma, YARA, incidents and exports
+
+Evidence of execution
+- New Get-WfxArtifact: Amcache (SHA-1, programs, drivers), ShimCache (Win7-11),
+  Prefetch, BAM, UserAssist, PCA, ShellBags, Jump Lists, shortcuts, RunMRU,
+  typed paths, Explorer searches, Chromium/Firefox downloads, Defender MPLog.
+- Live host or collected files (KAPE, Velociraptor, mounted image):
+  Invoke-WfxTriage -ArtifactPath, Invoke-WfxHunt -ArtifactPath.
+- Pure-PowerShell parsers for regf hives (with .LOG1/.LOG2 replay in memory),
+  compound files, shell links, shell items and SQLite. Nothing is loaded into
+  the registry or executed.
+- Artifact rules: offensive/exfil/RMM tools, masquerading, staging-folder
+  execution, vulnerable drivers, risky downloads, admin-share and USB access,
+  encoded arguments in shortcuts and Run history, Defender detections.
+
+Detection
+- Sigma rule support (-SigmaPath / WFX_SIGMA): modifiers, full conditions,
+  4688-to-Sysmon field mapping; 2,229 of 2,427 SigmaHQ Windows rules load,
+  the rest are reported as gaps with the reason.
+- Optional YARA via a user-installed yara executable (-YaraRules / WFX_YARA).
+- Incident grouping: findings linked by shared files, accounts and addresses
+  in time, with the reason for every link.
+
+Interop
+- Export-WfxCase: Timesketch CSV, ECS NDJSON, STIX 2.1 (validated), indicators.
+- New-WfxFleetReport: one offline report across many cases.
+
+Report, menu and docs
+- Report: Incidents and Evidence of execution sections.
+- Explore: new Evidence of execution group (57 views).
+- Menu entries for evidence folders, export, fleet, Sigma and YARA settings.
+- Guide: three new walk-throughs. README, CHANGELOG, SECURITY updated.
+
+Fixes
+- Collection gaps could be nested arrays in result.json.
+- Secret scrubbing about 10x faster on large collections.
+- Removed the obsolete tools/rules_lotl.py generator.
+
+Tests and the scenario suite are not updated in this push.

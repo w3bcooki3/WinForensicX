@@ -31,6 +31,7 @@ function Invoke-WfxTriage {
           • Offline (-EvtxPath)      — analyze exported event logs ONLY. Nothing is collected from the machine
                                        running the tool, so the analyst's workstation never contaminates the case.
           • Re-analyze (-InputPath)  — re-run analysis over a previously saved case/bundle (no collection).
+          • Artifacts (-ArtifactPath)— analyze a folder of collected files (hives, Jump Lists, .evtx, ...).
         Everything is read-only. Credential exposure is audited and REDACTED, never extracted.
     .PARAMETER OutputPath    Where the case folder is created (default: Desktop\WinForensicX). Prefer external media.
     .PARAMETER CaseName      Optional label folded into the case folder name.
@@ -41,7 +42,15 @@ function Invoke-WfxTriage {
     .PARAMETER Credential    Credential for the remote session.
     .PARAMETER EvtxPath      Folder or .evtx file to analyze offline.
     .PARAMETER InputPath     A previous case folder or bundle.json to re-analyze.
+    .PARAMETER ArtifactPath  A folder of evidence collected from another system (KAPE / Velociraptor output, a
+                             mounted image, CTF files): registry hives, Amcache, Jump Lists, .lnk, browser
+                             databases, Prefetch, PCA / Defender logs and .evtx files are found and parsed.
     .PARAMETER AllowlistPath JSON allowlist of known-good findings (default $env:WFX_ALLOWLIST).
+    .PARAMETER SigmaPath     Folder(s) of Sigma rules to run over the collected events too (default $env:WFX_SIGMA).
+    .PARAMETER YaraRules     YARA rule file(s) / folder(s) (default $env:WFX_YARA). Live: scans the programs that are
+                             running, autostart, recently executed and (-FileScan) the scanned files. -ArtifactPath:
+                             scans the evidence folder. Needs a yara executable you provide (-YaraExe / PATH).
+    .PARAMETER YaraExe       Path to yara64.exe / yara (default $env:WFX_YARA_EXE, then PATH).
     .PARAMETER Quiet         Suppress console output (results still written).
     .PARAMETER NoReport      Skip the HTML report (JSON/CSV still written).
     .PARAMETER PassThru      Return the result object(s).
@@ -53,6 +62,8 @@ function Invoke-WfxTriage {
         Invoke-WfxTriage -EvtxPath D:\evidence\logs -CaseName acme-ir
     .EXAMPLE
         Invoke-WfxTriage -InputPath 'C:\cases\WFX_host_20260101-000000Z' -AllowlistPath .\allow.json
+    .EXAMPLE
+        Invoke-WfxTriage -ArtifactPath D:\kape\C -CaseName ctf-challenge
     #>
     [CmdletBinding(DefaultParameterSetName = 'Local')]
     param(
@@ -65,7 +76,11 @@ function Invoke-WfxTriage {
         [Parameter(ParameterSetName = 'Remote')][System.Management.Automation.PSCredential]$Credential,
         [Parameter(ParameterSetName = 'Offline', Mandatory)][ValidateNotNullOrEmpty()][string]$EvtxPath,
         [Parameter(ParameterSetName = 'Reanalyze', Mandatory)][ValidateNotNullOrEmpty()][string]$InputPath,
+        [Parameter(ParameterSetName = 'Artifacts', Mandatory)][ValidateNotNullOrEmpty()][string]$ArtifactPath,
         [string]$AllowlistPath = $env:WFX_ALLOWLIST,
+        [string[]]$SigmaPath = @($env:WFX_SIGMA | Where-Object { $_ }),
+        [string[]]$YaraRules = @($env:WFX_YARA | Where-Object { $_ }),
+        [string]$YaraExe = '',
         [switch]$Quiet,
         [switch]$NoReport,
         [switch]$PassThru
@@ -73,7 +88,13 @@ function Invoke-WfxTriage {
 
     $script:WfxQuiet = [bool]$Quiet
     Write-WfxBanner
-    $params = @{ Hours = $Hours; FileScan = [bool]$FileScan; ExposureScan = [bool]$ExposureScan; Mode = $PSCmdlet.ParameterSetName; Allowlist = [string]$AllowlistPath }
+    $script:WfxSigmaEventQuery = @()
+    if (@($SigmaPath).Count) {
+        $sr = Get-WfxSigmaRuleSet -Path $SigmaPath
+        $extra = Set-WfxSigmaEventQuery -Rule $sr
+        Write-WfxConsole ("Sigma: {0} rule(s) loaded{1}" -f @($sr).Count, $(if ($extra) { "; collecting $extra extra event query(ies) they need" })) -Kind Dim
+    }
+    $params = @{ Hours = $Hours; FileScan = [bool]$FileScan; ExposureScan = [bool]$ExposureScan; Mode = $PSCmdlet.ParameterSetName; Allowlist = [string]$AllowlistPath; Sigma = (@($SigmaPath) -join '; '); Yara = (@($YaraRules) -join '; ') }
 
     # ── Re-analyze: no collection, just re-run analyzers over saved evidence ──
     if ($PSCmdlet.ParameterSetName -eq 'Reanalyze') {
@@ -88,7 +109,7 @@ function Invoke-WfxTriage {
         if (-not (Test-Path -LiteralPath $srcManifest)) { $srcManifest = Join-Path (Split-Path -Parent $src) 'manifest.json' }
         if (Test-Path -LiteralPath $srcManifest) { Add-WfxCaseSource -Path $srcManifest -Role 'source-manifest' }
         Copy-Item -LiteralPath $src -Destination (Join-Path (Join-Path $case.Path 'raw') 'bundle.json')
-        $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $hn -AllowlistPath $AllowlistPath
+        $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $hn -AllowlistPath $AllowlistPath -SigmaPath $SigmaPath
         Save-WfxResult -Result $result -Case $case -NoReport:$NoReport
         $null = Complete-WfxCase
         Write-WfxResultSummary -Result $result -Case $case
@@ -121,7 +142,7 @@ function Invoke-WfxTriage {
                 $rawPath = Join-Path (Join-Path $case.Path 'raw') 'bundle.json'
                 [IO.File]::WriteAllText($rawPath, [string]$json, (New-Object Text.UTF8Encoding($false)))
                 $bundle = [string]$json | ConvertFrom-Json
-                $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $cn -AllowlistPath $AllowlistPath
+                $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $cn -AllowlistPath $AllowlistPath -SigmaPath $SigmaPath
                 Save-WfxResult -Result $result -Case $case -NoReport:$NoReport
                 $null = Complete-WfxCase
                 Write-WfxResultSummary -Result $result -Case $case
@@ -129,7 +150,7 @@ function Invoke-WfxTriage {
             } catch {
                 Write-WfxConsole "  Failed on $cn`: $($_.Exception.Message)" -Kind Bad
                 Add-WfxGap -Source "remote:$cn" -Reason $_.Exception.Message -Fix 'Confirm WinRM is enabled (Enable-PSRemoting) and the account has access.'
-                Save-WfxJson -InputObject ([pscustomobject]@{ Host = $cn; Error = $_.Exception.Message; Gaps = @(Get-WfxGap) }) -Path (Join-Path $case.Path 'error.json')
+                Save-WfxJson -InputObject ([pscustomobject]@{ Host = $cn; Error = $_.Exception.Message; Gaps = @(Get-WfxGap | Expand-WfxRecord) }) -Path (Join-Path $case.Path 'error.json')
                 $null = Complete-WfxCase
             }
         }
@@ -148,7 +169,32 @@ function Invoke-WfxTriage {
         $case.Host = $bundle.HostName
         Save-WfxJson -InputObject $bundle -Path (Join-Path (Join-Path $case.Path 'raw') 'bundle.json') -Depth 12
         Write-WfxSection 'Analyzing'
-        $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $bundle.HostName -AllowlistPath $AllowlistPath
+        $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $bundle.HostName -AllowlistPath $AllowlistPath -SigmaPath $SigmaPath
+        Save-WfxResult -Result $result -Case $case -NoReport:$NoReport
+        $null = Complete-WfxCase
+        Write-WfxResultSummary -Result $result -Case $case
+        if ($PassThru) { return $result }
+        return
+    }
+
+    # ── Artifacts: a folder of files collected elsewhere ──
+    if ($PSCmdlet.ParameterSetName -eq 'Artifacts') {
+        if (-not (Test-Path -LiteralPath $ArtifactPath)) { throw "ArtifactPath not found: $ArtifactPath" }
+        $params.ArtifactPath = $ArtifactPath
+        $case = New-WfxCase -OutputPath $OutputPath -Name ($(if ($CaseName) { $CaseName } else { 'artifacts' })) -HostName 'offline' -Mode 'artifacts' -Parameters $params
+        Write-WfxSection 'Parsing collected artifacts'
+        $bundle = Get-WfxArtifactBundle -Path $ArtifactPath
+        Write-WfxConsole ("  {0} artifact records, {1} event-log file(s)" -f @($bundle.Artifacts).Count, @($bundle.Meta.EvtxFiles).Count) -Kind Dim
+        if (@($YaraRules).Count) {
+            Write-WfxConsole '  YARA scan of the evidence folder...' -Kind Dim
+            $bundle | Add-Member -NotePropertyName Yara -NotePropertyValue @(Invoke-WfxYaraScan -Rules $YaraRules -Folder @($ArtifactPath) -YaraExe $YaraExe | Expand-WfxRecord) -Force
+            $bundle.Gaps = @(Get-WfxGap | Expand-WfxRecord)
+        }
+        foreach ($f in @($bundle.Meta.EvtxFiles)) { Add-WfxCaseSource -Path $f -Role 'evtx' }
+        $case.Host = $bundle.HostName
+        Save-WfxJson -InputObject $bundle -Path (Join-Path (Join-Path $case.Path 'raw') 'bundle.json') -Depth 12
+        Write-WfxSection 'Analyzing'
+        $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $bundle.HostName -AllowlistPath $AllowlistPath -SigmaPath $SigmaPath
         Save-WfxResult -Result $result -Case $case -NoReport:$NoReport
         $null = Complete-WfxCase
         Write-WfxResultSummary -Result $result -Case $case
@@ -167,10 +213,17 @@ function Invoke-WfxTriage {
 
     Write-WfxSection 'Collecting'
     $bundle = Get-WfxCollectionBundle -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan
+    if (@($YaraRules).Count) {
+        $targets = @(@($bundle.Process | ForEach-Object { $_.Path }) + @($bundle.Persistence | ForEach-Object { $_.Path }) + @($bundle.Files | ForEach-Object { $_.Path }) +
+            @($bundle.Artifacts | Where-Object { $_.Evidence -in 'Execution', 'Download' -and $_.Path -match '^[A-Za-z]:\\' } | ForEach-Object { $_.Path }) | Where-Object { $_ } | Sort-Object -Unique)
+        Write-WfxConsole ("  YARA scan of {0} file path(s)..." -f $targets.Count) -Kind Dim
+        $bundle | Add-Member -NotePropertyName Yara -NotePropertyValue @(Invoke-WfxYaraScan -Rules $YaraRules -Target $targets -YaraExe $YaraExe -ListDir (Join-Path $case.Path 'raw') | Expand-WfxRecord) -Force
+        $bundle.Gaps = @(Get-WfxGap | Expand-WfxRecord)
+    }
     Save-WfxJson -InputObject $bundle -Path (Join-Path (Join-Path $case.Path 'raw') 'bundle.json') -Depth 12
 
     Write-WfxSection 'Analyzing'
-    $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $hn -AllowlistPath $AllowlistPath
+    $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $hn -AllowlistPath $AllowlistPath -SigmaPath $SigmaPath
 
     Save-WfxResult -Result $result -Case $case -NoReport:$NoReport
     $null = Complete-WfxCase

@@ -19,6 +19,23 @@ Side effects you should know about, as for any live-response tool:
 - Running PowerShell itself creates artifacts: process creation, Prefetch, and, if script-block logging is
   on, 4104 events containing this tool's code.
 
+## Artifacts, Sigma and YARA (3.0)
+
+- **Registry hives** (live `NTUSER.DAT` / `UsrClass.dat` of logged-off users, and every hive under `-ArtifactPath`)
+  are read as files with read/write sharing and parsed in memory. They are never loaded into the registry
+  (`reg load`), and transaction logs are replayed only in memory; the files are not modified.
+- **Browser databases** (`History`, `places.sqlite`) are copied into memory with sharing and only the
+  download tables are read: no cookies, saved logins, form data or browsing history.
+- **Jump Lists, shortcuts, PCA and Defender logs** are read as bytes or text; shortcuts are never resolved
+  or opened.
+- **Sigma rules** are parsed as data (a small YAML reader written for this purpose); nothing in a rule is
+  executed.
+- **YARA** runs only when you pass rules (`-YaraRules` / `WFX_YARA`) and only with a `yara` executable you
+  installed (`-YaraExe`, `WFX_YARA_EXE` or PATH). YARA reads the files it scans. The list of scanned files is
+  written to `raw\yara-scan-list.txt` inside the case folder as a record; nothing is written elsewhere.
+- **Exports** (`Export-WfxCase`, `New-WfxFleetReport`) write next to the case folder, never into it, so a
+  closed case still verifies.
+
 ## Network behaviour
 
 The tool sends **no network traffic of its own** during local triage. It performs no reverse-DNS lookups,

@@ -16,6 +16,9 @@
         Override the host label (defaults to the bundle's HostName).
     .PARAMETER AllowlistPath
         JSON allowlist of known-good findings to suppress (see Read-WfxAllowlist). Defaults to $env:WFX_ALLOWLIST.
+    .PARAMETER SigmaPath
+        Folder(s) or file(s) of Sigma rules (YAML) to run over the collected events as well. Defaults to
+        $env:WFX_SIGMA. Rules for data the tool does not collect are skipped and counted as a gap.
     .OUTPUTS
         [pscustomobject] winforensicx.result/2
     .EXAMPLE
@@ -25,14 +28,16 @@
     param(
         [Parameter(Mandatory, ValueFromPipeline)]$Bundle,
         [string]$HostName = '',
-        [string]$AllowlistPath = $env:WFX_ALLOWLIST
+        [string]$AllowlistPath = $env:WFX_ALLOWLIST,
+        [string[]]$SigmaPath = @($env:WFX_SIGMA | Where-Object { $_ })
     )
 
     process {
         if ($Bundle -is [string]) { $Bundle = Read-WfxBundle -Path $Bundle }
         if (-not $HostName) { $HostName = [string](Get-WfxValue $Bundle 'HostName' ([Environment]::MachineName)) }
         $gaps = New-Object System.Collections.Generic.List[object]
-        foreach ($g in @(Get-WfxValue $Bundle 'Gaps' @())) { if ($g) { $gaps.Add($g) } }
+        # Older bundles stored the gap list nested one level deep; flatten it.
+        foreach ($g in @(@(Get-WfxValue $Bundle 'Gaps' @()) | Expand-WfxRecord | Expand-WfxRecord)) { if ($g -and $g.PSObject.Properties['Source']) { $gaps.Add($g) } }
 
         $all = New-Object System.Collections.Generic.List[object]
         $run = {
@@ -53,18 +58,25 @@
         & $run 'dns'         { Invoke-WfxDnsAnalyzer         -DnsEntry   $dns                                      -HostName $HostName }
         & $run 'persistence' { Invoke-WfxPersistenceAnalyzer -Autostart  @(Get-WfxValue $Bundle 'Persistence' @()) -HostName $HostName }
         & $run 'events'      { Invoke-WfxEventAnalyzer       -Event      $events                                   -HostName $HostName }
+        if (@($SigmaPath).Count) {
+            & $run 'sigma' { $sr = Get-WfxSigmaRuleSet -Path $SigmaPath; Invoke-WfxSigmaAnalyzer -Event $events -Rule $sr -HostName $HostName }
+        }
         $activity = @(Get-WfxValue $Bundle 'Activity' @())
         & $run 'activity'    { Invoke-WfxActivityAnalyzer    -Activity   $activity                                 -HostName $HostName }
         & $run 'files'       { Invoke-WfxFileAnalyzer        -File       @(Get-WfxValue $Bundle 'Files' @())       -HostName $HostName }
         & $run 'exposure'    { Invoke-WfxExposureAnalyzer    -Exposure   @(Get-WfxValue $Bundle 'Exposure' @())    -HostName $HostName }
         & $run 'posture'     { Invoke-WfxPostureAnalyzer     -Posture    (Get-WfxValue $Bundle 'Security' $null)   -HostName $HostName }
+        $yara = @(Get-WfxValue $Bundle 'Yara' @())
+        if ($yara.Count) { & $run 'yara' { Invoke-WfxYaraAnalyzer -Hit $yara -HostName $HostName } }
+        $artifacts = @(Get-WfxValue $Bundle 'Artifacts' @())
+        & $run 'artifacts'   { Invoke-WfxArtifactAnalyzer    -Artifacts  $artifacts                                -HostName $HostName }
         $ransom = Get-WfxValue $Bundle 'Ransom' $null
         if ($ransom) {
             & $run 'ransomware' { Invoke-WfxRansomwareAnalyzer -Note @(Get-WfxValue $ransom 'Note' @()) -RecentFile @(Get-WfxValue $ransom 'RecentFile' @()) -HostName $HostName }
         }
 
         # Gaps raised while loading rules / analyzing (custom-pack parse errors, rejected rules) belong to this result.
-        foreach ($g in @(Get-WfxGap)) { if ($g -and -not ($gaps | Where-Object { $_.Source -eq $g.Source -and $_.Reason -eq $g.Reason })) { $gaps.Add($g) } }
+        foreach ($g in @(Get-WfxGap | Expand-WfxRecord)) { if ($g -and -not ($gaps | Where-Object { $_.Source -eq $g.Source -and $_.Reason -eq $g.Reason })) { $gaps.Add($g) } }
 
         $merged = Merge-WfxFinding -Finding $all.ToArray()
         $allow = @()
@@ -99,7 +111,10 @@
             Suppressed     = @($split.Suppressed)
             Activity       = @($activity | Sort-Object { [string]$_.Time } -Descending | Select-Object -First 3000)
             ActivityTotal  = $activity.Count
+            Artifacts      = @($artifacts | Sort-Object { [string]$_.Time } -Descending | Select-Object -First 5000)
+            ArtifactTotal  = $artifacts.Count
             AttackCoverage = @($coverage)
+            Incidents      = @(Get-WfxIncident -Finding $findings | Expand-WfxRecord)
             Gaps           = @($gaps.ToArray())
             Meta           = (Get-WfxValue $Bundle 'Meta' $null)
         }
