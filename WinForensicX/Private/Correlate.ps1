@@ -75,9 +75,17 @@ function Get-WfxIncident {
         $entCount = @{}; foreach ($m in $members) { foreach ($k in $ent[$m]) { $entCount[$k] = 1 + [int]$entCount[$k] } }
         $topEnt = @($entCount.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 6 | ForEach-Object Key)
         $sevName = @('Info', 'Low', 'Medium', 'High', 'Critical')[$maxSev]
+        # Likely starting point: the earliest finding at the earliest attack stage present (delivery before
+        # execution before everything else). It is a lead for where to look first, not a proven root cause.
+        $entry = $null
+        foreach ($stage in 'Initial Access', 'Execution') {
+            $hit = @($members | Where-Object { $m = $_; @($fs[$m].Technique | ForEach-Object { $x = Get-WfxAttackTechnique $_; if ($x) { $x.Tactic } }) -contains $stage } | Select-Object -First 1)
+            if ($hit) { $entry = [pscustomobject]@{ Id = $fs[$hit[0]].Id; Title = $fs[$hit[0]].Title; Entity = $fs[$hit[0]].Entity; Why = "earliest $($stage.ToLowerInvariant()) finding in the incident" }; break }
+        }
+        if (-not $entry) { $m0 = $members[0]; $entry = [pscustomobject]@{ Id = $fs[$m0].Id; Title = $fs[$m0].Title; Entity = $fs[$m0].Entity; Why = 'earliest finding in the incident' } }
         [pscustomobject]@{
             Severity = $sevName; Start = (ConvertTo-WfxUtcString $t[$members[0]]); End = (ConvertTo-WfxUtcString $t[$members[-1]])
-            Tactics = $tactics; Entities = $topEnt; Count = $members.Count
+            Tactics = $tactics; Entities = $topEnt; Count = $members.Count; Entry = $entry
             Score = [Math]::Round(($members | ForEach-Object { [double]$fs[$_].Score } | Measure-Object -Sum).Sum, 1)
             Findings = @($members | ForEach-Object { [pscustomobject]@{ Id = $fs[$_].Id; Title = $fs[$_].Title; Severity = $fs[$_].Severity; Time = $fs[$_].Time; Entity = $fs[$_].Entity } })
             Links = @($why.Keys | Where-Object { $p = $_ -split '\|'; [int]$p[0] -in $members } | ForEach-Object { $why[$_] } | Select-Object -Unique)

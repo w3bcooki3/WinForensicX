@@ -2,7 +2,7 @@
 # Compatible with Windows PowerShell 5.1 and PowerShell 7+. Analysis helpers here are
 # platform-neutral so analyzers can run (and be tested) on any OS.
 
-$script:WfxVersion = '3.0.0'
+$script:WfxVersion = '3.2.0'
 $script:WfxSeverities = @('Info', 'Low', 'Medium', 'High', 'Critical')
 $script:WfxSeverityWeight = @{ Info = 0; Low = 2; Medium = 5; High = 10; Critical = 20 }
 $script:WfxConfidenceFactor = @{ Low = 0.5; Medium = 0.8; High = 1.0 }

@@ -1,55 +1,40 @@
-﻿# Shared "Beacon" design system for the HTML report and guide, so they look like one product.
-# Decision-first, high-readability: light by default, full dark theme, system fonts (self-contained/offline).
+﻿# Shared look for the HTML pages that are built in PowerShell (the in-tool help page): the same tokens,
+# masthead and mark as the case report, fleet report and Explore views, so they read as one product.
+# System fonts only (self-contained / offline). Light by default, full dark theme.
+
+function Get-WfxMarkSvg {
+    <# The WinForensicX mark (evidence-photo frame, X, lens) as inline SVG. #>
+    param([string]$Class = '', [string]$Lens = 'var(--band)')
+    '<svg class="' + $Class + '" viewBox="0 0 64 64" aria-hidden="true"><path d="M6 20V6h14M44 6h14v14M58 44v14H44M20 58H6V44" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="square"/><path d="M20 20l24 24M44 20L20 44" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="32" cy="32" r="9" fill="' + $Lens + '" stroke="currentColor" stroke-width="5"/><circle cx="32" cy="32" r="3" fill="currentColor"/></svg>'
+}
 
 function Get-WfxThemeCss {
     @'
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+*,*::before,*::after{box-sizing:border-box;font-variant-ligatures:none;font-feature-settings:"calt" 0,"liga" 0,"clig" 0}
 :root{
-  --bg:#f6f7f9;--card:#ffffff;--card2:#fcfcfe;--ink:#0f1623;--ink2:#1f2a3a;--dim:#5b6676;--faint:#8a94a4;
-  --line:#e7eaef;--line2:#dfe3ea;--acc:#4f46e5;--acc2:#eef0fe;
-  --crit:#e11d48;--high:#ea580c;--med:#d97706;--low:#2563eb;--info:#64748b;--ok:#15a06b;
-  --sans:"Inter","Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
-  --mono:ui-monospace,"SFMono-Regular","SF Mono",Menlo,Consolas,monospace;
-  --sh:0 1px 2px rgba(11,24,48,.04),0 8px 24px -14px rgba(11,24,48,.13);
-  --sh2:0 2px 4px rgba(11,24,48,.06),0 16px 38px -18px rgba(11,24,48,.2);
-  --r:14px;
+  --page:#FFFFFF;--alt:#F5F6F8;--ink:#17202C;--ink2:#4E5967;--ink3:#7B8591;--line:#D3D8DE;--line2:#E6E9ED;--link:#0B57A4;
+  --band:#14233A;--band-ink:#F1F4F8;--band-dim:#A9B6C6;
+  --crit:#9B1C1C;--high:#C2410C;--med:#A16207;--low:#2B6CB0;--info:#6B7280;
+  --sans:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --mono:"Cascadia Mono","Cascadia Code",Consolas,"SF Mono",Menlo,monospace;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
-  --bg:#0a0c10;--card:#12151d;--card2:#161a24;--ink:#e9edf3;--ink2:#ffffff;--dim:#95a0b0;--faint:#667183;
-  --line:#20262f;--line2:#2c3340;--acc:#7c83ff;--acc2:#1a1f38;
-  --crit:#ff4766;--high:#ff9340;--med:#ffd24a;--low:#5e8fff;--info:#7d8798;--ok:#2ee6a6;
-  --sh:0 1px 2px rgba(0,0,0,.3),0 10px 26px -16px rgba(0,0,0,.6);
-  --sh2:0 2px 6px rgba(0,0,0,.4),0 18px 40px -20px rgba(0,0,0,.7);
-}}
-:root[data-theme=dark]{
-  --bg:#0a0c10;--card:#12151d;--card2:#161a24;--ink:#e9edf3;--ink2:#ffffff;--dim:#95a0b0;--faint:#667183;
-  --line:#20262f;--line2:#2c3340;--acc:#7c83ff;--acc2:#1a1f38;
-  --crit:#ff4766;--high:#ff9340;--med:#ffd24a;--low:#5e8fff;--info:#7d8798;--ok:#2ee6a6;
-  --sh:0 1px 2px rgba(0,0,0,.3),0 10px 26px -16px rgba(0,0,0,.6);
-  --sh2:0 2px 6px rgba(0,0,0,.4),0 18px 40px -20px rgba(0,0,0,.7);
-}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--page:#14181D;--alt:#1A1F25;--ink:#E3E7EC;--ink2:#A4AEBA;--ink3:#7D8793;--line:#333B45;--line2:#262D35;--link:#7CB1EC;--band:#0D141D;--crit:#F07171;--high:#F59056;--med:#E2B04A;--low:#7FB0E6;--info:#9AA3AE}}
+:root[data-theme=dark]{--page:#14181D;--alt:#1A1F25;--ink:#E3E7EC;--ink2:#A4AEBA;--ink3:#7D8793;--line:#333B45;--line2:#262D35;--link:#7CB1EC;--band:#0D141D;--crit:#F07171;--high:#F59056;--med:#E2B04A;--low:#7FB0E6;--info:#9AA3AE}
 html{-webkit-text-size-adjust:100%}
-body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;
-  letter-spacing:-.01em;-webkit-font-smoothing:antialiased}
-.mono{font-family:var(--mono)}
-a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{font-weight:700;letter-spacing:-.02em}
-kbd{font-family:var(--mono);font-size:.82em;background:var(--card2);border:1px solid var(--line2);
-  border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:var(--ink2)}
-::selection{background:var(--acc);color:#fff}
-.bg-Critical{background:var(--crit)}.bg-High{background:var(--high)}.bg-Medium{background:var(--med)}.bg-Low{background:var(--low)}.bg-Info{background:var(--info)}
-.fg-Critical{color:var(--crit)}.fg-High{color:var(--high)}.fg-Medium{color:var(--med)}.fg-Low{color:var(--low)}.fg-Info{color:var(--info)}
-/* top bar (shared) */
-.bar{display:flex;align-items:center;gap:13px;margin-bottom:24px}
-.bz{width:34px;height:34px;border-radius:10px;background:var(--acc);color:#fff;display:grid;place-items:center;
-  font-weight:800;box-shadow:0 6px 16px -6px var(--acc);flex:none}
-.bn{font-weight:750;font-size:16px;letter-spacing:-.02em}.bn span{color:var(--faint);font-weight:500;font-size:12.5px;margin-left:7px}
-.bar .sp{flex:1}
-.chip{font-size:13px;color:var(--ink2);background:var(--card);border:1px solid var(--line2);border-radius:9px;
-  padding:7px 12px;box-shadow:var(--sh);white-space:nowrap}
-.chip b{color:var(--acc)}
-.gbtn{font-size:13px;color:var(--dim);background:var(--card);border:1px solid var(--line2);border-radius:9px;
-  padding:7px 13px;cursor:pointer;box-shadow:var(--sh)}
-.gbtn:hover{color:var(--ink2);border-color:var(--acc)}
+body{margin:0;background:var(--page);color:var(--ink);font:14.5px/1.55 var(--sans)}
+a{color:var(--link);text-decoration:none}a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+h1,h2,h3{margin:0;font-weight:600}
+.mono{font-family:var(--mono);font-size:12.5px}
+.mast{background:var(--band);color:var(--band-ink)}
+.mast .in{max-width:960px;margin:0 auto;padding:16px 24px 26px}
+.brandrow{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--band-dim)}
+.brandrow svg{width:22px;height:22px;color:var(--band-ink)}
+.brandrow b{color:var(--band-ink);font-weight:600;font-size:14px}
+.brandrow .tools{margin-left:auto}
+.mbtn{font:inherit;font-size:12.5px;color:var(--band-ink);background:transparent;border:1px solid rgba(255,255,255,.28);border-radius:3px;padding:3px 10px;cursor:pointer}
+.mbtn:hover{border-color:rgba(255,255,255,.6)}
+.mast h1{font-size:30px;line-height:1.15;margin-top:26px}
+.mast p{color:var(--band-dim);margin:8px 0 0;max-width:72ch}
 '@
 }

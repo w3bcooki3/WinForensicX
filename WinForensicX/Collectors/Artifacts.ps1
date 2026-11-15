@@ -735,6 +735,12 @@ function Get-WfxArtifactData {
         if ($h) { & $add (Get-WfxAmcacheRecord -Hive $h -Source $am) }
         else { Add-WfxGap -Source 'Amcache' -Reason 'Amcache.hve is locked by Windows. Copy it with a raw-copy tool (KAPE, FTK Imager) and analyze the copy: Invoke-WfxTriage -ArtifactPath <folder>.' }
     }
+    # SRUM: the SRUM service keeps its database open; try, and say how to get it if locked.
+    $sru = Join-Path $env:SystemRoot 'System32\sru\SRUDB.dat'
+    if (Test-Path -LiteralPath $sru) {
+        try { & $add (Get-WfxSrumRecord -Path $sru) }
+        catch { Add-WfxGap -Source 'SRUM' -Reason "SRUDB.dat could not be read ($($_.Exception.Message)). Copy it with a raw-copy tool (KAPE, FTK Imager) and analyze the copy: Invoke-WfxTriage -ArtifactPath <folder>." }
+    }
     # PCA (Windows 11 22H2+)
     foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $env:SystemRoot 'appcompat\pca') -Filter 'Pca*.txt' -File -ErrorAction SilentlyContinue)) { & $add (Get-WfxPcaRecord -Path $f.FullName) }
     # Defender support logs
@@ -807,12 +813,142 @@ function Get-WfxPrefetchRecord {
 }
 
 # ───────────────────────────── collection: files from another system ─────────────────────────────
+function ConvertFrom-WfxSidBytes {
+    <# Binary SID -> S-1-5-21-... text. #>
+    param([byte[]]$B)
+    if (-not $B -or $B.Length -lt 8) { return '' }
+    $n = $B[1]; if ($B.Length -lt 8 + 4 * $n) { return '' }
+    $auth = 0L; for ($i = 2; $i -lt 8; $i++) { $auth = ($auth -shl 8) -bor $B[$i] }
+    $s = "S-$($B[0])-$auth"
+    for ($i = 0; $i -lt $n; $i++) { $s += '-' + [BitConverter]::ToUInt32($B, 8 + 4 * $i) }
+    $s
+}
+
+function Get-WfxSrumRecord {
+    <#
+    .SYNOPSIS Artifact records from SRUM (System Resource Usage Monitor, C:\Windows\System32\sru\SRUDB.dat): for
+    each program and account, the network bytes sent and received and the disk bytes read and written, as
+    Windows recorded them hour by hour for about 30 to 60 days. One row per program, account and table.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    $db = Open-WfxEse -Path $Path
+    $ids = @{}
+    foreach ($r in (Get-WfxEseTable $db 'SruDbIdMapTable' -Column 'IdType', 'IdIndex', 'IdBlob')) {
+        $blob = $r['IdBlob']; if ($null -eq $r['IdIndex']) { continue }
+        $v = if ($blob -is [byte[]]) {
+            if ([int]$r['IdType'] -eq 3) { ConvertFrom-WfxSidBytes $blob } else { [Text.Encoding]::Unicode.GetString($blob, 0, $blob.Length - ($blob.Length % 2)).TrimEnd([char]0) }
+        } else { [string]$blob }
+        $ids[[int]$r['IdIndex']] = $v
+    }
+    $app = {
+        param($id)
+        $s = [string]$ids[[int]$id]
+        if (-not $s) { return "(unnamed app $id)" }
+        $s -replace '(?i)^\\device\\harddiskvolume\d+\\', '(volume)\'
+    }
+    $mb = { param([double]$x) if ($x -ge 1GB) { '{0:n1} GB' -f ($x / 1GB) } elseif ($x -ge 1MB) { '{0:n1} MB' -f ($x / 1MB) } else { '{0:n0} KB' -f ($x / 1KB) } }
+    $tables = @(
+        @{ Guid = '{973F5D5C-1D90-4944-BE8E-24B94231A174}'; Kind = 'Network'; A = 'BytesSent'; B = 'BytesRecvd' },
+        @{ Guid = '{D10CA2FE-6FCF-4F6D-848E-B2E99266FA89}'; Kind = 'Resources'; A = 'ForegroundBytesWritten'; A2 = 'BackgroundBytesWritten'; B = 'ForegroundBytesRead'; B2 = 'BackgroundBytesRead' })
+    foreach ($tb in $tables) {
+        if (-not $db.Tables.ContainsKey($tb.Guid)) { continue }
+        $agg = @{}
+        $cols = @('AppId', 'UserId', 'TimeStamp', $tb.A, $tb.B) + @(@($tb.A2, $tb.B2) | Where-Object { $_ })
+        foreach ($r in (Get-WfxEseTable $db $tb.Guid -Column $cols)) {
+            $k = "$($r['AppId'])|$($r['UserId'])"
+            if (-not $agg.ContainsKey($k)) { $agg[$k] = [pscustomobject]@{ App = $r['AppId']; User = $r['UserId']; A = 0.0; B = 0.0; First = $null; Last = $null; Hours = 0 } }
+            $g = $agg[$k]
+            $g.A += [double]$r[$tb.A] + $(if ($tb.A2) { [double]$r[$tb.A2] } else { 0 })
+            $g.B += [double]$r[$tb.B] + $(if ($tb.B2) { [double]$r[$tb.B2] } else { 0 })
+            $ts = $r['TimeStamp']
+            if ($ts -is [datetime]) { if (-not $g.First -or $ts -lt $g.First) { $g.First = $ts }; if (-not $g.Last -or $ts -gt $g.Last) { $g.Last = $ts } }
+            $g.Hours++
+        }
+        foreach ($g in $agg.Values) {
+            $path = & $app $g.App
+            $user = [string]$ids[[int]$g.User]
+            $detail = if ($tb.Kind -eq 'Network') { "network: $(& $mb $g.A) sent, $(& $mb $g.B) received in $($g.Hours) hourly records" } else { "disk: $(& $mb $g.A) written, $(& $mb $g.B) read in $($g.Hours) hourly records" }
+            if ($g.First) { $detail += " since $(ConvertTo-WfxUtcString $g.First)" }
+            $extra = [ordered]@{ Table = $tb.Kind; FirstSeen = (ConvertTo-WfxUtcString $g.First); Hours = $g.Hours }
+            if ($tb.Kind -eq 'Network') { $extra.BytesSent = [long]$g.A; $extra.BytesReceived = [long]$g.B } else { $extra.BytesWritten = [long]$g.A; $extra.BytesRead = [long]$g.B }
+            New-WfxArtifact -Artifact 'SRUM' -Time $g.Last -TimeKind 'Last hour recorded' -Evidence 'Execution' -Path $path -User $user -Detail $detail -Source $Path -Extra ([pscustomobject]$extra)
+        }
+    }
+}
+
+function Get-WfxMftArtifactRecord {
+    <#
+    .SYNOPSIS Artifact records from a copied $MFT: executables, scripts, archives, disk images and shortcuts in
+    folders users can write to (including deleted ones), every file with a Zone.Identifier (downloaded),
+    and every executable or script whose timestamps look rewritten (timestomped). Not every file, which would
+    be millions of rows.
+    .PARAMETER Volume  Drive letter to show (default: taken from a KAPE-style ...\C\$MFT path, else "(volume)").
+    #>
+    param([Parameter(Mandatory)][string]$Path, [string]$Volume = '', [int]$Max = 20000)
+    if (-not $Volume) { $Volume = if ($Path -match '(?i)[\\/]([A-Z])[\\/]\$MFT$') { "$($Matches[1].ToUpperInvariant()):" } else { '(volume)' } }
+    $exeRx = '(?i)\.(?:exe|dll|sys|scr|com|cpl|ps1|psm1|bat|cmd|vbs|vbe|js|jse|wsf|hta|lnk|msi|iso|img|vhdx?|zip|rar|7z|jar)$'
+    $userRx = '(?i)^\\(?:Users|ProgramData\\[^\\]+$|ProgramData\\(?!Microsoft\\|Package Cache\\)|PerfLogs|\$Recycle\.Bin|Windows\\Temp|Temp|Intel|Recovery)\\|^\\[^\\]+$|^\\\[Orphaned\]\\'
+    $quiet = '(?i)^\\Users\\[^\\]+\\AppData\\Local\\(?:Microsoft\\(?:Windows\\INetCache|OneDrive|Edge|Teams|WindowsApps)|Packages|Google\\Chrome\\User Data\\[^\\]+\\(?:Code Cache|Service Worker))\\'
+    $pre = {
+        param($b)
+        if ($b.IsDir) { return $false }
+        if ($b.Zone) { return $true }
+        $nm = $b.FN.Name
+        if ($nm -notmatch $exeRx) { return $false }
+        $true
+    }
+    $entries = @(Read-WfxMft -Path $Path -Prefilter $pre)
+    # Timestomp candidates. Windows Setup, updates and installers legitimately write files with backdated,
+    # whole-second times (they keep the times of the build), so this is only checked where attackers drop
+    # tools (folders users can write to), never in System Restore copies. An installer unpacks many such
+    # files into one folder within a minute; five or more backdated programs in one folder and minute are
+    # treated as an installer. A handful (an attacker's toolkit, even with identical copied times) is not.
+    $codeRx = '(?i)\.(?:exe|dll|sys|scr|com|cpl|ps1|psm1|bat|cmd|vbs|vbe|js|jse|wsf|hta)$'
+    $tsOf = @{}; $byDirMin = @{}
+    $dirMin = { param($e) ($e.Path -replace '\\[^\\]*$', '') + '|' + $e.FNCreated.ToString('yyyyMMddHHmm') }
+    foreach ($e in $entries) {
+        if ($e.Name -notmatch $codeRx -or -not $e.FNCreated -or $e.Path -notmatch $userRx -or $e.Path -match '(?i)^\\System Volume Information\\') { continue }
+        # Boot files at the volume root are written by Setup with build times.
+        if ($e.Path -match '(?i)^\\(?:ntldr|ntdetect\.com|bootmgr|io\.sys|msdos\.sys|bootsect\.bak|autoexec\.bat|config\.sys|BOOTNXT)$') { continue }
+        $ts = Test-WfxMftTimestomp $e
+        if (-not $ts) { continue }
+        $tsOf[$e.Number] = $ts
+        $dk = & $dirMin $e; $byDirMin[$dk] = 1 + [int]$byDirMin[$dk]
+    }
+    $n = 0
+    foreach ($e in $entries) {
+        $ts = $null
+        if ($tsOf.ContainsKey($e.Number) -and $byDirMin[(& $dirMin $e)] -lt 5) { $ts = $tsOf[$e.Number] }
+        $userPath = $e.Path -match $userRx -and $e.Path -notmatch $quiet -and $e.Path -notmatch '(?i)^\\System Volume Information\\'
+        if (-not ($e.Zone -or $ts -or $userPath)) { continue }
+        if (++$n -gt $Max) { Add-WfxGap -Source "artifacts:$Path" -Reason "More than $Max interesting `$MFT entries; the rest were not listed." -Fix 'Filter the $MFT with a dedicated tool (MFTECmd) for a full listing.'; break }
+        $url = ''; $zoneId = ''
+        if ($e.Zone) {
+            if ($e.Zone -match '(?im)^\s*ZoneId\s*=\s*(\d)') { $zoneId = $Matches[1] }
+            if ($e.Zone -match '(?im)^\s*HostUrl\s*=\s*(\S+)') { $url = $Matches[1] } elseif ($e.Zone -match '(?im)^\s*ReferrerUrl\s*=\s*(\S+)') { $url = $Matches[1] }
+        }
+        $bits = New-Object System.Collections.Generic.List[string]
+        if (-not $e.InUse) { $bits.Add('deleted') }
+        if ($null -ne $e.Size) { $bits.Add("$($e.Size) bytes") }
+        if ($zoneId) { $bits.Add("downloaded (zone $zoneId)" + $(if ($url) { " from $url" } else { '' })) }
+        if ($ts) { $bits.Add('timestamps look rewritten') }
+        $extra = [ordered]@{ Record = $e.Number; Deleted = (-not $e.InUse); FNCreated = (ConvertTo-WfxUtcString $e.FNCreated); SIModified = (ConvertTo-WfxUtcString $e.SIModified) }
+        if ($url) { $extra.Url = $url }
+        if ($zoneId) { $extra.ZoneId = $zoneId }
+        if ($ts) { $extra.Timestomp = ($ts.Reasons -join '; '); $extra.TimestompScore = $ts.Score }
+        $other = @($e.Ads | Where-Object { $_ -ne 'Zone.Identifier' -and $_ -notmatch '^(?:SmartScreen|\$Kernel\.Purge.*|encryptable|favicon|OECustomProperty)$' })
+        if ($other) { $extra.Streams = ($other -join ', ') }
+        New-WfxArtifact -Artifact 'MFT' -Time $e.SICreated -TimeKind 'Created ($SI)' -Evidence $(if ($zoneId) { 'Download' } else { 'Presence' }) `
+            -Path ($Volume + $e.Path) -Detail ($bits -join '; ') -Source $Path -Extra ([pscustomobject]$extra)
+    }
+}
+
 function Import-WfxArtifact {
     <#
     .SYNOPSIS Parses artifacts from a folder of collected evidence (KAPE / Velociraptor output, a mounted
     image, CTF files) or a single file. Files are recognised by their content and name: registry hives
     (SYSTEM, Amcache.hve, NTUSER.DAT, UsrClass.dat), Jump Lists, .lnk, browser databases, PCA and Defender
-    logs, Prefetch. Nothing in the folder is executed or modified.
+    logs, Prefetch, $MFT, SRUM (SRUDB.dat). Nothing in the folder is executed or modified.
     .OUTPUTS Artifact records. Event logs (*.evtx) are listed in $script:WfxImportEvtx for the caller.
     #>
     param([Parameter(Mandatory)][string]$Path, [int]$MaxFiles = 20000)
@@ -825,6 +961,8 @@ function Import-WfxArtifact {
         $user = if ($full -match '(?i)[\\/]Users[\\/]([^\\/]+)[\\/]') { $Matches[1] } else { '' }
         try {
             if ($name -match '(?i)\.evtx$') { $script:WfxImportEvtx.Add($full); continue }
+            if ($name -match '(?i)^\$MFT$|^MFT$|\.mft$' -and $f.Length -ge 1024) { Get-WfxMftArtifactRecord -Path $full; continue }
+            if ($name -match '(?i)^SRUDB\.dat$') { Get-WfxSrumRecord -Path $full; continue }
             if ($name -match '(?i)\.pf$') { $pf.Add($f); continue }
             if ($name -match '(?i)\.(automaticDestinations-ms|customDestinations-ms)$') { Get-WfxJumpListRecord -Path $full -User $user; continue }
             if ($name -match '(?i)\.lnk$') { Get-WfxShortcutRecord -Path $full -User $user -FileTime $f.LastWriteTimeUtc; continue }

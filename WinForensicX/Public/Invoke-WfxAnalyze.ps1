@@ -58,6 +58,7 @@
         & $run 'dns'         { Invoke-WfxDnsAnalyzer         -DnsEntry   $dns                                      -HostName $HostName }
         & $run 'persistence' { Invoke-WfxPersistenceAnalyzer -Autostart  @(Get-WfxValue $Bundle 'Persistence' @()) -HostName $HostName }
         & $run 'events'      { Invoke-WfxEventAnalyzer       -Event      $events                                   -HostName $HostName }
+        & $run 'logintegrity' { Invoke-WfxLogIntegrityAnalyzer -Event    $events                                   -HostName $HostName }
         if (@($SigmaPath).Count) {
             & $run 'sigma' { $sr = Get-WfxSigmaRuleSet -Path $SigmaPath; Invoke-WfxSigmaAnalyzer -Event $events -Rule $sr -HostName $HostName }
         }
@@ -86,6 +87,12 @@
         }
         $split = Split-WfxAllowlisted -Finding $merged -Allowlist $allow
         $findings = @($split.Kept)
+        # Independent sources that record the same program raise confidence (and are shown as such in the report).
+        try { $findings = @(Add-WfxCorroboration -Finding $findings -Bundle $Bundle -Event $events -Artifact $artifacts | Expand-WfxRecord) }
+        catch { $gaps.Add([pscustomobject]@{ Source = 'analyzer:corroboration'; Reason = $_.Exception.Message; Fix = 'Report the record that caused this; findings are unaffected.' }) }
+        # Who started whom: the ancestry of each process finding, from Sysmon 1, 4688 and the process list.
+        try { $findings = @(Add-WfxProcessLineage -Finding $findings -Event $events -Process @(Get-WfxValue $Bundle 'Process' @()) | Expand-WfxRecord) }
+        catch { $gaps.Add([pscustomobject]@{ Source = 'analyzer:process-tree'; Reason = $_.Exception.Message; Fix = 'Report the record that caused this; findings are unaffected.' }) }
 
         $compromise = @($findings | Where-Object { -not (Test-WfxPostureFinding $_) })
         $postureF = @($findings | Where-Object { Test-WfxPostureFinding $_ })
@@ -115,6 +122,10 @@
             ArtifactTotal  = $artifacts.Count
             AttackCoverage = @($coverage)
             Incidents      = @(Get-WfxIncident -Finding $findings | Expand-WfxRecord)
+            # Summaries for comparing hosts (fleet report): programs seen, remote access in and out, own addresses.
+            Programs       = @(try { Get-WfxProgramSummary -Bundle $Bundle -Event $events -Artifact $artifacts | Expand-WfxRecord } catch { $gaps.Add([pscustomobject]@{ Source = 'analyzer:programs'; Reason = $_.Exception.Message; Fix = 'Fleet rarity will skip this host.' }) })
+            Logons         = @(try { Get-WfxLogonSummary -Event $events | Expand-WfxRecord } catch { $gaps.Add([pscustomobject]@{ Source = 'analyzer:logons'; Reason = $_.Exception.Message; Fix = 'Fleet movement will skip this host.' }) })
+            Addresses      = @(try { Get-WfxHostAddress -Bundle $Bundle | Expand-WfxRecord } catch { })
             Gaps           = @($gaps.ToArray())
             Meta           = (Get-WfxValue $Bundle 'Meta' $null)
         }

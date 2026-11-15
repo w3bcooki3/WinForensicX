@@ -6,7 +6,9 @@
     .DESCRIPTION
         Sources: Amcache (programs, drivers, installed apps, SHA-1), ShimCache, Prefetch, BAM, UserAssist,
         PCA (Windows 11), ShellBags, Jump Lists, shortcut (.lnk) files, RunMRU, typed paths, Explorer searches,
-        browser download history (Chromium browsers and Firefox) and Microsoft Defender support logs.
+        browser download history (Chromium browsers and Firefox), Microsoft Defender support logs, SRUM
+        (network and disk use per program) and, from collected files only, the NTFS $MFT (programs, scripts,
+        archives and shortcuts, deleted records, download origin, timestomping).
 
         Without -Path the live host is read (Windows, administrator recommended). With -Path, a folder of
         collected files (KAPE / Velociraptor output, a mounted image, CTF evidence) or a single file is parsed.
@@ -24,11 +26,13 @@
         Get-WfxArtifact -Path .\Amcache.hve | Where-Object Sha1 -eq 'e3b0c442...'
     .EXAMPLE
         Get-WfxArtifact -Artifact JumpList, Shortcut | Where-Object { $_.Extra.DriveType -eq 'Removable' }
+    .EXAMPLE
+        Get-WfxArtifact -Path 'D:\kape\C\$MFT' -Flag | Where-Object { $_.Extra.Timestomp }
     #>
     [CmdletBinding()]
     param(
         [Parameter(Position = 0)][string]$Path = '',
-        [ValidateSet('Amcache', 'AmcacheProgram', 'AmcacheDriver', 'ShimCache', 'Prefetch', 'BAM', 'UserAssist', 'PCA', 'ShellBag', 'JumpList', 'Shortcut', 'RunMRU', 'TypedPath', 'Search', 'Download', 'DefenderLog')]
+        [ValidateSet('Amcache', 'AmcacheProgram', 'AmcacheDriver', 'ShimCache', 'Prefetch', 'BAM', 'UserAssist', 'PCA', 'ShellBag', 'JumpList', 'Shortcut', 'RunMRU', 'TypedPath', 'Search', 'Download', 'DefenderLog', 'MFT', 'SRUM')]
         [string[]]$Artifact = @(),
         [switch]$Flag
     )

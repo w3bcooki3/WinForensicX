@@ -11,7 +11,7 @@ $script:WfxEventQuery = @(
     @{ Log = 'Microsoft-Windows-PowerShell/Operational'; Ids = @(4104); Max = 5000; Msg = $false }
     @{ Log = 'Microsoft-Windows-TaskScheduler/Operational'; Ids = @(106, 140, 141, 200); Max = 3000; Msg = $false }
     @{ Log = 'Microsoft-Windows-Windows Defender/Operational'; Ids = @(1116, 1117, 5001, 5007); Max = 2000; Msg = $true }
-    @{ Log = 'Microsoft-Windows-Sysmon/Operational'; Ids = @(1, 3, 7, 8, 10, 11, 13, 22, 23); Max = 15000; Msg = $false }
+    @{ Log = 'Microsoft-Windows-Sysmon/Operational'; Ids = @(1, 3, 4, 7, 8, 10, 11, 13, 16, 22, 23); Max = 15000; Msg = $false }
     @{ Log = 'Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational'; Ids = @(1149); Max = 2000; Msg = $false }
 )
 # Only fields that can carry free text are secret-scrubbed; names, SIDs, IPs, GUIDs and codes cannot.

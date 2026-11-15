@@ -1,7 +1,7 @@
 ﻿function New-WfxGuide {
     <#
     .SYNOPSIS Writes a self-contained HTML usage guide (how to use, commands, outputs, limitations, safety),
-              in the same "Beacon" look as the report.
+              in the same look as the case report.
     .PARAMETER Path  Output .html path.
     .OUTPUTS The output path.
     #>
@@ -11,11 +11,11 @@
     $enc = { param($s) [System.Net.WebUtility]::HtmlEncode([string]$s) }
 
     $cmdHtml = foreach ($c in $h.Commands) {
-        $ex = ($c.Examples | ForEach-Object { "<div class='ex mono'>$(& $enc $_)</div>" }) -join ''
-        $pr = if (@($c.Params).Count) { "<div class='params mono'>" + ((@($c.Params) | ForEach-Object { & $enc $_ }) -join '<br>') + "</div>" } else { '' }
+        $ex = if (@($c.Examples).Count) { "<pre class='ex'>" + ((@($c.Examples) | ForEach-Object { & $enc $_ }) -join "`n") + "</pre>" } else { '' }
+        $pr = if (@($c.Params).Count) { "<ul class='params'>" + ((@($c.Params) | ForEach-Object { "<li class='mono'>$(& $enc $_)</li>" }) -join '') + "</ul>" } else { '' }
         @"
 <div class="cmd">
-  <div class="cmd-h"><span class="cmd-n mono">$(& $enc $c.Name)</span><span class="cmd-s">$(& $enc $c.Summary)</span></div>
+  <h3 class="mono">$(& $enc $c.Name)</h3><p>$(& $enc $c.Summary)</p>
   $pr$ex
 </div>
 "@
@@ -27,56 +27,42 @@
     $html = @"
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WinForensicX $(& $enc $h.Version) · Guide</title>
-<style>html{font-variant-ligatures:none;font-feature-settings:"calt" 0,"liga" 0,"clig" 0}
-
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>WinForensicX $(& $enc $h.Version) help</title>
+<style>
 $(Get-WfxThemeCss)
-.wrap{max-width:900px;margin:0 auto;padding:24px 22px 90px}
-.hero{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px 28px;box-shadow:var(--sh2);margin-bottom:24px}
-.hero .k{font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
-.hero h1{font-size:26px;font-weight:800;letter-spacing:-.03em;color:var(--ink2)}
-.hero h1 small{font-family:var(--mono);font-size:12px;color:var(--faint);font-weight:400;margin-left:9px}
-.hero p{color:var(--dim);max-width:70ch;margin-top:11px;font-size:14.5px}
-.sec{display:flex;align-items:center;gap:12px;margin:28px 0 14px}
-.sec h2{font-size:14px;font-weight:750;color:var(--ink2)}
-.sec::after{content:"";flex:1;height:1px;background:var(--line)}
-.cmd{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 17px;margin-bottom:11px;box-shadow:var(--sh)}
-.cmd-h{display:flex;flex-wrap:wrap;gap:9px;align-items:baseline;margin-bottom:4px}
-.cmd-n{color:var(--acc);font-size:14.5px;font-weight:700}.cmd-s{color:var(--dim);font-size:13.5px}
-.params{color:var(--ink);font-size:12.5px;margin:9px 0 2px;padding:8px 11px;border-left:2px solid var(--line2);background:var(--card2);border-radius:7px}
-.ex{color:var(--ink2);font-size:12.5px;background:var(--card2);border:1px solid var(--line);border-radius:7px;padding:8px 11px;margin-top:7px;overflow-x:auto}
-.ex::before{content:"$ ";color:var(--ok)}
-ul.list{list-style:none}
-ul.list li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 13px;margin-bottom:8px;font-size:13.5px;color:var(--ink);box-shadow:var(--sh)}
-ul.list.mono-list li{font-family:var(--mono);font-size:12px}
-ul.list.warn li{border-left:3px solid var(--high)}
-ul.list.safe li{border-left:3px solid var(--ok)}
-.req{font-family:var(--mono);font-size:12.5px;color:var(--dim);border:1px dashed var(--line2);border-radius:12px;padding:11px 14px;background:var(--card)}
-.foot{margin-top:32px;border-top:1px solid var(--line);padding-top:16px;color:var(--faint);font-size:12.5px}
-*,*::before,*::after{font-variant-ligatures:none!important;font-feature-settings:"calt" 0,"liga" 0,"clig" 0!important}
+.wrap{max-width:960px;margin:0 auto;padding:8px 24px 80px}
+h2{font-size:19px;margin:36px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.cmd{padding:14px 0 16px;border-bottom:1px solid var(--line2)}
+.cmd h3{font-size:14.5px;color:var(--ink)}
+.cmd p{margin:4px 0 8px;color:var(--ink2)}
+ul.params{margin:0 0 8px;padding-left:18px;color:var(--ink2)}
+ul.params li{margin:2px 0}
+pre.ex{font:12.5px/1.5 var(--mono);background:var(--alt);border:1px solid var(--line2);padding:8px 11px;margin:6px 0 0;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+ul.list{margin:0;padding-left:20px}
+ul.list li{margin:6px 0}
+.req{font-family:var(--mono);font-size:12.5px;color:var(--ink2);border:1px solid var(--line);background:var(--alt);padding:10px 13px}
+.foot{margin-top:36px;border-top:1px solid var(--line);padding-top:14px;color:var(--ink3);font-size:12.5px}
+@media (max-width:640px){.mast .in,.wrap{padding-left:16px;padding-right:16px}.mast h1{font-size:24px}}
 </style></head><body>
-<div class="wrap">
-  <div class="bar"><div class="bz">W</div><div class="bn">WinForensicX<span>help &amp; how-to</span></div>
-    <div class="sp"></div><div class="chip" id="when"></div>
-    <button class="gbtn" id="themebtn" title="Toggle theme">Theme</button></div>
-
-  <div class="hero"><div class="k">Getting started</div>
-    <h1>WinForensicX <small>$(& $enc $h.Version) · read-only DFIR triage</small></h1>
-    <p>$(& $enc $h.Tagline)</p></div>
-
-  <div class="sec"><h2>Commands</h2></div>$($cmdHtml -join "`n")
-  <div class="sec"><h2>What a run produces</h2></div><ul class="list mono-list">$outRows</ul>
-  <div class="sec"><h2>Safety &amp; defensive posture</h2></div><ul class="list safe">$safeRows</ul>
-  <div class="sec"><h2>Limitations</h2></div><ul class="list warn">$limRows</ul>
-  <div class="sec"><h2>Requirements</h2></div><div class="req">$(& $enc $h.Requires)</div>
-  <div class="foot">WinForensicX $(& $enc $h.Version) · generated $(Get-Date -Format 'u') · self-contained and safe to share.</div>
-</div>
+<header class="mast"><div class="in">
+  <div class="brandrow">$(Get-WfxMarkSvg)<b>WinForensicX</b><span>Help</span><span class="tools"><button class="mbtn" id="themebtn" type="button">Dark</button></span></div>
+  <h1>WinForensicX $(& $enc $h.Version)</h1>
+  <p>$(& $enc $h.Tagline)</p>
+</div></header>
+<main class="wrap">
+  <h2>Commands</h2>$($cmdHtml -join "`n")
+  <h2>What a run produces</h2><ul class="list">$outRows</ul>
+  <h2>Safety</h2><ul class="list">$safeRows</ul>
+  <h2>Limitations</h2><ul class="list">$limRows</ul>
+  <h2>Requirements</h2><div class="req">$(& $enc $h.Requires)</div>
+  <div class="foot">WinForensicX $(& $enc $h.Version). Generated $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm')) UTC. Self-contained and offline.</div>
+</main>
 <script>
-(function(){try{var s=localStorage.getItem('wfx-theme');if(s)document.documentElement.setAttribute('data-theme',s);}catch(e){}
-var t=document.getElementById('themebtn');if(t)t.onclick=function(){var c=document.documentElement.getAttribute('data-theme');
-var n=c==='light'?'dark':(c==='dark'?'light':(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark'));
-document.documentElement.setAttribute('data-theme',n);try{localStorage.setItem('wfx-theme',n);}catch(e){}};
-var w=document.getElementById('when');if(w)w.textContent=new Date().toLocaleString();})();
+(function(){var r=document.documentElement,b=document.getElementById('themebtn');
+function lbl(){var c=r.getAttribute('data-theme');var d=c?c==='dark':matchMedia('(prefers-color-scheme: dark)').matches;b.textContent=d?'Light':'Dark';}
+try{var s=localStorage.getItem('wfx-theme');if(s==='dark'||s==='light')r.setAttribute('data-theme',s);}catch(e){}
+lbl();b.onclick=function(){var n=b.textContent==='Dark'?'dark':'light';r.setAttribute('data-theme',n);try{localStorage.setItem('wfx-theme',n);}catch(e){}lbl();};})();
 </script>
 </body></html>
 "@

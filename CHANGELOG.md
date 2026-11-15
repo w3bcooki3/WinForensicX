@@ -1,5 +1,58 @@
 # Changelog
 
+## 3.2.0 — process trees, log integrity, $MFT, SRUM, fleet movement
+
+### Added
+- **Process trees.** Parent-child chains rebuilt from Sysmon process events (by process GUID), 4688 events
+  (by process ID and start time, so a reused ID is not taken for the parent) and the live process list.
+  Findings about a process carry their ancestry (up to twelve levels, with command line, user and the source
+  of each step) and the case file shows it as a tree.
+- **Event-log integrity:** the clock set back while a log was recording (`LOG-TIME-BACKWARDS`), a busy
+  Security or Sysmon log falling silent for six hours or more while other logs kept recording
+  (`LOG-SILENT-GAP`), Sysmon stopped (`LOG-SYSMON-STOPPED`) or reconfigured (`LOG-SYSMON-CONFIG`). Sysmon
+  events 4 and 16 are now collected.
+- **`$MFT` parsing** from collected files (`Get-WfxArtifact -Path`, `-ArtifactPath`): programs, scripts,
+  archives and shortcuts with full paths, deleted records, alternate data streams and the download origin
+  from `Zone.Identifier`. Handles update-sequence fixups (including torn records), extension records and
+  orphaned files. **Timestomp detection** (`ART-TIMESTOMP`) compares standard-information and file-name
+  times for programs in user-writable folders.
+- **SRUM** (`SRUDB.dat`) through a new read-only ESE database reader: bytes sent and received, and written
+  and read, per program and user. **Large uploads** by exfiltration tools or by programs that do not usually
+  upload are reported (`ART-SRUM-UPLOAD`).
+- **Fleet report:** movement between hosts from each host's remote logons in and remote access out,
+  matched by host name or by addresses that belong to one host only; machines in those records that were
+  not triaged; programs recorded on only one host when three or more hosts are compared. `result.json` now
+  carries compact `Programs`, `Logons` and `Addresses` summaries for this, and host information records the
+  host's own addresses.
+
+### Tests
+- Engine tests (`tests/Engine.Tests.ps1`) build event logs, `$MFT` files and ESE databases byte by byte.
+  The `$MFT` reader was cross-checked during development against an independent parser on four public test
+  images, and the ESE reader against another on three public databases.
+
+## 3.1.0 — redesigned report, corroboration
+
+### Tests
+- **Case report redesigned.** A masthead with the host, verdict and case details; a summary that says what
+  happened first and last; a chart of when it happened (one row per ATT&CK stage, incidents shaded, zoom to
+  an incident). Each finding opens as a case file: what happened, when, how we know (source, process chain,
+  marked command line, evidence, independent sources), what to do. Print gives a cover page, every case
+  file, running headers and page numbers. All times are now UTC.
+- **Explore views in the browser** use the same design: a summary of flagged rows, filters by flag and by
+  the main columns, a column picker, a side panel with every field of a row, CSV of exactly what is shown.
+- Fleet report, in-tool help and the field guide share the same look and mark.
+
+### Added
+- **Corroboration.** Findings record which independent sources (Amcache, Prefetch, Sysmon, 4688, service
+  installs, Defender, autostarts, running processes, the change journal) also saw the same program, with
+  the earliest trace. Two or more raise confidence one level, and the report says why.
+- **Likely starting point** for each incident.
+- ATT&CK names for phishing (T1566, .001, .002) and drive-by compromise (T1189).
+
+### Fixed
+- Paths stored as `%SystemRoot%\...` (UserAssist, shortcuts) were flagged as system programs in the wrong
+  folder.
+
 ## 3.0.0 — evidence of execution, Sigma, YARA, incidents and exports
 
 ### Added
@@ -37,7 +90,7 @@
 
 ## 2.6.0 — case report redesign
 
-### Changed
+### Tests
 - **Case report (`report.html`) rewritten** as a plain, document-style report that reads top to bottom and
   prints cleanly:
   - **Summary:** a verdict in words (compromise indicated / likely, suspicious activity, no strong
@@ -161,7 +214,7 @@
 - **Recycle Bin**: reads every fixed drive, validates `$I` records, and states whether the item is a file or
   folder and whether its content is still recoverable (with its `$R` path).
 
-### Changed
+### Tests
 - **G** in a view now opens a self-contained, offline browser table (sort, filter, copy as TSV). Values are
   inserted as text only and the page has a no-network Content-Security-Policy, so hostile file names in the
   evidence cannot run script. Out-GridView is offered (as **W**) only where it actually works — it needs the
@@ -170,7 +223,7 @@
 
 ## 2.3.1 — simpler, more transparent launcher
 
-### Changed
+### Tests
 - **Removed `Start-WinForensicX.cmd`.** Start the tool with `.\Start-WinForensicX.ps1` from a PowerShell
   window (administrator recommended), or right-click it → Run with PowerShell.
 - **The launcher no longer elevates or relaunches itself** and never passes `-ExecutionPolicy`. When not
@@ -210,7 +263,7 @@
   content-changed, timestamp-only), also in Hunt & analyze.
 - 5 new tests (83 total).
 
-### Changed
+### Tests
 - **Redesigned HTML report** in a case-file style:
   - a sticky sidebar with the host, both scores and the sections
   - an evidence-tag verdict in plain words with a numbered "start here" list

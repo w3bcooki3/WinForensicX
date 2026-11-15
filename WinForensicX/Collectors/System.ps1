@@ -45,6 +45,12 @@ function Get-WfxHostInfo {
         Admin        = (Test-WfxAdmin)
         Operator     = [Environment]::UserName
         PSVersion    = $PSVersionTable.PSVersion.ToString()
+        # Own unicast addresses (read from the network stack; nothing is sent), so other hosts' logon
+        # records can be matched to this one in a fleet report.
+        Addresses    = @(try {
+                [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() | Where-Object { $_.OperationalStatus -eq 'Up' -and $_.NetworkInterfaceType -ne 'Loopback' } |
+                    ForEach-Object { $_.GetIPProperties().UnicastAddresses } | ForEach-Object { $_.Address } | Where-Object { -not $_.IsIPv6LinkLocal -and -not [System.Net.IPAddress]::IsLoopback($_) } | ForEach-Object { $_.ToString() }
+            } catch { })
     }
 }
 

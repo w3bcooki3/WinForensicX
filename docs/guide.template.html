@@ -10,7 +10,7 @@
 :root{
   --paper:#EDF0F3; --sheet:#FFFFFF; --ink:#17212B; --slate:#52606E; --rule:#C7D0D9;
   --tag:#F2C230; --tag-ink:#2B2100; --console:#15212C; --console-ink:#D3DEE8; --console-dim:#7F93A6;
-  --crit:#7A0E0E; --high:#C0362C; --med:#E8A33D; --low:#3E6E9C; --link:#1F5FAD;
+  --crit:#9B1C1C; --high:#C2410C; --med:#A16207; --low:#2B6CB0; --link:#0B57A4;
   --head:"Bahnschrift","DIN Alternate","DIN 2014","Arial Narrow",system-ui,sans-serif;
   --body:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
   --mono:"Cascadia Mono","Cascadia Code",Consolas,"SF Mono",Menlo,monospace;
@@ -20,7 +20,7 @@
 html{scroll-padding-top:16px}
 body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 var(--body);-webkit-text-size-adjust:100%}
 a{color:var(--link);text-underline-offset:2px}
-a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--tag);outline-offset:2px;border-radius:2px}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--link);outline-offset:2px}
 h1,h2,h3{font-family:var(--head);font-weight:700;line-height:1.15;letter-spacing:-.005em;margin:0}
 h2{font-size:30px;margin:0 0 6px;font-stretch:semi-condensed}
 h3{font-size:21px;margin:30px 0 6px;font-stretch:semi-condensed}
@@ -31,7 +31,8 @@ p code,li code,td code{background:rgba(82,96,110,.12);padding:1px 5px;border-rad
 /* layout */
 .frame{display:grid;grid-template-columns:240px minmax(0,1fr);max-width:1180px;margin:0 auto}
 nav.rail{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;padding:30px 18px 30px 22px;border-right:1px solid var(--rule)}
-nav.rail .mark{font-family:var(--head);font-weight:700;font-size:19px;letter-spacing:.01em;display:block;margin-bottom:2px}
+nav.rail .mark{font-family:var(--head);font-weight:700;font-size:19px;letter-spacing:.01em;display:flex;align-items:center;gap:8px;margin-bottom:2px}
+nav.rail .mark svg{width:22px;height:22px;flex:none}
 nav.rail .ver{color:var(--slate);font-size:13px;margin-bottom:22px}
 nav.rail ol{list-style:none;margin:0;padding:0}
 nav.rail li{margin:2px 0}
@@ -69,13 +70,13 @@ figure img{display:block;max-width:100%;height:auto;border:1px solid var(--rule)
 figcaption{font-size:13.5px;color:var(--slate);margin-top:8px}
 
 /* evidence tags: the key path for every task */
-.tag{display:inline-flex;align-items:center;gap:7px;background:var(--tag);color:var(--tag-ink);font:600 14px/1 var(--head);padding:6px 11px 6px 9px;border-radius:2px 6px 6px 2px;position:relative;white-space:nowrap;vertical-align:1px}
-.tag::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--paper);box-shadow:inset 0 0 0 1.5px rgba(43,33,0,.35)}
-.tag kbd{font:600 14px/1 var(--head)}
+.tag{display:inline-flex;align-items:center;gap:6px;background:var(--sheet);color:var(--ink);font:600 13.5px/1 var(--mono);padding:5px 8px;border:1px solid var(--rule);border-bottom-width:2px;border-radius:3px;position:relative;white-space:nowrap;vertical-align:1px}
+.tag::before{content:"Menu";font:400 12px/1 var(--body);color:var(--slate)}
+.tag kbd{font:600 13.5px/1 var(--mono)}
 .tag .sep{opacity:.55;font-weight:400}
 
 /* scenarios */
-.case{border-left:3px solid var(--rule);padding:2px 0 2px 22px;margin:34px 0 0}
+.case{border-top:1px solid var(--rule);padding:22px 0 0;margin:34px 0 0}
 .case h3{margin-top:0;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
 .case .when{color:var(--slate);margin-bottom:12px}
 .case ol{padding-left:22px;margin:0 0 14px}
@@ -88,8 +89,9 @@ figcaption{font-size:13.5px;color:var(--slate);margin-top:8px}
 .tbl th{font-family:var(--head);font-weight:600;font-size:14px;text-align:left;border-bottom:2px solid var(--ink);padding:6px 10px 6px 0}
 .tbl td{border-bottom:1px solid var(--rule);padding:8px 10px 8px 0;vertical-align:top}
 .tbl td:first-child{white-space:nowrap}
-.sev{display:inline-block;font:600 12px/1 var(--head);letter-spacing:.03em;padding:4px 7px;border-radius:3px;color:#fff}
-.sev.crit{background:var(--crit)}.sev.high{background:var(--high)}.sev.med{background:var(--med);color:#1B1300}.sev.low{background:#D5E3F2;color:#123}
+.sev{display:inline-flex;align-items:center;gap:6px;font:600 13px/1 var(--body);white-space:nowrap}
+.sev::before{content:"";width:8px;height:8px;background:currentColor}
+.sev.crit{color:var(--crit)}.sev.crit::before{transform:rotate(45deg)}.sev.high{color:var(--high)}.sev.high::before{width:9px;clip-path:polygon(50% 0,100% 100%,0 100%)}.sev.med{color:var(--med)}.sev.low{color:var(--low)}.sev.low::before{border-radius:50%}
 .yes{font-family:var(--head);font-weight:600}
 .no{color:var(--slate)}
 
@@ -102,7 +104,7 @@ details.cmd summary span{font:14px var(--body);color:var(--slate);text-align:rig
 details.cmd[open] summary{margin-bottom:6px}
 details.cmd .console{margin:8px 0 6px}
 .group h3{margin-top:34px}
-.note{border-left:3px solid var(--tag);background:var(--sheet);padding:12px 16px;margin:16px 0 20px;font-size:15px}
+.note{border:1px solid var(--rule);background:var(--sheet);padding:12px 16px;margin:16px 0 20px;font-size:15px}
 .note p:last-child{margin:0}
 ul.plain{padding-left:20px;margin:0 0 14px}ul.plain li{margin:5px 0}
 footer{color:var(--slate);font-size:13.5px;border-top:1px solid var(--rule);padding-top:16px;max-width:720px}
@@ -126,7 +128,7 @@ footer{color:var(--slate);font-size:13.5px;border-top:1px solid var(--rule);padd
 <body>
 <div class="frame">
 <nav class="rail" aria-label="Contents">
-  <span class="mark">WinForensicX</span>
+  <span class="mark"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 20V6h14M44 6h14v14M58 44v14H44M20 58H6V44" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="square"/><path d="M20 20l24 24M44 20L20 44" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="32" cy="32" r="9" fill="var(--paper)" stroke="currentColor" stroke-width="5"/><circle cx="32" cy="32" r="3" fill="currentColor"/></svg>WinForensicX</span>
   <div class="ver">Field guide for version {{VERSION}}</div>
   <ol>
     <li><a href="#start">Start it</a></li>

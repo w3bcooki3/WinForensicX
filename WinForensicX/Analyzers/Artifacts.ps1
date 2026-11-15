@@ -39,15 +39,15 @@ function Invoke-WfxArtifactAnalyzer {
     $byFile = @{}
     foreach ($a in $arts) {
         if ($a.Evidence -notin 'Execution', 'Presence', 'Install') { continue }
-        $p = [string]$a.Path; if (-not $p) { continue }
+        $p = ConvertFrom-WfxEnvPath ([string]$a.Path); if (-not $p) { continue }
         $key = $p.ToLowerInvariant() -replace '^\(volume\)', '' -replace '^[a-z]:', ''
         if (-not $byFile.ContainsKey($key)) { $byFile[$key] = New-Object System.Collections.Generic.List[object] }
         $byFile[$key].Add($a)
     }
     foreach ($key in $byFile.Keys) {
         $rows = $byFile[$key].ToArray()
-        $first = $rows[0]; $path = [string]$first.Path
-        $full = @($rows | Where-Object { & $isFull $_.Path } | Select-Object -First 1); if ($full) { $path = [string]$full[0].Path }
+        $first = $rows[0]; $path = ConvertFrom-WfxEnvPath ([string]$first.Path)
+        $full = @($rows | Where-Object { & $isFull (ConvertFrom-WfxEnvPath $_.Path) } | Select-Object -First 1); if ($full) { $path = ConvertFrom-WfxEnvPath ([string]$full[0].Path) }
         $leaf = (Get-WfxLeaf $path).ToLowerInvariant()
         $kinds = @($rows | ForEach-Object Artifact | Select-Object -Unique)
         $ran = [bool]@($rows | Where-Object Evidence -eq 'Execution').Count
@@ -106,6 +106,31 @@ function Invoke-WfxArtifactAnalyzer {
         }
     }
 
+    # Risky / attack-tool downloads, for browser history and for $MFT Zone.Identifier streams alike.
+    $dlCheck = {
+        param($p, $x, $time, $ev)
+            $url = if ($x) { [string]$x.Url } else { '' }
+            $host_ = ''; try { if ($url) { $host_ = ([uri]$url).Host.ToLowerInvariant() } } catch { }
+            $rawIp = $host_ -match '^\d{1,3}(?:\.\d{1,3}){3}$|^\[?[0-9a-f:]+\]?$'
+            $why = @()
+            if ($rawIp -and -not (Test-WfxPrivateIp $host_)) { $why += 'served from a bare IP address' }
+            if ($host_ -and @($paste | Where-Object { $host_ -eq $_ -or $host_.EndsWith(".$_") }).Count) { $why += 'from a paste / file-sharing site' }
+            if ($host_ -and @($tunnel | Where-Object { $host_ -eq $_ -or $host_.EndsWith(".$_") }).Count) { $why += 'from a tunnelling service' }
+            $tld = ($host_ -split '\.')[-1]; if ($host_ -and -not $rawIp -and $tld -in $tlds) { $why += "from a .$tld domain" }
+            if ($x -and $x.Danger -and $x.Danger -notmatch 'safe|allowlisted') { $why += "the browser warned: $($x.Danger)" }
+            if ($p -match $riskyDl -and $why.Count) {
+                $sev = if (($x -and $x.Opened) -or $why.Count -ge 2) { 'High' } else { 'Medium' }
+                & $add 'ART-RISKY-DOWNLOAD' "Risky download: $(Get-WfxLeaf $p)" $sev 'Medium' @('T1105', 'T1204.002') `
+                    "An executable, script or disk-image file was downloaded ($($why -join '; ')). This is how loaders and phishing payloads arrive." `
+                    'Check whether it was opened or run (Amcache / Prefetch / ShimCache for the same name), hash it, and review the referrer and the source site.' "download:$p" $time (Join-WfxDict $ev ([ordered]@{ Url = $url; Referrer = $(if ($x) { $x.Referrer }); Opened = $(if ($x) { $x.Opened }) })) 'Initial Access'
+            }
+            $leaf = (Get-WfxLeaf $p).ToLowerInvariant()
+            if (@($offensive | Where-Object { $leaf -eq $_ -or ($_ -notmatch '\.' -and $leaf.Contains($_)) }).Count) {
+                & $add 'ART-OFFENSIVE-DOWNLOAD' "Attack tool downloaded: $leaf" 'High' 'Medium' @('T1105', 'T1588.002') `
+                    'A browser download saved a file named like a known attack tool.' 'Check whether it ran (execution artifacts for the same name) and who downloaded it.' "download:$p" $time (Join-WfxDict $ev ([ordered]@{ Url = $url })) 'Initial Access'
+            }
+    }
+
     foreach ($a in $arts) {
         $p = [string]$a.Path; $x = $a.Extra; $time = $a.Time
         $ev = [ordered]@{ Artifact = $a.Artifact; Time = $a.Time; TimeKind = $a.TimeKind; Path = $p; Detail = $a.Detail; User = $a.User; Source = $a.Source }
@@ -118,26 +143,30 @@ function Invoke-WfxArtifactAnalyzer {
                     "Microsoft Defender's support log records a detection of $threat on $p. This log is separate from the event log, so it can survive when event logs were cleared." `
                     'Confirm the remediation succeeded, find how the file arrived, and check for related detections on other hosts.' "defender:${threat}:$p" $time $ev 'Malware'
             }
-            'Download' {
-                $url = if ($x) { [string]$x.Url } else { '' }
-                $host_ = ''; try { if ($url) { $host_ = ([uri]$url).Host.ToLowerInvariant() } } catch { }
-                $rawIp = $host_ -match '^\d{1,3}(?:\.\d{1,3}){3}$|^\[?[0-9a-f:]+\]?$'
-                $why = @()
-                if ($rawIp -and -not (Test-WfxPrivateIp $host_)) { $why += 'served from a bare IP address' }
-                if ($host_ -and @($paste | Where-Object { $host_ -eq $_ -or $host_.EndsWith(".$_") }).Count) { $why += 'from a paste / file-sharing site' }
-                if ($host_ -and @($tunnel | Where-Object { $host_ -eq $_ -or $host_.EndsWith(".$_") }).Count) { $why += 'from a tunnelling service' }
-                $tld = ($host_ -split '\.')[-1]; if ($host_ -and -not $rawIp -and $tld -in $tlds) { $why += "from a .$tld domain" }
-                if ($x -and $x.Danger -and $x.Danger -notmatch 'safe|allowlisted') { $why += "the browser warned: $($x.Danger)" }
-                if ($p -match $riskyDl -and $why.Count) {
-                    $sev = if (($x -and $x.Opened) -or $why.Count -ge 2) { 'High' } else { 'Medium' }
-                    & $add 'ART-RISKY-DOWNLOAD' "Risky download: $(Get-WfxLeaf $p)" $sev 'Medium' @('T1105', 'T1204.002') `
-                        "An executable, script or disk-image file was downloaded ($($why -join '; ')). This is how loaders and phishing payloads arrive." `
-                        'Check whether it was opened or run (Amcache / Prefetch / ShimCache for the same name), hash it, and review the referrer and the source site.' "download:$p" $time (Join-WfxDict $ev ([ordered]@{ Url = $url; Referrer = $(if ($x) { $x.Referrer }); Opened = $(if ($x) { $x.Opened }) })) 'Initial Access'
-                }
+            'Download' { & $dlCheck $p $x $time $ev }
+            'SRUM' {
+                if (-not $x -or -not $x.PSObject.Properties['BytesSent']) { break }
+                $sent = [double]$x.BytesSent; $recv = [double]$x.BytesReceived
                 $leaf = (Get-WfxLeaf $p).ToLowerInvariant()
-                if (@($offensive | Where-Object { $leaf -eq $_ -or ($_ -notmatch '\.' -and $leaf.Contains($_)) }).Count) {
-                    & $add 'ART-OFFENSIVE-DOWNLOAD' "Attack tool downloaded: $leaf" 'High' 'Medium' @('T1105', 'T1588.002') `
-                        'A browser download saved a file named like a known attack tool.' 'Check whether it ran (execution artifacts for the same name) and who downloaded it.' "download:$p" $time (Join-WfxDict $ev ([ordered]@{ Url = $url })) 'Initial Access'
+                $isExfil = [bool]@($exfil | Where-Object { $leaf -eq $_ }).Count
+                # Programs that upload by design: sync clients, browsers, mail, Windows itself.
+                $expected = $p -match '(?i)(?:^System$|^\(unnamed app|\\(?:onedrive|dropbox|googledrivefs|box|boxsync|teams|ms-teams|outlook|thunderbird|chrome|msedge|firefox|brave|opera|iexplore|svchost|backgroundtransferhost|backgroundtaskhost|lsass|searchapp|msmpeng|mpdefendercoreservice|wuauclt|usoclient|code|zoom)\.exe$)'
+                $big = $sent -ge 500MB -or ($sent -ge 100MB -and $sent -ge 4 * $recv)
+                $sz = if ($sent -ge 1GB) { '{0:n1} GB' -f ($sent / 1GB) } else { '{0:n0} MB' -f ($sent / 1MB) }
+                if (($isExfil -and $sent -ge 10MB) -or ($big -and -not $expected)) {
+                    $sev = if ($isExfil -or ($p -match $staging)) { 'High' } else { 'Medium' }
+                    & $add 'ART-SRUM-UPLOAD' "Large upload by $(Get-WfxLeaf $p): $sz sent" $sev 'Medium' @('T1048', 'T1567') `
+                        "Windows' resource usage database (SRUM) records that $(Get-WfxLeaf $p) sent $sz over the network ($('{0:n0}' -f ($recv / 1MB)) MB received) in $($x.Hours) hourly records. Sending far more than receiving is the shape of an upload; SRUM keeps this for weeks, even after the program is deleted." `
+                        'Find what the program is and who ran it; check proxy and firewall logs for the destination in the same hours, and what data it could reach.' "srum:$p|$($a.User)" $time (Join-WfxDict $ev ([ordered]@{ BytesSent = $x.BytesSent; BytesReceived = $x.BytesReceived; FirstSeen = $x.FirstSeen; Hours = $x.Hours })) 'Exfiltration'
+                }
+            }
+            'MFT' {
+                if ($x -and $x.PSObject.Properties['Url'] -and $x.Url) { & $dlCheck $p $x $time $ev }
+                if ($x -and $x.PSObject.Properties['Timestomp'] -and $x.Timestomp) {
+                    $sev = if ([int]$x.TimestompScore -ge 3) { 'High' } else { 'Medium' }
+                    & $add 'ART-TIMESTOMP' "File timestamps rewritten: $(Get-WfxLeaf $p)" $sev 'Medium' @('T1070.006') `
+                        "The `$MFT shows signs that this file's timestamps were changed after it was written: $($x.Timestomp). Attackers backdate their tools so they hide among old system files and fall outside a timeline." `
+                        'Trust the $FILE_NAME times for this file; hash and inspect it, and check what ran around the $FILE_NAME creation time.' "timestomp:$p" $(if ($x.FNCreated) { $x.FNCreated } else { $time }) (Join-WfxDict $ev ([ordered]@{ FNCreated = $x.FNCreated; Reasons = $x.Timestomp })) 'Defense Evasion'
                 }
             }
             { $_ -in 'ShellBag', 'JumpList', 'Shortcut', 'TypedPath' } {
