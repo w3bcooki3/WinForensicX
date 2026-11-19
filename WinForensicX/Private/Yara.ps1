@@ -26,7 +26,7 @@ function Invoke-WfxYaraScan {
         })
     if (-not $ruleFiles.Count) { Add-WfxGap -Source 'yara' -Reason "No .yar/.yara files found in: $($Rules -join ', ')"; return }
     $files = @($Target | Where-Object { $_ } | Sort-Object -Unique | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First $MaxFiles)
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $run = {
         param([string[]]$ArgList)
         $psi = New-Object Diagnostics.ProcessStartInfo
@@ -62,7 +62,7 @@ function Invoke-WfxYaraScan {
 
 function Invoke-WfxYaraAnalyzer {
     param([object[]]$Hit, [string]$HostName = '')
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     foreach ($h in @($Hit | Where-Object { $_ })) {
         $findings.Add((New-WfxFinding -Id "YARA-$($h.Rule)" -Title "YARA rule $($h.Rule) matched: $(Get-WfxLeaf $h.Path)" -Severity 'High' -Confidence 'Medium' -Category 'Malware' -Technique @() `
                     -Description "The file matched YARA rule $($h.Rule)$(if ($h.Tags) { " (tags: $($h.Tags))" }). How much this means depends on the rule: check its description and author." `

@@ -112,7 +112,7 @@ function Get-WfxSecurityData {
 
     # ── AI tooling inventory (installed runtimes / assistant CLIs) — context, not a finding by itself ──
     $aiTools = Invoke-WfxStep 'posture:aitools' {
-        $found = New-Object System.Collections.Generic.List[object]
+        $found = [System.Collections.Generic.List[object]]::new()
         $dirs = @(
             @{ N = 'Ollama'; P = "$env:LOCALAPPDATA\Programs\Ollama" }
             @{ N = 'LM Studio'; P = "$env:LOCALAPPDATA\LM-Studio" }

@@ -18,7 +18,7 @@
     $root = (Resolve-Path -LiteralPath $root).Path
     $m = Get-Content -LiteralPath $mp -Raw -Encoding UTF8 | ConvertFrom-Json
     $mHash = (Get-FileHash -LiteralPath $mp -Algorithm SHA256).Hash.ToLowerInvariant()
-    $rows = New-Object System.Collections.Generic.List[object]
+    $rows = [System.Collections.Generic.List[object]]::new()
     $listed = @{}
     foreach ($f in @($m.files)) {
         $full = Join-Path $root ([string]$f.path -replace '/', [IO.Path]::DirectorySeparatorChar)

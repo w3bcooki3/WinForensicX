@@ -33,7 +33,7 @@ function Test-WfxRegex {
 
 function Read-WfxRuleJson {
     param([string]$Name)
-    $docs = New-Object System.Collections.Generic.List[object]
+    $docs = [System.Collections.Generic.List[object]]::new()
     if ($script:WfxEmbeddedRules.ContainsKey($Name)) {
         $docs.Add(($script:WfxEmbeddedRules[$Name] | ConvertFrom-Json))
     } elseif ($script:WfxRuleRoot) {
@@ -51,6 +51,18 @@ function Read-WfxRuleJson {
     return , $docs.ToArray()
 }
 
+function ConvertTo-WfxFieldMatch {
+    <#
+    Compiles a rule's field conditions: { "Image|NewProcessName": "regex", ... }. The key lists alternative field
+    names (the first one present on the event is used), so one rule covers Sysmon and Security schemas.
+    #>
+    param($Spec)
+    if (-not $Spec) { return }
+    foreach ($p in $Spec.PSObject.Properties) {
+        [pscustomobject]@{ Key = $p.Name; Names = @($p.Name -split '\|' | ForEach-Object { $_.Trim() } | Where-Object { $_ }); Rx = (New-WfxRegex ([string]$p.Value)) }
+    }
+}
+
 function Test-WfxRuleDefinition {
     <# Validates one rule object. Returns '' when valid, otherwise the reason it was rejected. #>
     param($Rule)
@@ -59,6 +71,15 @@ function Test-WfxRuleDefinition {
     if ([string](Get-WfxValue $Rule 'severity' 'Medium') -notin $script:WfxSeverities) { return "invalid severity" }
     if ([string](Get-WfxValue $Rule 'confidence' 'Medium') -notin @('Low', 'Medium', 'High')) { return "invalid confidence" }
     foreach ($t in @(Get-WfxValue $Rule 'technique' @())) { if ([string]$t -notmatch '^T\d{4}(?:\.\d{3})?$') { return "invalid ATT&CK technique '$t'" } }
+    foreach ($k in 'match', 'matchNot') {
+        $m = Get-WfxValue $Rule $k
+        if ($null -eq $m) { continue }
+        if ($m -isnot [System.Management.Automation.PSCustomObject]) { return "'$k' must be an object of field: regex" }
+        foreach ($p in $m.PSObject.Properties) {
+            if ($p.Value -isnot [string] -or $p.Value -eq '') { return "'$k.$($p.Name)' must be a non-empty regex string" }
+            try { $null = [regex]::new([string]$p.Value) } catch { return "'$k.$($p.Name)' is not a valid regex" }
+        }
+    }
     return ''
 }
 
@@ -77,7 +98,7 @@ function Get-WfxRulePack {
     }
     $pack = $docs[0]
     if ($pack.PSObject.Properties['rules']) {
-        $all = New-Object System.Collections.Generic.List[object]
+        $all = [System.Collections.Generic.List[object]]::new()
         $ids = @{}
         foreach ($d in $docs) {
             foreach ($r in @($d.rules)) {
@@ -90,6 +111,8 @@ function Get-WfxRulePack {
                     $r | Add-Member -NotePropertyName rxExclude -NotePropertyValue (New-WfxRegex $ex) -Force
                     $imgs = @(Get-WfxValue $r 'images' @()) | ForEach-Object { ([string]$_).ToLowerInvariant() }
                     $r | Add-Member -NotePropertyName imageSet -NotePropertyValue @($imgs) -Force
+                    $r | Add-Member -NotePropertyName matchSet -NotePropertyValue @(ConvertTo-WfxFieldMatch (Get-WfxValue $r 'match')) -Force
+                    $r | Add-Member -NotePropertyName matchNotSet -NotePropertyValue @(ConvertTo-WfxFieldMatch (Get-WfxValue $r 'matchNot')) -Force
                     $ids[$r.id] = $true
                     $all.Add($r)
                 } catch {

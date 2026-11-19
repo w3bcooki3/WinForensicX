@@ -11,7 +11,7 @@
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][string[]]$Path, [string]$OutputPath = '', [int]$MaxFiles = 200000, [int]$MaxFileMB = 256)
-    $files = New-Object System.Collections.Generic.List[object]
+    $files = [System.Collections.Generic.List[object]]::new()
     foreach ($root in $Path) {
         if (-not (Test-Path -LiteralPath $root)) { Write-Warning "Not found: $root"; continue }
         Write-WfxConsole "  Hashing $root ..." -Kind Dim
@@ -42,7 +42,7 @@ function Compare-WfxFileBaseline {
     $b = Get-Content -LiteralPath $Baseline -Raw -Encoding UTF8 | ConvertFrom-Json
     $old = @{}; foreach ($f in @($b.Files)) { $old[$f.Path.ToLowerInvariant()] = $f }
     $seen = @{}
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     foreach ($root in @($b.Roots)) {
         foreach ($f in (Get-ChildItem -LiteralPath $root -File -Recurse -Force -ErrorAction SilentlyContinue)) {
             $k = $f.FullName.ToLowerInvariant(); $seen[$k] = $true
@@ -59,6 +59,6 @@ function Compare-WfxFileBaseline {
     foreach ($k in $old.Keys) { if (-not $seen.ContainsKey($k)) { $out.Add([pscustomobject]@{ Change = 'Deleted'; Path = $old[$k].Path; Modified = $old[$k].Modified; Detail = "$($old[$k].Size) bytes" }) } }
     $res = @($out | Sort-Object Change, Path)
     Write-WfxSection 'File baseline comparison'
-    Write-WfxConsole ("Baseline {0} ({1} files) · now: added {2}, deleted {3}, content changed {4}, timestamp-only {5}" -f $b.Created, @($b.Files).Count, @($res | Where-Object Change -eq 'Added').Count, @($res | Where-Object Change -eq 'Deleted').Count, @($res | Where-Object Change -eq 'ContentChanged').Count, @($res | Where-Object Change -eq 'TimestampOnly').Count) -Kind Info
+    Write-WfxConsole ("Baseline {0} ({1} files); now: added {2}, deleted {3}, content changed {4}, timestamp-only {5}" -f $b.Created, @($b.Files).Count, @($res | Where-Object Change -eq 'Added').Count, @($res | Where-Object Change -eq 'Deleted').Count, @($res | Where-Object Change -eq 'ContentChanged').Count, @($res | Where-Object Change -eq 'TimestampOnly').Count) -Kind Info
     $res
 }

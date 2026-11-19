@@ -164,8 +164,8 @@ footer{color:var(--slate);font-size:13.5px;border-top:1px solid var(--rule);padd
 <pre class="console has-copy"><button class="copy" type="button" data-copy="cd &quot;$HOME\Downloads\WinForensicX-{{VERSION}}&quot;&#10;.\Start-WinForensicX.ps1">Copy</button><span class="ps">PS C:\&gt;</span> cd "$HOME\Downloads\WinForensicX-{{VERSION}}"
 <span class="ps">PS …\WinForensicX-{{VERSION}}&gt;</span> .\Start-WinForensicX.ps1
 
-  WinForensicX  v{{VERSION}} <span class="dim">· read-only DFIR toolkit</span>
-  <span class="dim">Host PC-0412 · elevated · output E:\cases</span>
+  WinForensicX  v{{VERSION}}<span class="dim">, read-only DFIR toolkit</span>
+  <span class="dim">Host PC-0412, elevated, output E:\cases</span>
 
   ── Main menu ──────────────────────────────────
    <span class="key">1</span>  Investigate this computer  <span class="dim">triage and report</span>
@@ -255,7 +255,7 @@ footer{color:var(--slate);font-size:13.5px;border-top:1px solid var(--rule);padd
     <p class="when">You know roughly when something happened and want everything that changed around it, in one list.</p>
     <p>The combined timeline merges registry writes in persistence and security keys, installs, services, scheduled tasks, accounts, firewall and Defender changes, program executions, connections and deletions. Set a shorter look-back with <span class="tag"><kbd>6</kbd><span class="sep">›</span><kbd>3</kbd></span>.</p>
 <pre class="console wide">  ── Explore › Everything that changed recently (combined timeline) ──
-  <span class="r">Suspicious: 4 HIGH · 1 MEDIUM   (S = show only these)</span>
+  <span class="r">Suspicious: 4 HIGH, 1 MEDIUM   (S = show only these)</span>
 
 Flag   Why                                              Time                 Action                 Target
 ----   ---                                              ----                 ------                 ------
@@ -267,7 +267,7 @@ Flag   Why                                              Time                 Act
 <span class="y">MEDIUM Remote-access software installed: anydesk        2026-11-07T14:32:11Z Software installed     Product: AnyDesk -- Installation completed…</span>
 
   6 row(s).
-   <span class="key">S</span>  Show suspicious rows only    <span class="dim">4 HIGH · 1 MEDIUM</span>
+   <span class="key">S</span>  Show suspicious rows only    <span class="dim">4 HIGH, 1 MEDIUM</span>
    <span class="key">G</span>  Open in browser (sort, filter, copy)</pre>
     <p>Press <kbd>S</kbd> to hide everything that matched no rule, and <kbd>G</kbd> to open the view as a page you can sort, filter and copy from. The page works offline and treats every value as plain text, so a hostile file name cannot run script in it.</p>
     <figure>

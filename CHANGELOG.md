@@ -1,5 +1,47 @@
 # Changelog
 
+## 3.3.0 — parser accuracy and event detections
+
+### Parsers
+- **Event logs (.evtx)** are read by a built-in parser on every platform, and on Windows whenever the event
+  API cannot open a file. It handles damaged chunks (checked by CRC), files without a header, inline and
+  shared templates, arrays, embedded Sysmon data and classic unnamed parameters, and recovers older
+  records from unused space (marked `Recovered`, reported as a gap). Checked record by record against
+  libevtx on 37,364 records from 278 public attack-sample logs.
+- **Prefetch** versions 17, 23, 26, 30 and 31, including Windows 10/11 compressed files (XPRESS Huffman):
+  run count, the last eight run times, volumes and loaded files. The program's full path is taken from
+  the loaded-file list. The timeline has one entry per run. Matches libscca on 62 of 62 test files.
+- **SQLite** applies the `-wal` file (committed frames only), handles quoted names, table-level primary
+  keys, defaults and REAL affinity. 1,128 tables match the SQLite library.
+- **Shell items:** users property views, property stores, ZIP folders and many more known folders. 16,031
+  items match libfwsi.
+- **Registry:** ShimCache and BAM/DAM are read from every control set (entries only in an older control set
+  are marked), UserAssist handles Windows XP entries and skips counter entries, string values stop at the
+  first NUL. 1,170,935 keys match libregf.
+- **Sigma YAML:** comments, escapes, multi-line scalars and block scalars follow the YAML spec;
+  3,779 of 3,779 SigmaHQ rules parse identically to PyYAML.
+- Damaged input never stops a triage: fuzzing every parser with corrupted files found three numeric
+  overflows in the browser-history reader, now fixed.
+
+### Detections
+- Event rules can now test individual fields (`match`, `matchNot`, `differ`) with alternatives such as
+  `Image|NewProcessName`, so one rule covers Sysmon and Security events. Titles name the actual program,
+  key or account.
+- 47 new rules, among them: DCSync (4662), DSRM password change, SID history, boot debugging/test signing,
+  GetSystem pipe services, bare-command services, PsExec/Impacket pipes and executables copied to admin
+  shares (5145), tunnelled RDP, KrbRelayUp, pass-the-hash logons, LSASS handle requests (4656/4663),
+  silent-process-exit LSASS dumps, NTDS copies, xp_cmdshell, process tampering, WMI subscriptions,
+  unsigned drivers, remote threads, shellcode handle access, credential-dump files, Startup drops,
+  sideloaded and planted DLLs, Office and server processes starting shells, WMI execution, UAC bypasses
+  (auto-elevating parents and hijacked registry keys), masquerading and renamed binaries, weakened
+  security settings, persistence keys, SAM/LSA secret edits, port proxies, MRU wiping, potato/PsExec
+  pipes, suspicious BITS downloads, accessibility shims, Winsock LSPs, BlueKeep probes and stopped
+  logging services.
+- More events are collected (Security 4656, 4662, 4663, 4703, 4765, 4766, 4794, 4826, 5136, 5145;
+  System 7036; Application ESENT, SQL Server and WER events; Sysmon 2, 6, 12, 17–21, 25; BITS, shim,
+  Winsock and RDP core events), each with its own cap.
+- On the 278 public attack-sample logs, files with at least one finding rose from 84 to 201.
+
 ## 3.2.0 — process trees, log integrity, $MFT, SRUM, fleet movement
 
 ### Added

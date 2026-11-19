@@ -42,7 +42,7 @@ No install, no external modules, no network traffic of its own. Windows PowerShe
 3. **Start it from that window:**
 
    ```powershell
-   cd "$HOME\Downloads\WinForensicX-3.2.0"
+   cd "$HOME\Downloads\WinForensicX-3.3.0"
    .\Start-WinForensicX.ps1
    ```
 
@@ -393,7 +393,12 @@ look-alike artefacts **inside Windows Sandbox only**, checks each is flagged, an
   Sysmon, "nothing found" often means "nothing could be seen".
 - **Triage, not imaging.** No disk or memory acquisition, no carving of deleted files.
 - Live: Amcache is locked by Windows and is reported as a gap (collect it with KAPE or a VSS copy and use
-  `-ArtifactPath`); Prefetch is read for names and times only (its compressed contents are not decoded).
+  `-ArtifactPath`). Prefetch, including Windows 10/11 compressed files, is fully parsed (run count, last
+  eight run times, volumes, loaded files).
+- Event logs are read by a built-in parser when the Windows event API is unavailable or cannot open a file
+  (damaged or partly overwritten logs); that path has no rendered message text, only the event fields.
+- The built-in event detections were measured on 278 public attack-sample logs (EVTX-ATTACK-SAMPLES):
+  201 produce at least one finding. Live collection on Windows was not part of that measurement.
   SRUM is usually locked too and is then reported as a gap; a large SRUM database takes minutes to read.
   `$MFT` is read only from collected files; the tool never opens a raw volume.
 - Deleted ESE records are skipped. Timestomping is checked only for programs in user-writable folders, and

@@ -10,7 +10,7 @@
     $bundlePath = Resolve-WfxBundlePath -Path $InputPath
     $b = Get-Content -LiteralPath $bundlePath -Raw -Encoding UTF8 | ConvertFrom-Json
     $hn = [string](Get-WfxValue $b 'HostName' '')
-    $rows = New-Object System.Collections.Generic.List[object]
+    $rows = [System.Collections.Generic.List[object]]::new()
     $add = {
         param($Time, $Source, $Type, $Summary, $Detail = '')
         $t = ConvertTo-WfxDateTime $Time

@@ -62,7 +62,7 @@ function Add-WfxFlag {
         [Parameter(ValueFromPipeline)]$InputObject,
         [hashtable]$DnsMap = @{}
     )
-    begin { $all = New-Object System.Collections.Generic.List[object] }
+    begin { $all = [System.Collections.Generic.List[object]]::new() }
     process { if ($null -ne $InputObject) { $all.Add($InputObject) } }
     end {
         $recs = $all.ToArray()
@@ -87,7 +87,7 @@ function Add-WfxFlag {
         }
         # Index findings by the key each record type can be matched on.
         $by = @{}
-        $add = { param($k, $f) if (-not $by.ContainsKey($k)) { $by[$k] = New-Object System.Collections.Generic.List[object] }; $by[$k].Add($f) }
+        $add = { param($k, $f) if (-not $by.ContainsKey($k)) { $by[$k] = [System.Collections.Generic.List[object]]::new() }; $by[$k].Add($f) }
         foreach ($f in $findings) {
             $e = [string]$f.Entity
             switch ($Kind) {
@@ -139,11 +139,11 @@ function ConvertTo-WfxArtifactKey {
 function Add-WfxViewPattern {
     <# A finding about many rows at once (e.g. 400 deletions in 10 minutes). Shown above the table. #>
     param([string]$Severity, [string]$Text, [string[]]$Technique = @())
-    if ($null -eq $script:WfxViewPatterns) { $script:WfxViewPatterns = New-Object System.Collections.Generic.List[object] }
+    if ($null -eq $script:WfxViewPatterns) { $script:WfxViewPatterns = [System.Collections.Generic.List[object]]::new() }
     $script:WfxViewPatterns.Add([pscustomobject]@{ Severity = $Severity.ToUpperInvariant(); Text = $Text; Technique = (@($Technique) -join ', ') })
 }
 
-function Clear-WfxViewPattern { $script:WfxViewPatterns = New-Object System.Collections.Generic.List[object] }
+function Clear-WfxViewPattern { $script:WfxViewPatterns = [System.Collections.Generic.List[object]]::new() }
 function Get-WfxViewPattern { if ($null -eq $script:WfxViewPatterns) { return } ; $script:WfxViewPatterns.ToArray() }
 
 function Add-WfxCommandVerdict {
@@ -190,8 +190,8 @@ function Complete-WfxFlagRow {
 }
 
 function Get-WfxFlagSummary {
-    <# "2 HIGH · 1 MEDIUM" for a set of rows ('' when nothing is flagged). #>
+    <# "2 HIGH, 1 MEDIUM" for a set of rows ('' when nothing is flagged). #>
     param([object[]]$Rows)
     $g = @($Rows | Where-Object { $_ -and $_.PSObject.Properties['Flag'] -and $_.Flag -and $_.Flag -ne 'INFO' } | Group-Object Flag | Sort-Object { -$script:WfxFlagRank[$_.Name] })
-    (@($g | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ' · ')
+    (@($g | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', ')
 }

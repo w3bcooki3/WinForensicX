@@ -2,7 +2,9 @@
 # Used for browser download history (Chromium "History", Firefox "places.sqlite"). The database is copied
 # into memory with read sharing, so the browser keeps running; no SQLite library is loaded or executed.
 #
-# Limits: rows still in the write-ahead log (History-wal) are not read; freed pages are not carved.
+# A write-ahead log next to the database (History-wal, places.sqlite-wal) is applied in memory, committed
+# transactions only, so rows the browser has not yet checkpointed into the main file are read too.
+# Limits: freed pages are not carved.
 
 function Read-WfxSqliteVarint {
     param([byte[]]$B, [int]$O)
@@ -18,25 +20,107 @@ function Read-WfxSqliteVarint {
 }
 
 function Read-WfxBigEndian {
-    param([byte[]]$B, [int]$O, [int]$N)
+    param([byte[]]$B, [int]$O, [int]$N, [switch]$Unsigned)
     [long]$v = 0; for ($i = 0; $i -lt $N; $i++) { $v = ($v -shl 8) -bor $B[$O + $i] }
-    if ($N -lt 8 -and $N -gt 0 -and ($B[$O] -band 0x80)) { $v -= ([long]1 -shl (8 * $N)) }   # sign-extend
+    if (-not $Unsigned -and $N -lt 8 -and $N -gt 0 -and ($B[$O] -band 0x80)) { $v -= ([long]1 -shl (8 * $N)) }   # sign-extend
     $v
 }
 
-function Open-WfxSqlite {
-    <# Returns a database handle, or $null when the bytes are not an SQLite 3 database. #>
-    param([string]$Path, [byte[]]$Bytes)
-    if (-not $Bytes) {
-        try {
-            $fs = New-Object IO.FileStream($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
-            try { $Bytes = New-Object byte[] $fs.Length; $n = 0; while ($n -lt $Bytes.Length) { $r = $fs.Read($Bytes, $n, $Bytes.Length - $n); if ($r -le 0) { break }; $n += $r } } finally { $fs.Dispose() }
-        } catch { Write-Verbose "sqlite open failed: $Path : $($_.Exception.Message)"; return $null }
+function Read-WfxSharedFile {
+    <# All bytes of a file opened with read/write/delete sharing (the owning program keeps running). $null if unreadable. #>
+    param([string]$Path)
+    try {
+        $fs = New-Object IO.FileStream($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+        try { $b = New-Object byte[] $fs.Length; $n = 0; while ($n -lt $b.Length) { $r = $fs.Read($b, $n, $b.Length - $n); if ($r -le 0) { break }; $n += $r } } finally { $fs.Dispose() }
+        , $b
+    } catch { Write-Verbose "open failed: $Path : $($_.Exception.Message)"; $null }
+}
+
+function Get-WfxWalChecksum {
+    <# SQLite WAL checksum: pairs of 32-bit words (big-endian when $BigEndian), accumulated from $S0/$S1. #>
+    param([byte[]]$B, [int]$Off, [int]$Len, [uint32]$S0, [uint32]$S1, [bool]$BigEndian)
+    [long]$s0 = $S0; [long]$s1 = $S1
+    $end = $Off + $Len
+    if ($BigEndian) {
+        for ($i = $Off; $i -lt $end; $i += 8) {
+            $x0 = ([long]$B[$i] -shl 24) -bor ([long]$B[$i + 1] -shl 16) -bor ([long]$B[$i + 2] -shl 8) -bor $B[$i + 3]
+            $x1 = ([long]$B[$i + 4] -shl 24) -bor ([long]$B[$i + 5] -shl 16) -bor ([long]$B[$i + 6] -shl 8) -bor $B[$i + 7]
+            $s0 = ($s0 + $x0 + $s1) -band 0xFFFFFFFFL; $s1 = ($s1 + $x1 + $s0) -band 0xFFFFFFFFL
+        }
+    } else {
+        for ($i = $Off; $i -lt $end; $i += 8) {
+            $s0 = ($s0 + [long][BitConverter]::ToUInt32($B, $i) + $s1) -band 0xFFFFFFFFL
+            $s1 = ($s1 + [long][BitConverter]::ToUInt32($B, $i + 4) + $s0) -band 0xFFFFFFFFL
+        }
     }
+    , @([uint32]$s0, [uint32]$s1)
+}
+
+function Merge-WfxSqliteWal {
+    <#
+    .SYNOPSIS Applies the committed frames of an SQLite write-ahead log to a copy of the database bytes.
+    A frame counts when its salts match the log header and its checksum continues the chain; pages are applied
+    up to the last commit frame (later frames for a page win), and the database takes the size that commit
+    recorded. Frames of an unfinished transaction, or left from an earlier checkpoint, are ignored.
+    .OUTPUTS { Bytes; Frames (applied) }
+    #>
+    param([byte[]]$Db, [byte[]]$Wal, [int]$PageSize)
+    $none = [pscustomobject]@{ Bytes = $Db; Frames = 0 }
+    if (-not $Wal -or $Wal.Length -lt 32) { return $none }
+    $magic = [uint32](Read-WfxBigEndian $Wal 0 4 -Unsigned)
+    if ($magic -ne 0x377f0682L -and $magic -ne 0x377f0683L) { return $none }
+    $be = $magic -eq 0x377f0683L
+    $ps = [int](Read-WfxBigEndian $Wal 8 4 -Unsigned)
+    if ($ps -ne $PageSize) { return $none }
+    $salt1 = Read-WfxBigEndian $Wal 16 4 -Unsigned; $salt2 = Read-WfxBigEndian $Wal 20 4 -Unsigned
+    $ck = Get-WfxWalChecksum $Wal 0 24 0 0 $be
+    if ($ck[0] -ne (Read-WfxBigEndian $Wal 24 4 -Unsigned) -or $ck[1] -ne (Read-WfxBigEndian $Wal 28 4 -Unsigned)) { return $none }
+    $commits = [System.Collections.Generic.List[object]]::new()
+    $pos = 32; $frame = 24 + $ps
+    $cur = [System.Collections.Generic.List[object]]::new()
+    while ($pos + $frame -le $Wal.Length) {
+        if ((Read-WfxBigEndian $Wal ($pos + 8) 4 -Unsigned) -ne $salt1 -or (Read-WfxBigEndian $Wal ($pos + 12) 4 -Unsigned) -ne $salt2) { break }
+        $c1 = Get-WfxWalChecksum $Wal $pos 8 $ck[0] $ck[1] $be
+        $c2 = Get-WfxWalChecksum $Wal ($pos + 24) $ps $c1[0] $c1[1] $be
+        if ($c2[0] -ne (Read-WfxBigEndian $Wal ($pos + 16) 4 -Unsigned) -or $c2[1] -ne (Read-WfxBigEndian $Wal ($pos + 20) 4 -Unsigned)) { break }
+        $ck = $c2
+        $cur.Add([long]$pos)
+        $dbPages = Read-WfxBigEndian $Wal ($pos + 4) 4 -Unsigned
+        if ($dbPages -gt 0) { $commits.Add([pscustomobject]@{ Frames = $cur.ToArray(); Pages = $dbPages }); $cur.Clear() }
+        $pos += $frame
+    }
+    if (-not $commits.Count) { return $none }
+    $size = [long]$commits[$commits.Count - 1].Pages * $ps
+    if ($size -le 0 -or $size -gt 2GB) { return $none }
+    $out = New-Object byte[] $size
+    [Array]::Copy($Db, $out, [Math]::Min($Db.Length, $size))
+    $n = 0
+    foreach ($c in $commits) {
+        foreach ($f in $c.Frames) {
+            $pg = Read-WfxBigEndian $Wal ([int]$f) 4 -Unsigned
+            $dst = ($pg - 1) * $ps
+            if ($pg -ge 1 -and $dst + $ps -le $size) { [Array]::Copy($Wal, [int]$f + 24, $out, $dst, $ps); $n++ }
+        }
+    }
+    [pscustomobject]@{ Bytes = $out; Frames = $n }
+}
+
+function Open-WfxSqlite {
+    <#
+    Returns a database handle, or $null when the bytes are not an SQLite 3 database. With -Path, a write-ahead
+    log beside the file (<name>-wal) is applied unless -NoWal; WalFrames on the handle says how many pages it gave.
+    #>
+    param([string]$Path, [byte[]]$Bytes, [byte[]]$WalBytes, [switch]$NoWal)
+    if (-not $Bytes) { $Bytes = Read-WfxSharedFile $Path; if (-not $Bytes) { return $null } }
     if ($Bytes.Length -lt 512 -or [Text.Encoding]::ASCII.GetString($Bytes, 0, 15) -ne 'SQLite format 3') { return $null }
     $ps = ([int]$Bytes[16] -shl 8) -bor $Bytes[17]; if ($ps -eq 1) { $ps = 65536 }
+    $frames = 0
+    if (-not $NoWal) {
+        if (-not $WalBytes -and $Path -and (Test-Path -LiteralPath "$Path-wal" -PathType Leaf)) { $WalBytes = Read-WfxSharedFile "$Path-wal" }
+        if ($WalBytes) { $m = Merge-WfxSqliteWal -Db $Bytes -Wal $WalBytes -PageSize $ps; $Bytes = $m.Bytes; $frames = $m.Frames }
+    }
     $enc = [int](Read-WfxBigEndian $Bytes 56 4)
-    [pscustomobject]@{ B = $Bytes; PageSize = $ps; Usable = $ps - $Bytes[20]; Encoding = $(if ($enc -eq 2) { [Text.Encoding]::Unicode } elseif ($enc -eq 3) { [Text.Encoding]::BigEndianUnicode } else { [Text.Encoding]::UTF8 }) }
+    [pscustomobject]@{ B = $Bytes; PageSize = $ps; Usable = $ps - $Bytes[20]; WalFrames = $frames; Encoding = $(if ($enc -eq 2) { [Text.Encoding]::Unicode } elseif ($enc -eq 3) { [Text.Encoding]::BigEndianUnicode } else { [Text.Encoding]::UTF8 }) }
 }
 
 function Get-WfxSqlitePayload {
@@ -62,11 +146,11 @@ function ConvertFrom-WfxSqliteRecord {
     $h = Read-WfxSqliteVarint $R 0; $hdrLen = [int]$h[0]; $p = [int]$h[1]
     $types = New-Object System.Collections.Generic.List[long]
     while ($p -lt $hdrLen -and $p -lt $R.Length) { $v = Read-WfxSqliteVarint $R $p; $types.Add($v[0]); $p += $v[1] }
-    $d = $hdrLen; $vals = New-Object System.Collections.Generic.List[object]
+    $d = $hdrLen; $vals = [System.Collections.Generic.List[object]]::new()
     foreach ($t in $types) {
         $val = $null; $n = 0
         switch ($t) {
-            0 { } 8 { $val = 0 } 9 { $val = 1 }
+            0 { } 8 { $val = 0L } 9 { $val = 1L }
             1 { $n = 1 } 2 { $n = 2 } 3 { $n = 3 } 4 { $n = 4 } 5 { $n = 6 } 6 { $n = 8 }
             7 { $n = 8 }
             default { $n = if ($t -ge 12) { [int][Math]::Floor(($t - 12) / 2) } else { 0 } }
@@ -77,6 +161,7 @@ function ConvertFrom-WfxSqliteRecord {
             elseif ($t -ge 13 -and ($t % 2) -eq 1) { $val = $Sdb.Encoding.GetString($R, $d, $n) }
             else { $tmp = New-Object byte[] $n; [Array]::Copy($R, $d, $tmp, 0, $n); $val = $tmp }
         } elseif ($t -ge 13 -and ($t % 2) -eq 1) { $val = '' }
+        elseif ($t -ge 12 -and ($t % 2) -eq 0) { $val = [byte[]]@() }
         $vals.Add($val); $d += $n
     }
     , $vals.ToArray()
@@ -85,7 +170,7 @@ function ConvertFrom-WfxSqliteRecord {
 function Get-WfxSqliteRows {
     <# Every (rowid, values[]) of the table b-tree rooted at a page. Bounded against cycles. #>
     param($Sdb, [long]$RootPage, [int]$Max = 200000)
-    $b = $Sdb.B; $out = New-Object System.Collections.Generic.List[object]
+    $b = $Sdb.B; $out = [System.Collections.Generic.List[object]]::new()
     $stack = New-Object System.Collections.Generic.Stack[long]; $stack.Push($RootPage); $visited = @{}
     while ($stack.Count -and $out.Count -lt $Max) {
         $pg = $stack.Pop(); if ($visited.ContainsKey($pg) -or $pg -lt 1) { continue }; $visited[$pg] = $true
@@ -136,23 +221,53 @@ function Find-WfxSqliteRow {
 }
 
 function Get-WfxSqliteSchema {
-    <# Root page and column names (INTEGER PRIMARY KEY index) of a table, from sqlite_master. #>
+    <#
+    Root page, column names, declared types and the rowid alias of a table, from sqlite_master. A column is the
+    rowid alias when its declared type is exactly INTEGER and it is the primary key, written on the column
+    ("id INTEGER NOT NULL PRIMARY KEY") or as the table's single-column key ("PRIMARY KEY (id)").
+    #>
     param($Sdb, [string]$Table)
     $def = Get-WfxSqliteRows $Sdb 1 | Expand-WfxRecord | Where-Object { $_.Values[0] -eq 'table' -and $_.Values[1] -ieq $Table } | Select-Object -First 1
     if (-not $def) { return $null }
     $sql = [string]$def.Values[4]
-    $body = $sql.Substring($sql.IndexOf('(') + 1); $body = $body.Substring(0, $body.LastIndexOf(')'))
-    $cols = New-Object System.Collections.Generic.List[string]; $depth = 0; $cur = ''
-    foreach ($ch in $body.ToCharArray()) { if ($ch -eq '(') { $depth++ } elseif ($ch -eq ')') { $depth-- }; if ($ch -eq ',' -and $depth -eq 0) { $cols.Add($cur); $cur = '' } else { $cur += $ch } }
-    if ($cur) { $cols.Add($cur) }
-    $names = @(); $pk = -1
-    foreach ($c in $cols) {
-        $c = $c.Trim(); if ($c -match '^(?i)(?:PRIMARY|UNIQUE|CHECK|FOREIGN|CONSTRAINT)\b') { continue }
-        $nm = ($c -split '\s+')[0].Trim('"', '`', '[', ']')
-        if ($c -match '(?i)\bINTEGER\s+PRIMARY\s+KEY\b') { $pk = $names.Count }
-        $names += $nm
+    if ($sql -match '(?i)\)\s*WITHOUT\s+ROWID\s*;?\s*$' -or $sql -match '(?i)^\s*CREATE\s+VIRTUAL\b') { return $null }
+    $open = $sql.IndexOf('('); $close = $sql.LastIndexOf(')')
+    if ($open -lt 0 -or $close -le $open) { return $null }
+    $body = $sql.Substring($open + 1, $close - $open - 1)
+    # Split on top-level commas, ignoring commas inside brackets and quotes.
+    $cols = New-Object System.Collections.Generic.List[string]; $depth = 0; $cur = ''; $q = [char]0
+    foreach ($ch in $body.ToCharArray()) {
+        if ($q -ne [char]0) { if ($ch -eq $q) { $q = [char]0 }; $cur += $ch; continue }
+        if ($ch -eq '"' -or $ch -eq "'" -or $ch -eq '`') { $q = $ch; $cur += $ch; continue }
+        if ($ch -eq '[') { $q = ']'; $cur += $ch; continue }
+        if ($ch -eq '(') { $depth++ } elseif ($ch -eq ')') { $depth-- }
+        if ($ch -eq ',' -and $depth -eq 0) { $cols.Add($cur); $cur = '' } else { $cur += $ch }
     }
-    [pscustomobject]@{ Root = [long]$def.Values[3]; Names = $names; Pk = $pk }
+    if ($cur.Trim()) { $cols.Add($cur) }
+    $names = @(); $types = @(); $defaults = @(); $pk = -1; $tablePk = $null
+    foreach ($c in $cols) {
+        $c = $c.Trim()
+        if ($c -match '^(?i)(?:CONSTRAINT\s+\S+\s+)?PRIMARY\s+KEY\s*\(\s*["`\[]?([^"`\]\s,)]+)["`\]]?\s*(?:ASC|DESC)?\s*\)') { $tablePk = $Matches[1]; continue }
+        if ($c -match '^(?i)(?:PRIMARY|UNIQUE|CHECK|FOREIGN|CONSTRAINT)\b') { continue }
+        if ($c -match '^\s*"((?:[^"]|"")*)"\s*(.*)$' -or $c -match "^\s*'((?:[^']|'')*)'\s*(.*)$" -or $c -match '^\s*`([^`]*)`\s*(.*)$' -or $c -match '^\s*\[([^\]]*)\]\s*(.*)$' -or $c -match '^\s*(\S+)\s*(.*)$') { $nm = $Matches[1]; $rest = $Matches[2] } else { continue }
+        $type = ($rest -replace '(?i)\b(?:CONSTRAINT|PRIMARY|NOT|NULL|UNIQUE|CHECK|DEFAULT|COLLATE|REFERENCES|GENERATED|AS)\b.*$', '').Trim()
+        # DEFAULT: rows written before ALTER TABLE ADD COLUMN read the column's default.
+        $dv = $null
+        if ($rest -match "(?i)\bDEFAULT\s+(?:\(\s*)?([+-]?\d+(?:\.\d+)?(?:e[+-]?\d+)?|'(?:[^']|'')*'|NULL|TRUE|FALSE|X'[0-9a-f]*')") {
+            $lit = $Matches[1]
+            $dv = if ($lit -match "^'") { $lit.Substring(1, $lit.Length - 2).Replace("''", "'") }
+            elseif ($lit -match '(?i)^NULL$') { $null } elseif ($lit -match '(?i)^TRUE$') { 1L } elseif ($lit -match '(?i)^FALSE$') { 0L }
+            elseif ($lit -match "(?i)^X'") { $hx = $lit.Substring(2, $lit.Length - 3); [byte[]]@(for ($j = 0; $j + 1 -lt $hx.Length; $j += 2) { [Convert]::ToByte($hx.Substring($j, 2), 16) }) }
+            elseif ($lit -match '[.eE]') { [double]::Parse($lit, [Globalization.CultureInfo]::InvariantCulture) } else { [long]$lit }
+        }
+        $defaults += , $dv
+        if ($rest -match '(?i)^INTEGER\b(?:(?!\bDESC\b).)*\bPRIMARY\s+KEY\b' -and $rest -notmatch '(?i)\bPRIMARY\s+KEY\s+DESC\b') { $pk = $names.Count }
+        $names += $nm; $types += $type
+    }
+    if ($pk -lt 0 -and $tablePk) {
+        for ($i = 0; $i -lt $names.Count; $i++) { if ($names[$i] -ieq $tablePk -and $types[$i] -ieq 'INTEGER') { $pk = $i } }
+    }
+    [pscustomobject]@{ Root = [long]$def.Values[3]; Names = $names; Types = $types; Defaults = $defaults; Pk = $pk }
 }
 
 function Get-WfxSqliteTable {
@@ -161,9 +276,16 @@ function Get-WfxSqliteTable {
     $sc = Get-WfxSqliteSchema $Sdb $Table
     if (-not $sc) { return }
     $names = $sc.Names; $pk = $sc.Pk
+    # REAL affinity: SQLite stores whole-number REAL values as integers; give them back as numbers with a fraction part.
+    $real = @(for ($i = 0; $i -lt $names.Count; $i++) { [bool]($sc.Types[$i] -match '(?i)REAL|FLOA|DOUB') -and -not ($sc.Types[$i] -match '(?i)INT') })
     foreach ($row in (Get-WfxSqliteRows $Sdb $sc.Root $Max)) {
         $o = [ordered]@{}
-        for ($i = 0; $i -lt $names.Count; $i++) { $o[$names[$i]] = if ($i -eq $pk) { $row.RowId } elseif ($i -lt $row.Values.Count) { $row.Values[$i] } else { $null } }
+        for ($i = 0; $i -lt $names.Count; $i++) {
+            # Plain assignments: an if-expression would unroll a BLOB (byte[]) into an object array.
+            if ($i -eq $pk) { $v = $row.RowId } elseif ($i -lt $row.Values.Count) { $v = $row.Values[$i] } else { $v = $sc.Defaults[$i] }
+            if ($real[$i] -and ($v -is [long] -or $v -is [int])) { $v = [double]$v }
+            $o[$names[$i]] = $v
+        }
         [pscustomobject]$o
     }
 }

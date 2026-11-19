@@ -111,7 +111,7 @@
         $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
         $caseId = if ($r.Case -and $r.Case.Id) { [string]$r.Case.Id } else { $hn }
         $identity = "identity--$(New-WfxUuidV5 'WinForensicX')"
-        $objs = New-Object System.Collections.Generic.List[object]
+        $objs = [System.Collections.Generic.List[object]]::new()
         $objs.Add([ordered]@{ type = 'identity'; spec_version = '2.1'; id = $identity; created = '2026-01-01T00:00:00.000Z'; modified = '2026-01-01T00:00:00.000Z'; name = 'WinForensicX'; identity_class = 'system' })
         $apIds = @{}
         foreach ($tq in @($findings | ForEach-Object { $_.Technique } | Where-Object { $_ } | Sort-Object -Unique)) {

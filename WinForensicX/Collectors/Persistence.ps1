@@ -6,7 +6,7 @@
 
 function Get-WfxPersistenceData {
     if (-not (Test-WfxWindows)) { return @() }
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
 
     $add = {
         param($Kind, $Name, $Command, $Location, $User = '')

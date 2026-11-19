@@ -5,7 +5,7 @@
 
 function Invoke-WfxPostureAnalyzer {
     param($Posture, [string]$HostName = '')
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     if (-not $Posture) { return , $findings.ToArray() }
 
     $def = Get-WfxValue $Posture 'Defender' $null

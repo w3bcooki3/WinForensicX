@@ -16,7 +16,7 @@
 function Invoke-WfxLogIntegrityAnalyzer {
     [CmdletBinding()]
     param([object[]]$Event = @(), [string]$HostName = '')
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $rows = foreach ($e in $Event) {
         if (-not $e) { continue }
         $t = ConvertTo-WfxDateTime (Get-WfxValue $e 'TimeCreated' (Get-WfxValue $e 'Time' $null))
@@ -29,7 +29,7 @@ function Invoke-WfxLogIntegrityAnalyzer {
     # 1. Time running backwards, per log and machine, in write order.
     foreach ($g in @($rows | Where-Object { $_.RecordId -gt 0 -and $_.Log } | Group-Object Log, Computer)) {
         $seq = @($g.Group | Sort-Object RecordId)
-        $hits = New-Object System.Collections.Generic.List[object]
+        $hits = [System.Collections.Generic.List[object]]::new()
         for ($i = 1; $i -lt $seq.Count; $i++) {
             $a = $seq[$i - 1]; $b = $seq[$i]
             # Close record numbers only: a large jump can be two generations of the log (an archive and the

@@ -2,8 +2,8 @@
 # UsrClass.dat, Amcache.hve. Pure byte parsing of a copy held in memory: the file is opened for reading
 # with sharing, never loaded into the live registry (no "reg load"), and nothing in it is executed.
 #
-# Limits: transaction logs (.LOG1/.LOG2) are not replayed, so a "dirty" hive copied from a running system
-# can lack the most recent writes; deleted (unallocated) keys are not recovered. Both are reported.
+# A "dirty" hive copied from a running system is brought up to date from its transaction logs (.LOG1/.LOG2,
+# Windows 8.1 and later format) in memory. Deleted (unallocated) keys are not recovered.
 
 function Open-WfxHive {
     <#
@@ -42,7 +42,7 @@ function Invoke-WfxHiveLogReplay {
     #>
     param([byte[]]$Bytes, [string[]]$LogPath)
     $out = New-Object byte[] $Bytes.Length; [Array]::Copy($Bytes, $out, $Bytes.Length)
-    $entries = New-Object System.Collections.Generic.List[object]
+    $entries = [System.Collections.Generic.List[object]]::new()
     foreach ($lp in $LogPath) {
         try { $L = [IO.File]::ReadAllBytes($lp) } catch { continue }
         if ($L.Length -lt 1024 -or [Text.Encoding]::ASCII.GetString($L, 0, 4) -ne 'regf') { continue }
@@ -151,7 +151,7 @@ function Get-WfxHiveValue {
     .SYNOPSIS Values of a key node: Name, Type (REG_*), Data (string / string[] / int / long / byte[]).
     .PARAMETER Name Return only this value ('' or '(default)' for the default value).
     #>
-    param($Hive, $Node, [string]$Name)
+    param($Hive, $Node, [string]$Name, [switch]$IncludeRaw)
     if (-not $Node -or $Node.ValueCount -eq 0) { return }
     $b = $Hive.B; $lo = Get-WfxHiveCell $Hive $Node.ValueList
     if ($lo -lt 0) { return }
@@ -165,7 +165,9 @@ function Get-WfxHiveValue {
         if ($null -ne $want -and $vname -ine $want) { continue }
         $size = [BitConverter]::ToUInt32($b, $vo + 4); $doff = [BitConverter]::ToUInt32($b, $vo + 8); $type = [BitConverter]::ToUInt32($b, $vo + 0xC)
         $raw = Get-WfxHiveData $Hive $size $doff
-        [pscustomobject]@{ Name = $vname; Type = (ConvertTo-WfxRegTypeName $type); Data = (ConvertFrom-WfxRegData $type $raw) }
+        $v = [pscustomobject]@{ Name = $vname; Type = (ConvertTo-WfxRegTypeName $type); Data = (ConvertFrom-WfxRegData $type $raw) }
+        if ($IncludeRaw) { $v | Add-Member -NotePropertyName Raw -NotePropertyValue $raw; $v | Add-Member -NotePropertyName TypeId -NotePropertyValue $type }
+        $v
         if ($null -ne $want) { return }
     }
 }
@@ -205,7 +207,11 @@ function ConvertFrom-WfxRegData {
     param([uint32]$Type, $Raw)
     $r = [byte[]]@($Raw)
     switch ($Type) {
-        { $_ -in 1, 2 } { return ([Text.Encoding]::Unicode.GetString($r, 0, $r.Length - ($r.Length % 2))).TrimEnd([char]0) }
+        { $_ -in 1, 2 } {
+            # A string ends at its first NUL, as Windows reads it; bytes after that (slack or hidden data) are not part of it.
+            $s = [Text.Encoding]::Unicode.GetString($r, 0, $r.Length - ($r.Length % 2)); $z = $s.IndexOf([char]0)
+            return $(if ($z -ge 0) { $s.Substring(0, $z) } else { $s })
+        }
         7 { return , @(([Text.Encoding]::Unicode.GetString($r, 0, $r.Length - ($r.Length % 2))) -split "`0" | Where-Object { $_ }) }
         4 { if ($r.Length -ge 4) { return [BitConverter]::ToUInt32($r, 0) } else { return $null } }
         11 { if ($r.Length -ge 8) { return [BitConverter]::ToUInt64($r, 0) } else { return $null } }

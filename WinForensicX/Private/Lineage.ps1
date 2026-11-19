@@ -18,7 +18,7 @@ function ConvertFrom-WfxPidValue {
 function New-WfxProcessGraph {
     <# Builds an index of process starts. Returns { Nodes (List); ByGuid; ByPid (pid -> nodes sorted by start) }. #>
     param([object[]]$Event = @(), [object[]]$Process = @())
-    $nodes = New-Object System.Collections.Generic.List[object]
+    $nodes = [System.Collections.Generic.List[object]]::new()
     $byGuid = @{}; $byPid = @{}; $byLeaf = @{}; $byPidAny = @{}
     $add = {
         param($n)
@@ -26,9 +26,9 @@ function New-WfxProcessGraph {
         if ($n.Guid) { $byGuid[$n.Guid] = $n }
         $lf = if ($n.Image) { ($n.Image -split '\\')[-1].ToLowerInvariant() } else { '' }
         $n | Add-Member -NotePropertyName Leaf -NotePropertyValue $lf
-        if ($lf) { if (-not $byLeaf.ContainsKey($lf)) { $byLeaf[$lf] = New-Object System.Collections.Generic.List[object] }; $byLeaf[$lf].Add($n) }
-        if ($null -ne $n.Pid) { if (-not $byPidAny.ContainsKey($n.Pid)) { $byPidAny[$n.Pid] = New-Object System.Collections.Generic.List[object] }; $byPidAny[$n.Pid].Add($n) }
-        if ($null -ne $n.Pid) { $k = "$($n.Computer)|$($n.Pid)"; if (-not $byPid.ContainsKey($k)) { $byPid[$k] = New-Object System.Collections.Generic.List[object] }; $byPid[$k].Add($n) }
+        if ($lf) { if (-not $byLeaf.ContainsKey($lf)) { $byLeaf[$lf] = [System.Collections.Generic.List[object]]::new() }; $byLeaf[$lf].Add($n) }
+        if ($null -ne $n.Pid) { if (-not $byPidAny.ContainsKey($n.Pid)) { $byPidAny[$n.Pid] = [System.Collections.Generic.List[object]]::new() }; $byPidAny[$n.Pid].Add($n) }
+        if ($null -ne $n.Pid) { $k = "$($n.Computer)|$($n.Pid)"; if (-not $byPid.ContainsKey($k)) { $byPid[$k] = [System.Collections.Generic.List[object]]::new() }; $byPid[$k].Add($n) }
     }
     foreach ($e in $Event) {
         if (-not $e) { continue }
@@ -81,7 +81,7 @@ function Get-WfxProcessParent {
 function Get-WfxProcessLineage {
     <# Ancestry of $Node, oldest first, ending with $Node. Adds the parent named by the child's own record when the parent's start was not collected. #>
     param($Graph, $Node, [int]$Max = 12)
-    $chain = New-Object System.Collections.Generic.List[object]
+    $chain = [System.Collections.Generic.List[object]]::new()
     $seen = New-Object System.Collections.Generic.HashSet[object]
     $cur = $Node
     while ($cur -and $chain.Count -lt $Max -and $seen.Add($cur)) {

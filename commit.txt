@@ -1,37 +1,40 @@
-WinForensicX 3.2.0: process trees, log integrity, $MFT, SRUM, fleet movement
+WinForensicX 3.3.0: parser accuracy and event detections
 
-Includes 3.1.0 (not pushed separately).
+Parsers
+- Built-in .evtx reader: CRC-checked chunks, headerless files, inline and
+  shared templates, arrays, embedded Sysmon data, unnamed parameters, and
+  older records recovered from slack (marked Recovered). Used on Linux/macOS
+  and on Windows when the event API cannot open a file. Matches libevtx on
+  37,364 records from 278 public attack-sample logs.
+- Prefetch v17/23/26/30/31 including compressed Windows 10/11 files (XPRESS
+  Huffman): run count, last eight run times, volumes, loaded files, full
+  program path. One timeline entry per run. Matches libscca 62/62.
+- SQLite: -wal applied (committed frames only), quoted names, table-level
+  primary keys, defaults, REAL affinity. 1,128 tables match SQLite.
+- Shell items: users property views, property stores, ZIP folders, more
+  known folders. 16,031 items match libfwsi.
+- Registry: ShimCache and BAM/DAM from every control set, UserAssist XP
+  entries, REG_SZ cut at the first NUL. 1,170,935 keys match libregf.
+- Sigma YAML follows the spec (comments, escapes, multi-line and block
+  scalars): 3,779/3,779 SigmaHQ rules parse identically to PyYAML.
+- Fuzzing with corrupted files: three numeric overflows in the browser
+  history reader fixed.
 
-Engine (3.2.0)
-- Process trees rebuilt from Sysmon 1 (process GUID), 4688 (process ID and
-  start time, so reused IDs are not taken for the parent) and the process
-  list; findings carry their ancestry and the case file shows it as a tree.
-- Event-log integrity: clock set back while a log was recording, a busy
-  Security or Sysmon log falling silent while other logs kept recording,
-  Sysmon stopped or reconfigured. Sysmon events 4 and 16 are collected.
-- $MFT parsing from collected files: programs, scripts, archives and
-  shortcuts, deleted records, ADS, download origin (Zone.Identifier), and
-  timestomp detection (SI vs FN times) in user-writable folders.
-- SRUM (SRUDB.dat) through a new read-only ESE reader: network and disk bytes
-  per program and user; large uploads by exfiltration tools or programs that
-  do not usually upload are reported.
-- Fleet report: movement between hosts (remote logons in, explicit
-  credentials and SMB/RDP/WinRM/RPC/SSH out), machines not yet triaged, and
-  programs recorded on only one host. result.json carries compact Programs,
-  Logons and Addresses summaries; host info records its own addresses.
-- Fleet report times stay UTC on PowerShell 7 (JSON dates were read back as
-  local-format text).
-
-Report and pages (3.1.0)
-- Case report redesigned: masthead, summary, chart of when it happened,
-  incidents with a likely starting point, and a case file per finding (what
-  happened, when, how we know, what to do). Print gives every case file with
-  running headers and page numbers. All times UTC.
-- Explore views in the browser, fleet report, in-tool help and field guide
-  share the same design.
-- Corroboration: independent sources that saw the same program, with the
-  earliest trace; two or more raise confidence one level.
-- ATT&CK names for T1566 (.001, .002) and T1189.
-- %SystemRoot% paths were flagged as masquerading (fixed).
+Detections
+- Event rules can test individual fields (match, matchNot, differ) with
+  alternatives such as Image|NewProcessName; titles name the program, key or
+  account.
+- 47 new rules: DCSync, DSRM, SID history, boot debug/test signing, GetSystem
+  and bare-command services, PsExec/Impacket pipes and admin-share copies,
+  tunnelled RDP, KrbRelayUp, pass-the-hash logons, LSASS access, silent-exit
+  dumps, NTDS copies, xp_cmdshell, process tampering, WMI subscriptions,
+  unsigned drivers, remote threads, shellcode access, dump files, Startup
+  drops, sideloaded/planted DLLs, Office and server processes starting
+  shells, WMI execution, UAC bypasses, masquerading and renamed binaries,
+  weakened settings, persistence keys, SAM/LSA edits, port proxies, MRU
+  wiping, privilege-escalation pipes, BITS, shims, Winsock LSPs, BlueKeep
+  probes, stopped logging services.
+- More event IDs collected, each query with its own cap.
+- Attack-sample logs with at least one finding: 84 -> 201 of 278.
 
 Tests and the scenario suite are not updated in this push.

@@ -2,7 +2,7 @@
 # Compatible with Windows PowerShell 5.1 and PowerShell 7+. Analysis helpers here are
 # platform-neutral so analyzers can run (and be tested) on any OS.
 
-$script:WfxVersion = '3.2.0'
+$script:WfxVersion = '3.3.0'
 $script:WfxSeverities = @('Info', 'Low', 'Medium', 'High', 'Critical')
 $script:WfxSeverityWeight = @{ Info = 0; Low = 2; Medium = 5; High = 10; Critical = 20 }
 $script:WfxConfidenceFactor = @{ Low = 0.5; Medium = 0.8; High = 1.0 }
@@ -10,7 +10,7 @@ $script:WfxConfidenceFactor = @{ Low = 0.5; Medium = 0.8; High = 1.0 }
 # separately (Posture score) so a well-run but un-hardened host is not reported as "compromised".
 $script:WfxPostureCategories = @('Posture', 'Visibility')
 $script:WfxCase = $null
-$script:WfxGaps = New-Object System.Collections.Generic.List[object]
+$script:WfxGaps = [System.Collections.Generic.List[object]]::new()
 $script:WfxQuiet = $false
 # Every built-in regex that runs over collected (potentially attacker-controlled) text uses this timeout.
 $script:WfxRegexTimeout = [TimeSpan]::FromMilliseconds(250)
@@ -45,7 +45,7 @@ function Get-WfxRxMatches {
     <# All matches of a pattern; on a regex timeout returns what was found so far (never hangs). #>
     param([string]$Pattern, [AllowEmptyString()][string]$Text)
     # Emits Match objects to the pipeline (wrap the call in @() to count them).
-    $list = New-Object System.Collections.Generic.List[object]
+    $list = [System.Collections.Generic.List[object]]::new()
     if ([string]::IsNullOrEmpty($Text)) { return }
     try { foreach ($m in (Get-WfxRx $Pattern).Matches($Text)) { $list.Add($m) } }
     catch [System.Text.RegularExpressions.RegexMatchTimeoutException] { Write-Verbose "regex timeout: $Pattern" }
@@ -276,8 +276,8 @@ function Split-WfxAllowlisted {
     <# Splits findings into Kept and Suppressed according to the allowlist. Suppressed findings are never
        silently dropped — they are reported separately with the matching reason. #>
     param([object[]]$Finding, [object[]]$Allowlist)
-    $kept = New-Object System.Collections.Generic.List[object]
-    $supp = New-Object System.Collections.Generic.List[object]
+    $kept = [System.Collections.Generic.List[object]]::new()
+    $supp = [System.Collections.Generic.List[object]]::new()
     foreach ($f in @($Finding | Where-Object { $_ })) {
         $hit = $null
         foreach ($a in @($Allowlist)) {
@@ -342,7 +342,7 @@ $script:WfxSecretPatterns = @(
 function Find-WfxSecret {
     <# Finds well-known secret formats in text. Returns type + redacted value + line number; never the secret. #>
     param([AllowEmptyString()][string]$Text)
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     if ([string]::IsNullOrEmpty($Text)) { return , $out.ToArray() }
     $lines = $Text -split "`r?`n"
     for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -473,7 +473,7 @@ function Test-WfxUserWritablePath {
     $p = $Path.ToLowerInvariant() -replace '/', '\'
     if (Test-WfxTrustedVendorPath $p) { return $false }
     return [bool]($p -match '\\appdata\\|\\temp\\|\\tmp\\|\\downloads\\|\\desktop\\|\\documents\\|\\users\\public\\|\\programdata\\|\\windows\\temp\\|\\windows\\tasks\\|\\windows\\tracing\\|\\perflogs\\|\\\$recycle\.bin\\|\\recycler\\|\\inetpub\\temp|\\windows\\debug\\|\\spool\\drivers\\color\\|\\music\\|\\videos\\|\\pictures\\' -or
-        $p -match '^[a-z]:\\[^\\]+\.(exe|dll|ps1|bat|vbs|js|hta)$')
+        $p -match '^(?:[a-z]:|\(volume\)|\\device\\harddiskvolume\d+)\\[^\\]+\.(exe|dll|ps1|bat|vbs|js|hta)$')
 }
 
 function Test-WfxTrustedVendorPath {
@@ -487,7 +487,7 @@ function Test-WfxTrustedVendorPath {
 function Test-WfxSystemPath {
     param([AllowEmptyString()][string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
-    return [bool]($Path -match '(?i)^(?:[a-z]:)?\\windows\\(system32|syswow64|winsxs)\\' -or $Path -match '(?i)^\\systemroot\\system32\\')
+    return [bool]($Path -match '(?i)^(?:[a-z]:|\(volume\)|\\device\\harddiskvolume\d+)?\\windows\\(system32|syswow64|winsxs)\\' -or $Path -match '(?i)^\\systemroot\\system32\\')
 }
 
 function Test-WfxTrustedSignature {
@@ -517,6 +517,15 @@ function ConvertTo-WfxInt {
     param($Value, [int]$Default = 0)
     $n = 0
     if ($null -ne $Value -and [int]::TryParse(([string]$Value).Trim(), [ref]$n)) { return $n }
+    return $Default
+}
+
+function ConvertTo-WfxLong {
+    <# 64-bit integer from saved evidence that may be malformed or damaged: never throws, returns -Default. #>
+    param($Value, [long]$Default = 0)
+    if ($Value -is [long] -or $Value -is [int]) { return [long]$Value }
+    $n = 0L
+    if ($null -ne $Value -and -not ($Value -is [array]) -and [long]::TryParse(([string]$Value).Trim(), [ref]$n)) { return $n }
     return $Default
 }
 

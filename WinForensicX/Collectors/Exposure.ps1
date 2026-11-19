@@ -55,7 +55,7 @@ function Get-WfxRedactedHits {
     <# Returns redacted secret descriptors for a block of text WITHOUT returning any raw value.
        Combines Find-WfxSecret (known key formats) with a generic key=value / assignment detector. #>
     param([AllowEmptyString()][string]$Text, [int]$MaxHits = 20)
-    $hits = New-Object System.Collections.Generic.List[object]
+    $hits = [System.Collections.Generic.List[object]]::new()
     if ([string]::IsNullOrEmpty($Text)) { return , $hits.ToArray() }
     foreach ($s in (Find-WfxSecret $Text)) {
         if ($hits.Count -ge $MaxHits) { break }
@@ -98,7 +98,7 @@ function Get-WfxExposureData {
     #>
     param([switch]$IncludeFileScan)
     if (-not (Test-WfxWindows)) { return @() }
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $add = { param($Kind, $Path, $Detail = '', $Accessible = $false, $WorldReadable = $false, $Redacted = @())
         $out.Add([pscustomobject]@{ Kind = $Kind; Path = $Path; Detail = $Detail; Accessible = [bool]$Accessible; WorldReadable = [bool]$WorldReadable; Content = ''; Redacted = @($Redacted) }) }
 

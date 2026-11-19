@@ -9,7 +9,7 @@ function ConvertTo-WfxViewHtml {
     $rows = @($Rows | Expand-WfxRecord)
     $cols = New-Object System.Collections.Generic.List[string]
     foreach ($r in $rows) { foreach ($p in $r.PSObject.Properties) { if (-not $cols.Contains($p.Name)) { $cols.Add($p.Name) } } }
-    $data = New-Object System.Collections.Generic.List[object]      # list of string[] — stays 2-D even with one row
+    $data = [System.Collections.Generic.List[object]]::new()      # list of string[] — stays 2-D even with one row
     foreach ($r in $rows) {
         $cells = New-Object string[] $cols.Count
         for ($i = 0; $i -lt $cols.Count; $i++) {

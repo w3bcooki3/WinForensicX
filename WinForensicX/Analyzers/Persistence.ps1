@@ -5,7 +5,7 @@
 
 function Invoke-WfxPersistenceAnalyzer {
     param([object[]]$Autostart, [string]$HostName = '')
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     $items = @($Autostart | Where-Object { $_ })
     if ($items.Count -eq 0) { return , $findings.ToArray() }
 

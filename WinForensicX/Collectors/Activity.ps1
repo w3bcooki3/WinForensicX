@@ -118,7 +118,7 @@ function Get-WfxRegistryActivity {
     param([int]$Days = 7)
     if (-not (Test-WfxWindows) -or -not (Initialize-WfxRegTime)) { return @() }
     $cut = (Get-Date).ToUniversalTime().AddDays(-[Math]::Abs($Days))
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $users = @(Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^S-1-5-21-|^S-1-12-1-' -and $_.PSChildName -notmatch '_Classes$' } | ForEach-Object { $_.PSChildName })
     foreach ($k in $script:WfxActivityRegKeys) {
         $roots = switch ($k.Hive) { 'HKLM' { @('HKLM:') } 'HKU' { @($users | ForEach-Object { "Registry::HKEY_USERS\$_" }) } default { @('HKLM:') + @($users | ForEach-Object { "Registry::HKEY_USERS\$_" }) } }
@@ -266,7 +266,7 @@ function ConvertTo-WfxUsnActivity {
     #>
     param([object[]]$Record, [scriptblock]$Resolve, [string]$Volume = 'C:')
     $old = @{}
-    $events = New-Object System.Collections.Generic.List[object]
+    $events = [System.Collections.Generic.List[object]]::new()
     foreach ($r in ($Record | Sort-Object Usn)) {
         if ($r.Flags -band 0x1000) { $old[$r.FileId] = $r }
         if (-not ($r.Flags -band 0x80000000L)) { continue }
@@ -290,9 +290,9 @@ function ConvertTo-WfxUsnActivity {
         $detail = ''
         if ($e.Rename -and $e.Prev) {
             $from = & $full $e.Prev.ParentId $e.Prev.Name
-            if ($e.RecycleItem) { $action = 'Deleted to Recycle Bin'; $detail = "$kind · now $target"; $target = $from }
-            elseif ($e.Prev.ParentId -eq $r.ParentId) { $action = 'Renamed'; $detail = "$kind · was: $($e.Prev.Name)" }
-            else { $action = 'Moved'; $detail = "$kind · from: $from" }
+            if ($e.RecycleItem) { $action = 'Deleted to Recycle Bin'; $detail = "$kind; now $target"; $target = $from }
+            elseif ($e.Prev.ParentId -eq $r.ParentId) { $action = 'Renamed'; $detail = "$kind; was: $($e.Prev.Name)" }
+            else { $action = 'Moved'; $detail = "$kind; from: $from" }
         } elseif ($e.Rename) {
             $action = 'Renamed/moved (old name outside journal window)'; $detail = $kind
         } else {
@@ -383,8 +383,8 @@ function Get-WfxRecycleBinActivity {
                 if ($info.Deleted -lt $cut) { continue }
                 $rPath = Join-Path $sidDir.FullName ('$R' + $i.Name.Substring(2))
                 $rItem = Get-Item -LiteralPath $rPath -Force -ErrorAction SilentlyContinue
-                $state = if (-not $rItem) { 'content gone (bin emptied or item restored/purged)' } elseif ($rItem.PSIsContainer) { "folder · recoverable at $rPath" } else { "file · recoverable at $rPath" }
-                New-WfxActivity -Time $info.Deleted -Category 'File' -Action 'Deleted to Recycle Bin' -Target $info.OriginalPath -Detail ("{0} · {1:N0} bytes" -f $state, $info.Size) -Actor $user -Source "Recycle Bin $($i.Name)"
+                $state = if (-not $rItem) { 'content gone (bin emptied or item restored/purged)' } elseif ($rItem.PSIsContainer) { "folder; recoverable at $rPath" } else { "file; recoverable at $rPath" }
+                New-WfxActivity -Time $info.Deleted -Category 'File' -Action 'Deleted to Recycle Bin' -Target $info.OriginalPath -Detail ("{0}; {1:N0} bytes" -f $state, $info.Size) -Actor $user -Source "Recycle Bin $($i.Name)"
             }
         }
     }
@@ -415,7 +415,7 @@ function Get-WfxEventActivity {
     <# Change events from the logs, normalized. Only reads data fields (fast). #>
     param([int]$Days = 7)
     if (-not (Test-WfxWindows)) { return @() }
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $q = {
         param($Log, [int[]]$Id, [int]$Max = 2000)
         try { @(Get-WfxEventQuick -Log $Log -Id $Id -Days $Days -Max $Max) } catch { Add-WfxGap -Source "activity:$Log" -Reason $_.Exception.Message; @() }
@@ -428,7 +428,7 @@ function Get-WfxEventActivity {
     foreach ($e in (& $q 'System' 7045, 7040, 20001, 6, 1)) {
         $f = $e.Fields
         switch ($e.Id) {
-            7045 { $out.Add((New-WfxActivity -Time $e.Time -Category 'Service' -Action 'Service installed' -Target $f.ServiceName -Detail "$($f.ImagePath) · start=$($f.StartType) · account=$($f.AccountName)" -Source 'System 7045')) }
+            7045 { $out.Add((New-WfxActivity -Time $e.Time -Category 'Service' -Action 'Service installed' -Target $f.ServiceName -Detail "$($f.ImagePath); start=$($f.StartType); account=$($f.AccountName)" -Source 'System 7045')) }
             7040 { $out.Add((New-WfxActivity -Time $e.Time -Category 'Service' -Action 'Service start type changed' -Target $f.param1 -Detail "$($f.param2) → $($f.param3)" -Source 'System 7040')) }
             20001 { $out.Add((New-WfxActivity -Time $e.Time -Category 'Software' -Action 'Device driver installed' -Target ((@($f.Values) | Where-Object { $_ }) -join ' ') -Source 'System 20001 (UserPnp)')) }
             6 { if ($f.ContainsKey('ImageName')) { $out.Add((New-WfxActivity -Time $e.Time -Category 'Software' -Action 'Kernel driver loaded' -Target $f.ImageName -Source 'System 6 (FilterManager)')) } }
@@ -457,7 +457,7 @@ function Get-WfxEventActivity {
     foreach ($e in (& $q 'Microsoft-Windows-Windows Defender/Operational' 5001, 5004, 5007, 5010, 5012, 1116)) {
         $f = $e.Fields
         $a = @{ 5001 = 'Real-time protection disabled'; 5004 = 'Real-time protection config changed'; 5007 = 'Defender configuration changed'; 5010 = 'Spyware scanning disabled'; 5012 = 'Virus scanning disabled'; 1116 = 'Malware detected' }[[int]$e.Id]
-        $t = if ($e.Id -eq 5007) { Get-WfxShortText "$($f.'Old Value') → $($f.'New Value')" 300 } elseif ($e.Id -eq 1116) { "$($f.'Threat Name') · $($f.Path)" } else { '' }
+        $t = if ($e.Id -eq 5007) { Get-WfxShortText "$($f.'Old Value') → $($f.'New Value')" 300 } elseif ($e.Id -eq 1116) { "$($f.'Threat Name'); $($f.Path)" } else { '' }
         $out.Add((New-WfxActivity -Time $e.Time -Category 'Defender' -Action $a -Target $t -Source "Defender $($e.Id)"))
     }
     foreach ($e in (& $q 'Microsoft-Windows-Windows Firewall With Advanced Security/Firewall' 2004, 2005, 2006, 2033, 2097, 2099, 2003)) {
@@ -491,9 +491,19 @@ function Get-WfxExecutionActivity {
     param([int]$Days = 7)
     if (-not (Test-WfxWindows)) { return @() }
     $cut = (Get-Date).ToUniversalTime().AddDays(-[Math]::Abs($Days))
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     Get-ChildItem -LiteralPath (Join-Path $env:SystemRoot 'Prefetch') -Filter *.pf -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTimeUtc -ge $cut } | ForEach-Object {
-        $out.Add((New-WfxActivity -Time $_.LastWriteTimeUtc -Category 'Execution' -Action 'Program ran (Prefetch)' -Target ($_.BaseName -replace '-[0-9A-F]{8}$', '') -Detail "first seen $(ConvertTo-WfxUtcString $_.CreationTimeUtc)" -Source 'Prefetch'))
+        # Each of the last eight runs recorded inside the file; the file's own time when it cannot be parsed.
+        $pf = $null; try { $pf = Read-WfxPrefetch -Path $_.FullName } catch { }
+        if ($pf -and @($pf.RunTimes).Count) {
+            $full = Get-WfxPrefetchExecutable $pf
+            $target = if ($full) { $full } else { $pf.Name }
+            foreach ($rt in @($pf.RunTimes | Where-Object { $_ -ge $cut })) {
+                $out.Add((New-WfxActivity -Time $rt -Category 'Execution' -Action 'Program ran (Prefetch)' -Target $target -Detail "ran $($pf.RunCount) time(s) in total" -Source 'Prefetch'))
+            }
+        } else {
+            $out.Add((New-WfxActivity -Time $_.LastWriteTimeUtc -Category 'Execution' -Action 'Program ran (Prefetch)' -Target ($_.BaseName -replace '-[0-9A-F]{8}$', '') -Detail "first seen $(ConvertTo-WfxUtcString $_.CreationTimeUtc) (file times; contents not readable)" -Source 'Prefetch'))
+        }
     }
     foreach ($bamRoot in 'HKLM:\SYSTEM\CurrentControlSet\Services\bam\State\UserSettings', 'HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings') {
         foreach ($sidKey in (Get-ChildItem -LiteralPath $bamRoot -ErrorAction SilentlyContinue)) {
@@ -531,7 +541,7 @@ function Get-WfxConnectionActivity {
        live connection creation times, outbound RDP history. #>
     param([int]$Days = 7, [int]$Max = 5000)
     if (-not (Test-WfxWindows)) { return @() }
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $cut = (Get-Date).AddDays(-[Math]::Abs($Days))
     try {
         foreach ($e in @(Get-WfxEventQuick -Log 'Microsoft-Windows-Sysmon/Operational' -Id 3 -Days $Days -Max $Max)) {
@@ -584,7 +594,7 @@ function Get-WfxActivityData {
     #>
     param([int]$Days = 7, [switch]$Journal)
     if (-not (Test-WfxWindows)) { return @() }
-    $all = New-Object System.Collections.Generic.List[object]
+    $all = [System.Collections.Generic.List[object]]::new()
     foreach ($part in @(
             @{ N = 'activity:registry'; S = { Get-WfxRegistryActivity -Days $Days } }
             @{ N = 'activity:events'; S = { Get-WfxEventActivity -Days $Days } }

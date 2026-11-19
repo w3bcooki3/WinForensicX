@@ -68,7 +68,7 @@
                 }
             }
 
-            $hits = New-Object System.Collections.Generic.List[object]
+            $hits = [System.Collections.Generic.List[object]]::new()
             # NB: analyzers return their findings as ONE array object; iterate the parenthesized result directly
             # (wrapping it in @() would yield a single nested array and garble alerts).
             if ($newProcs.Count) { foreach ($f in (Invoke-WfxProcessAnalyzer -Process $newProcs -HostName $hn)) { $hits.Add($f) } }

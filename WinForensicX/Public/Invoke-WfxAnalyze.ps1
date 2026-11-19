@@ -35,11 +35,11 @@
     process {
         if ($Bundle -is [string]) { $Bundle = Read-WfxBundle -Path $Bundle }
         if (-not $HostName) { $HostName = [string](Get-WfxValue $Bundle 'HostName' ([Environment]::MachineName)) }
-        $gaps = New-Object System.Collections.Generic.List[object]
+        $gaps = [System.Collections.Generic.List[object]]::new()
         # Older bundles stored the gap list nested one level deep; flatten it.
         foreach ($g in @(@(Get-WfxValue $Bundle 'Gaps' @()) | Expand-WfxRecord | Expand-WfxRecord)) { if ($g -and $g.PSObject.Properties['Source']) { $gaps.Add($g) } }
 
-        $all = New-Object System.Collections.Generic.List[object]
+        $all = [System.Collections.Generic.List[object]]::new()
         $run = {
             param([string]$Name, [scriptblock]$Body)
             try { foreach ($f in @(& $Body | ForEach-Object { $_ } | Where-Object { $_ })) { $all.Add($f) } }

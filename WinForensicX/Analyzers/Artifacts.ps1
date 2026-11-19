@@ -12,7 +12,7 @@ function Join-WfxDict {
 
 function Invoke-WfxArtifactAnalyzer {
     param([object[]]$Artifacts, [string]$HostName = '')
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     $arts = @($Artifacts | Where-Object { $_ })
     if (-not $arts.Count) { return , $findings.ToArray() }
     $threats = $null; try { $threats = Get-WfxRulePack -Name 'threats' } catch { }
@@ -41,7 +41,7 @@ function Invoke-WfxArtifactAnalyzer {
         if ($a.Evidence -notin 'Execution', 'Presence', 'Install') { continue }
         $p = ConvertFrom-WfxEnvPath ([string]$a.Path); if (-not $p) { continue }
         $key = $p.ToLowerInvariant() -replace '^\(volume\)', '' -replace '^[a-z]:', ''
-        if (-not $byFile.ContainsKey($key)) { $byFile[$key] = New-Object System.Collections.Generic.List[object] }
+        if (-not $byFile.ContainsKey($key)) { $byFile[$key] = [System.Collections.Generic.List[object]]::new() }
         $byFile[$key].Add($a)
     }
     foreach ($key in $byFile.Keys) {

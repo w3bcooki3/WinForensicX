@@ -34,7 +34,7 @@
         Exposure    = { param($x) @(Get-WfxValue $x.Bundle 'Exposure' @()) | ForEach-Object { [pscustomobject]@{ K = ("{0}|{1}" -f $_.Kind, $_.Path).ToLowerInvariant(); D = "$($_.Kind): $($_.Path) $($_.Detail)" } } }
         Finding     = { param($x) if ($x.Result) { @($x.Result.Findings) | ForEach-Object { [pscustomobject]@{ K = ("{0}|{1}" -f $_.Id, $_.Entity).ToLowerInvariant(); D = "[$($_.Severity)] $($_.Title)" } } } }
     }
-    $diff = New-Object System.Collections.Generic.List[object]
+    $diff = [System.Collections.Generic.List[object]]::new()
     foreach ($name in $sections.Keys) {
         $ia = @{}; foreach ($r in @(& $sections[$name] $A)) { if ($r) { $ia[$r.K] = $r.D } }
         $ib = @{}; foreach ($r in @(& $sections[$name] $B)) { if ($r) { $ib[$r.K] = $r.D } }

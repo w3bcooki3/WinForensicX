@@ -17,7 +17,7 @@
         [ValidateRange(1, 10)][int]$Depth = 3
     )
     process {
-        $layers = New-Object System.Collections.Generic.List[object]
+        $layers = [System.Collections.Generic.List[object]]::new()
         $text = Get-WfxEncodedCommandPayload $InputObject
         $how = '-EncodedCommand argument'
         if (-not $text) { $text = ConvertFrom-WfxBase64Text $InputObject; $how = 'raw Base64' }

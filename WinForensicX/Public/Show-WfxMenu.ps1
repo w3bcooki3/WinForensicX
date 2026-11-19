@@ -55,8 +55,8 @@ function Write-WfxMenuHeader {
     $admin = Test-WfxAdmin
     Write-WfxConsole ''
     Write-WfxConsole '  WinForensicX' -Kind Head -NoNewline
-    Write-WfxConsole "  v$script:WfxVersion · read-only DFIR toolkit" -Kind Dim
-    Write-WfxConsole ("  Host {0} · {1} · output {2}" -f [Environment]::MachineName, $(if ($admin) { 'elevated' } else { 'NOT elevated (some views limited)' }), (Get-WfxCaseRoot)) -Kind $(if ($admin) { 'Dim' } else { 'Warn' })
+    Write-WfxConsole "  v$script:WfxVersion, read-only DFIR toolkit" -Kind Dim
+    Write-WfxConsole ("  Host {0}, {1}, output {2}" -f [Environment]::MachineName, $(if ($admin) { 'elevated' } else { 'NOT elevated (some views limited)' }), (Get-WfxCaseRoot)) -Kind $(if ($admin) { 'Dim' } else { 'Warn' })
     if ($script:WfxMenu.LastCase) { Write-WfxConsole "  Last case: $($script:WfxMenu.LastCase)" -Kind Dim }
     Write-WfxConsole ''
     Write-WfxConsole "  ── $Crumb $('─' * [Math]::Max(3, 60 - $Crumb.Length))" -Kind Head
@@ -253,7 +253,7 @@ function Show-WfxMenuInsightTable {
                 } catch { Write-WfxConsole "  Could not create the page: $($_.Exception.Message)" -Kind Bad }
                 Wait-WfxMenu
             }
-            'W' { try { $view | Out-GridView -Title "WinForensicX · $Title" -ErrorAction Stop } catch { Write-WfxConsole "  Out-GridView failed: $($_.Exception.Message) - use G (browser) instead." -Kind Warn; Wait-WfxMenu } }
+            'W' { try { $view | Out-GridView -Title "WinForensicX: $Title" -ErrorAction Stop } catch { Write-WfxConsole "  Out-GridView failed: $($_.Exception.Message) - use G (browser) instead." -Kind Warn; Wait-WfxMenu } }
             'E' {
                 $root = Get-WfxCaseRoot
                 if (-not (Test-Path -LiteralPath $root)) { New-Item -ItemType Directory -Path $root -Force | Out-Null }

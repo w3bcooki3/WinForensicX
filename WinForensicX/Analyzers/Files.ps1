@@ -17,7 +17,7 @@ $script:WfxWebShellSigs = @(
 
 function Invoke-WfxFileAnalyzer {
     param([object[]]$File, [string]$HostName = '')
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     $files = @($File | Where-Object { $_ })
     if ($files.Count -eq 0) { return , $findings.ToArray() }
     $executable = @('.exe', '.dll', '.scr', '.com', '.pif', '.cpl', '.sys', '.ocx')
@@ -93,7 +93,7 @@ function Invoke-WfxRansomwareAnalyzer {
     .PARAMETER RecentFile  Recently modified files: { Path, Extension, Entropy, LastWrite }
     #>
     param([object[]]$Note = @(), [object[]]$RecentFile = @(), [string]$HostName = '')
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     # Bounded gaps (.{0,200}) instead of .* keep this linear on hostile input; it also runs with a timeout.
     $noteRx = '(?i)(your files (?:have been|are) (?:encrypted|locked)|all your (?:files|data|documents)|decrypt(?:ion)?\s+(?:key|tool|service|id)|bitcoin|\.onion\b|recover (?:your )?files|how_to_(?:decrypt|recover)|readme.{0,200}decrypt|pay(?:ment)? .{0,200}(?:ransom|decrypt)|contact us.{0,200}(?:tox|telegram|protonmail|session id))'
     foreach ($n in @($Note | Where-Object { $_ })) {

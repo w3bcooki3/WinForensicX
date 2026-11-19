@@ -12,7 +12,7 @@
 
 function Invoke-WfxExposureAnalyzer {
     param([object[]]$Exposure, [string]$HostName = '')
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     $items = @($Exposure | Where-Object { $_ })
     if ($items.Count -eq 0) { return , $findings.ToArray() }
 

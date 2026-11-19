@@ -35,7 +35,7 @@
     if (-not $cases.Count) { throw "No case results (result.json) found under: $($Path -join ', ')" }
     if (-not $AllCases) { $cases = @($cases | Group-Object { $_.Host.ToLowerInvariant() } | ForEach-Object { $_.Group | Sort-Object Collected -Descending | Select-Object -First 1 }) }
 
-    $hosts = New-Object System.Collections.Generic.List[object]
+    $hosts = [System.Collections.Generic.List[object]]::new()
     $iocHosts = @{}; $ruleHosts = @{}
     foreach ($c in $cases) {
         $r = $c.R
@@ -81,7 +81,7 @@ function Get-WfxFleetRarity {
     $seen = @{}
     foreach ($c in $with) { foreach ($k in @($c.R.Programs | ForEach-Object { [string]$_.Key } | Where-Object { $_ } | Sort-Object -Unique)) { $seen[$k] = 1 + [int]$seen[$k] } }
     $userRx = '\\users\\|\\programdata\\|\\temp\\|\\tmp\\|\\appdata\\|\\perflogs\\|\\\$recycle\.bin\\|\\windows\\tasks\\|\\public\\|\\downloads\\'
-    $items = New-Object System.Collections.Generic.List[object]
+    $items = [System.Collections.Generic.List[object]]::new()
     foreach ($c in $with) {
         $text = (@($c.R.Findings | Where-Object { $_ } | ForEach-Object { "$($_.Title) $($_.Entity) $(try { ConvertTo-Json -InputObject $_.Evidence -Depth 4 -Compress } catch { '' })" }) -join "`n").ToLowerInvariant()
         $done = @{}

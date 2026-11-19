@@ -39,7 +39,7 @@ function ConvertFrom-WfxYaml {
        ordered dictionaries, arrays and strings. Not a general YAML parser: anchors, tags and complex
        keys are not supported. #>
     param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
-    $lines = New-Object System.Collections.Generic.List[object]
+    $lines = [System.Collections.Generic.List[object]]::new()
     $raw = $Text -split "`r?`n"
     for ($i = 0; $i -lt $raw.Count; $i++) {
         $l = $raw[$i]
@@ -54,15 +54,81 @@ function ConvertFrom-WfxYaml {
 }
 
 function Remove-WfxYamlComment {
+    <#
+    Strips a trailing comment from one trimmed line. A quote opens a quoted scalar only where a value starts
+    (after "- ", after "key: ", or inside a flow list after "[" or ","); in a plain scalar such as a regular
+    expression, quotes are ordinary characters and " #" starts the comment.
+    #>
     param([string]$S)
-    $q = $null
+    $i = 0
+    while ($S.Length -gt $i + 1 -and $S[$i] -eq '-' -and $S[$i + 1] -eq ' ') { $i += 2; while ($i -lt $S.Length -and $S[$i] -eq ' ') { $i++ } }
+    $skipQuoted = {
+        param([int]$at)
+        $qc = $S[$at]; $j = $at + 1
+        while ($j -lt $S.Length) {
+            if ($qc -eq "'" -and $S[$j] -eq "'") { if ($j + 1 -lt $S.Length -and $S[$j + 1] -eq "'") { $j += 2; continue }; return $j + 1 }
+            if ($qc -eq '"' -and $S[$j] -eq '\') { $j += 2; continue }
+            if ($qc -eq '"' -and $S[$j] -eq '"') { return $j + 1 }
+            $j++
+        }
+        $S.Length
+    }
+    # Key (plain or quoted), then the value.
+    $v = $i
+    if ($i -lt $S.Length -and ($S[$i] -eq "'" -or $S[$i] -eq '"')) {
+        $k = & $skipQuoted $i
+        if ($k -lt $S.Length -and $S[$k] -eq ':') { $v = $k + 1 }
+    } else {
+        $c = $S.IndexOf(': ', $i); $endColon = $S.EndsWith(':') -and $S.IndexOf(':', $i) -eq $S.Length - 1
+        if ($c -ge 0 -and ($S.IndexOf(' #', $i) -lt 0 -or $S.IndexOf(' #', $i) -gt $c)) { $v = $c + 1 } elseif ($endColon) { return $S }
+    }
+    while ($v -lt $S.Length -and $S[$v] -eq ' ') { $v++ }
+    if ($v -ge $S.Length) { return $S }
+    $ch = $S[$v]
+    if ($ch -eq "'" -or $ch -eq '"') {
+        $k = & $skipQuoted $v
+        $h = $S.IndexOf('#', $k)
+        if ($h -ge 0 -and ($h -eq 0 -or $S[$h - 1] -eq ' ' -or $S[$h - 1] -eq "`t")) { return $S.Substring(0, $h).TrimEnd() }
+        return $S
+    }
+    if ($ch -eq '[' -or $ch -eq '{') {
+        $j = $v; $atStart = $true
+        while ($j -lt $S.Length) {
+            $c2 = $S[$j]
+            if (($c2 -eq "'" -or $c2 -eq '"') -and $atStart) { $j = & $skipQuoted $j; $atStart = $false; continue }
+            if ($c2 -eq '#' -and $j -gt 0 -and $S[$j - 1] -eq ' ') { return $S.Substring(0, $j).TrimEnd() }
+            $atStart = $c2 -in '[', ',', '{', ' ' -or ($c2 -eq ':')
+            if ($c2 -ne ' ' -and $c2 -notin '[', ',', '{', ':') { $atStart = $false }
+            $j++
+        }
+        return $S
+    }
+    # Plain scalar: a comment starts at " #" (or "<tab>#").
+    for ($j = $v; $j -lt $S.Length; $j++) { if ($S[$j] -eq '#' -and ($S[$j - 1] -eq ' ' -or $S[$j - 1] -eq "`t")) { return $S.Substring(0, $j).TrimEnd() } }
+    $S
+}
+
+function ConvertFrom-WfxYamlDoubleQuoted {
+    <# The body of a double-quoted YAML scalar with its escapes (\n \t \" \\ \xHH \uHHHH \UHHHHHHHH ...) decoded. #>
+    param([string]$S)
+    if ($S.IndexOf('\') -lt 0) { return $S }
+    $sb = New-Object System.Text.StringBuilder
     for ($i = 0; $i -lt $S.Length; $i++) {
         $c = $S[$i]
-        if ($q) { if ($c -eq $q) { $q = $null } ; continue }
-        if ($c -eq "'" -or $c -eq '"') { if ($i -eq 0 -or $S[$i - 1] -match '[\s:\[,{-]') { $q = $c } ; continue }
-        if ($c -eq '#' -and ($i -eq 0 -or $S[$i - 1] -eq ' ')) { return $S.Substring(0, $i).TrimEnd() }
+        if ($c -ne '\' -or $i + 1 -ge $S.Length) { [void]$sb.Append($c); continue }
+        $n = $S[++$i]
+        switch -CaseSensitive ($n) {
+            'n' { [void]$sb.Append("`n") } 't' { [void]$sb.Append("`t") } 'r' { [void]$sb.Append("`r") } '0' { [void]$sb.Append([char]0) }
+            'a' { [void]$sb.Append([char]7) } 'b' { [void]$sb.Append([char]8) } 'e' { [void]$sb.Append([char]27) } 'f' { [void]$sb.Append([char]12) } 'v' { [void]$sb.Append([char]11) }
+            '"' { [void]$sb.Append('"') } '\' { [void]$sb.Append('\') } '/' { [void]$sb.Append('/') } ' ' { [void]$sb.Append(' ') }
+            'N' { [void]$sb.Append([char]0x85) } '_' { [void]$sb.Append([char]0xA0) } 'L' { [void]$sb.Append([char]0x2028) } 'P' { [void]$sb.Append([char]0x2029) }
+            'x' { if ($i + 2 -lt $S.Length + 0 -and $S.Substring($i + 1, 2) -match '^[0-9A-Fa-f]{2}$') { [void]$sb.Append([char][Convert]::ToInt32($S.Substring($i + 1, 2), 16)); $i += 2 } else { [void]$sb.Append('\x') } }
+            'u' { if ($i + 4 -lt $S.Length + 0 -and $S.Substring($i + 1, 4) -match '^[0-9A-Fa-f]{4}$') { [void]$sb.Append([char][Convert]::ToInt32($S.Substring($i + 1, 4), 16)); $i += 4 } else { [void]$sb.Append('\u') } }
+            'U' { if ($i + 8 -lt $S.Length + 0 -and $S.Substring($i + 1, 8) -match '^[0-9A-Fa-f]{8}$') { [void]$sb.Append([char]::ConvertFromUtf32([Convert]::ToInt32($S.Substring($i + 1, 8), 16))); $i += 8 } else { [void]$sb.Append('\U') } }
+            default { [void]$sb.Append('\').Append($n) }
+        }
     }
-    $S
+    $sb.ToString()
 }
 
 function ConvertFrom-WfxYamlScalar {
@@ -70,12 +136,12 @@ function ConvertFrom-WfxYamlScalar {
     $v = $V.Trim()
     if ($v -eq '' -or $v -eq '~' -or $v -eq 'null') { return $null }
     if ($v.StartsWith("'") -and $v.EndsWith("'") -and $v.Length -ge 2) { return $v.Substring(1, $v.Length - 2).Replace("''", "'") }
-    if ($v.StartsWith('"') -and $v.EndsWith('"') -and $v.Length -ge 2) { return ($v.Substring(1, $v.Length - 2) -replace '\\"', '"' -replace '\\\\', '\') }
+    if ($v.StartsWith('"') -and $v.EndsWith('"') -and $v.Length -ge 2) { return (ConvertFrom-WfxYamlDoubleQuoted $v.Substring(1, $v.Length - 2)) }
     if ($v.StartsWith('[') -and $v.EndsWith(']')) {
         $inner = $v.Substring(1, $v.Length - 2); $items = @(); $cur = ''; $q = $null
         foreach ($c in $inner.ToCharArray()) {
             if ($q) { $cur += $c; if ($c -eq $q) { $q = $null }; continue }
-            if ($c -eq "'" -or $c -eq '"') { $q = $c; $cur += $c; continue }
+            if (($c -eq "'" -or $c -eq '"') -and -not $cur.Trim()) { $q = $c; $cur += $c; continue }
             if ($c -eq ',') { $items += , (ConvertFrom-WfxYamlScalar $cur); $cur = ''; continue }
             $cur += $c
         }
@@ -85,12 +151,20 @@ function ConvertFrom-WfxYamlScalar {
     $v
 }
 
+function Get-WfxYamlContinuation {
+    <# A scalar that goes on over more-indented lines (plain or quoted): those lines, joined with spaces. #>
+    param($Lines, [ref]$Pos, [int]$Indent, [string]$First)
+    $parts = New-Object System.Collections.Generic.List[string]; $parts.Add($First)
+    while ($Pos.Value -lt $Lines.Count -and $Lines[$Pos.Value].I -gt $Indent) { $parts.Add($Lines[$Pos.Value].T); $Pos.Value++ }
+    ($parts -join ' ')
+}
+
 function ConvertFrom-WfxYamlBlock {
     param($Lines, [ref]$Pos, [int]$Indent)
     if ($Pos.Value -ge $Lines.Count) { return $null }
     $first = $Lines[$Pos.Value]
     if ($first.T.StartsWith('- ') -or $first.T -eq '-') {
-        $list = New-Object System.Collections.Generic.List[object]
+        $list = [System.Collections.Generic.List[object]]::new()
         while ($Pos.Value -lt $Lines.Count) {
             $ln = $Lines[$Pos.Value]
             if ($ln.I -lt $Indent -or -not ($ln.T.StartsWith('- ') -or $ln.T -eq '-')) { break }
@@ -104,9 +178,15 @@ function ConvertFrom-WfxYamlBlock {
                 $childIndent = $ln.I + 2
                 $Lines[$Pos.Value] = [pscustomobject]@{ I = $childIndent; T = $rest; N = $ln.N; Raw = $ln.Raw }
                 $list.Add((ConvertFrom-WfxYamlBlock $Lines $Pos $childIndent))
-            } else { $list.Add((ConvertFrom-WfxYamlScalar $rest)); $Pos.Value++ }
+            } else { $Pos.Value++; $list.Add((ConvertFrom-WfxYamlScalar (Get-WfxYamlContinuation $Lines $Pos $ln.I $rest))) }
         }
         return , $list.ToArray()
+    }
+    # Lines that are not "key: value" pairs here form one multi-line plain scalar (a long condition, for example).
+    if ($first.T -notmatch '^(''[^'']*''|"[^"]*"|[^:]+?)\s*:(?:\s+(.*))?$') {
+        $parts = New-Object System.Collections.Generic.List[string]
+        while ($Pos.Value -lt $Lines.Count -and $Lines[$Pos.Value].I -ge $Indent) { $parts.Add($Lines[$Pos.Value].T); $Pos.Value++ }
+        return (ConvertFrom-WfxYamlScalar ($parts -join ' '))
     }
     $map = [ordered]@{}
     while ($Pos.Value -lt $Lines.Count) {
@@ -118,18 +198,27 @@ function ConvertFrom-WfxYamlBlock {
         $key = ConvertFrom-WfxYamlScalar $m.Groups[1].Value
         $val = $m.Groups[2].Value
         $Pos.Value++
-        if ($val -match '^[|>][+-]?$') {
+        if ($val -match '^([|>])([+-]?)$') {
+            # Block scalar: literal (|) keeps line breaks, folded (>) joins lines with spaces; chomping: clip
+            # (one final line break), strip (-) or keep (+).
+            $style = $Matches[1]; $chomp = $Matches[2]
             $buf = New-Object System.Collections.Generic.List[string]; $bi = -1
+            $firstLine = if ($Pos.Value -lt $Lines.Count) { $Lines[$Pos.Value].N } else { 0 }
+            $lastLine = $firstLine
             while ($Pos.Value -lt $Lines.Count -and $Lines[$Pos.Value].I -gt $Indent) {
                 $r = $Lines[$Pos.Value].Raw; if ($bi -lt 0) { $bi = $Lines[$Pos.Value].I }
+                # blank lines inside the block were dropped from $Lines; restore them from the raw text
+                for ($g = $lastLine + 1; $g -lt $Lines[$Pos.Value].N -and $buf.Count; $g++) { $buf.Add('') }
+                $lastLine = $Lines[$Pos.Value].N
                 $buf.Add($(if ($r.Length -ge $bi) { $r.Substring($bi) } else { $r.Trim() })); $Pos.Value++
             }
-            $map[$key] = if ($val.StartsWith('>')) { ($buf -join ' ') } else { ($buf -join "`n") }
+            $body = if ($style -eq '>') { ((($buf -join "`n") -replace '(?<!\n)\n(?!\n)', ' ') -replace '\n\n', "`n") } else { ($buf -join "`n") }
+            $map[$key] = if ($chomp -eq '-' -or -not $buf.Count) { $body } else { $body + "`n" }
         } elseif ($val -eq '') {
             if ($Pos.Value -lt $Lines.Count -and ($Lines[$Pos.Value].I -gt $Indent -or ($Lines[$Pos.Value].I -eq $Indent -and $Lines[$Pos.Value].T.StartsWith('-')))) {
                 $map[$key] = ConvertFrom-WfxYamlBlock $Lines $Pos $Lines[$Pos.Value].I
             } else { $map[$key] = $null }
-        } else { $map[$key] = ConvertFrom-WfxYamlScalar $val }
+        } else { $map[$key] = ConvertFrom-WfxYamlScalar (Get-WfxYamlContinuation $Lines $Pos $Indent $val) }
     }
     $map
 }
@@ -145,7 +234,7 @@ function Import-WfxSigmaRule {
         if (Test-Path -LiteralPath $p -PathType Container) { Get-ChildItem -LiteralPath $p -Recurse -File -Include *.yml, *.yaml -ErrorAction SilentlyContinue }
         elseif (Test-Path -LiteralPath $p) { Get-Item -LiteralPath $p }
     }
-    $out = New-Object System.Collections.Generic.List[object]; $skipped = @{}
+    $out = [System.Collections.Generic.List[object]]::new(); $skipped = @{}
     foreach ($f in @($files | Select-Object -First $Max)) {
         $text = try { [IO.File]::ReadAllText($f.FullName) } catch { ''; continue }
         foreach ($doc in ($text -split '(?m)^---\s*$')) {
@@ -255,10 +344,10 @@ function ConvertTo-WfxSigmaSelection {
     if (-not @($items | Where-Object { $_ -is [System.Collections.IDictionary] }).Count) {
         return , @(, @([pscustomobject]@{ Field = '*'; Mods = @('contains'); Values = @($items | ForEach-Object { [string]$_ }); All = $false; Exists = $null }))
     }
-    $alts = New-Object System.Collections.Generic.List[object]
+    $alts = [System.Collections.Generic.List[object]]::new()
     foreach ($m in $items) {
         if ($m -isnot [System.Collections.IDictionary]) { return 'mixed selection' }
-        $tests = New-Object System.Collections.Generic.List[object]
+        $tests = [System.Collections.Generic.List[object]]::new()
         foreach ($k in $m.Keys) {
             $parts = ([string]$k) -split '\|'; $field = $parts[0]; $mods = @($parts | Select-Object -Skip 1)
             foreach ($md in $mods) { if ($md -notin 'contains', 'startswith', 'endswith', 'all', 're', 'i', 'm', 's', 'windash', 'cidr', 'base64offset', 'base64', 'fieldref', 'exists', 'cased') { return "modifier $md" } }
@@ -457,7 +546,7 @@ function Test-WfxSigmaTree {
 function Invoke-WfxSigmaAnalyzer {
     <# Runs compiled Sigma rules over collected events. At most -MaxPerRule findings per rule. #>
     param([object[]]$Event, [object[]]$Rule, [string]$HostName = '', [int]$MaxPerRule = 25)
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     $events = @($Event | Where-Object { $_ })
     if (-not $events.Count -or -not @($Rule).Count) { return , $findings.ToArray() }
     # Prepare each event once: field table, searchable text, and a signature so identical events
@@ -470,7 +559,7 @@ function Invoke-WfxSigmaAnalyzer {
     }
     $uniq = [ordered]@{}
     foreach ($pe in $prep) { if ($uniq.Contains($pe.Sig)) { $uniq[$pe.Sig].N++ } else { $pe | Add-Member -NotePropertyName N -NotePropertyValue 1; $uniq[$pe.Sig] = $pe } }
-    $byLog = @{}; foreach ($pe in $uniq.Values) { if (-not $byLog.ContainsKey($pe.Log)) { $byLog[$pe.Log] = New-Object System.Collections.Generic.List[object] }; $byLog[$pe.Log].Add($pe) }
+    $byLog = @{}; foreach ($pe in $uniq.Values) { if (-not $byLog.ContainsKey($pe.Log)) { $byLog[$pe.Log] = [System.Collections.Generic.List[object]]::new() }; $byLog[$pe.Log].Add($pe) }
     foreach ($r in $Rule) {
         $hits = 0
         $cands = foreach ($lg in $r.Logs) { if ($byLog[$lg]) { $byLog[$lg] } }

@@ -74,7 +74,7 @@ function Get-WfxHelpModel {
             'Administrator rights are recommended; without them some data is unavailable (recorded as gaps). Remote mode needs WinRM enabled on the target.',
             'It will not extract, decrypt, or dump secrets - that is a deliberate boundary, not a missing feature.',
             'The manifest is not signed: record its SHA-256 (printed at the end of each run) out-of-band to make the case tamper-evident.',
-            'Artifacts: Amcache.hve is locked on a running system (collect it with a raw-copy tool and use -ArtifactPath); dirty hives are repaired from .LOG1/.LOG2 only when the logs continue the hive; browser rows still in the -wal file and compressed Prefetch contents are not read (Prefetch gives name and times); SRUDB.dat is usually locked live (collect it); $MFT is read from collected files only, and deleted SRUM records are skipped.',
+            'Artifacts: Amcache.hve is locked on a running system (collect it with a raw-copy tool and use -ArtifactPath); dirty hives are repaired from .LOG1/.LOG2 only when the logs continue the hive; SRUDB.dat is usually locked live (collect it); $MFT is read from collected files only, and deleted SRUM records are skipped.',
             'Sigma: rules run only on the event logs and IDs the tool collects (rules can add Security/System IDs they need); aggregations and correlation rules are skipped and counted as a gap. YARA needs a yara executable you provide.'
         )
         Requires = 'Windows PowerShell 5.1 or PowerShell 7+. No external modules. Live collection needs Windows; analysis, re-analysis, hunting in saved cases, timelines, diffs and file triage also run on Linux/macOS (PowerShell 7).'

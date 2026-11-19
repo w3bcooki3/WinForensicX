@@ -133,7 +133,7 @@ function Read-WfxMft {
     $ext = @{}
     & $walk {
         param($r)
-        if ($r.Base -and $r.Base -ne $r.Number) { if (-not $ext.ContainsKey($r.Base)) { $ext[$r.Base] = New-Object System.Collections.Generic.List[object] }; $ext[$r.Base].Add($r); return }
+        if ($r.Base -and $r.Base -ne $r.Number) { if (-not $ext.ContainsKey($r.Base)) { $ext[$r.Base] = [System.Collections.Generic.List[object]]::new() }; $ext[$r.Base].Add($r); return }
         if ($r.IsDir) { $dirs[$r.Number] = $r }
     }
     $merge = {

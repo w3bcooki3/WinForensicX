@@ -28,7 +28,7 @@ $script:WfxScriptChildren = @('powershell.exe', 'pwsh.exe', 'cmd.exe', 'mshta.ex
 
 function Invoke-WfxProcessAnalyzer {
     param([object[]]$Process, [string]$HostName = '')
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     $procs = @($Process | Where-Object { $_ })
     if ($procs.Count -eq 0) { return , $findings.ToArray() }
 

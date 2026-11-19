@@ -7,14 +7,14 @@ function Join-WfxScriptBlock {
     <# Re-assembles PowerShell 4104 script blocks that were split across several events (MessageNumber/
        MessageTotal sharing one ScriptBlockId) so detections see the whole script, not fragments. #>
     param([object[]]$Event)
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $groups = @{}
     foreach ($e in $Event) {
         $fl = Get-WfxValue $e 'Fields' @{}
         $sbid = [string](Get-WfxValue $fl 'ScriptBlockId' '')
         $tot = (ConvertTo-WfxInt (Get-WfxValue $fl 'MessageTotal' 1))
         if ((ConvertTo-WfxInt (Get-WfxValue $e 'Id' 0)) -eq 4104 -and $sbid -and $tot -gt 1) {
-            if (-not $groups.ContainsKey($sbid)) { $groups[$sbid] = New-Object System.Collections.Generic.List[object] }
+            if (-not $groups.ContainsKey($sbid)) { $groups[$sbid] = [System.Collections.Generic.List[object]]::new() }
             $groups[$sbid].Add($e)
         } else { $out.Add($e) }
     }
@@ -40,15 +40,71 @@ function Test-WfxRuleLog {
     return $false
 }
 
+function Get-WfxEventField {
+    <# One field of a normalized event. 'A|B' returns the first of A, B that has a value ('-' counts as none). Log, Provider and Id are fields too. #>
+    param($Event, [string[]]$Names)
+    $fs = Get-WfxValue $Event 'Fields' @{}
+    foreach ($n in $Names) {
+        $v = switch ($n) { 'Log' { Get-WfxValue $Event 'Log' '' } 'Provider' { Get-WfxValue $Event 'Provider' '' } 'Id' { Get-WfxValue $Event 'Id' '' } default { Get-WfxValue $fs $n '' } }
+        $s = [string]$v
+        if ($s -ne '' -and $s -ne '-') { return $s }
+    }
+    return ''
+}
+
+function Test-WfxEventMatch {
+    <# True when every "match" condition of a rule holds for the event and no "matchNot" condition does. #>
+    param($Event, $Rule)
+    foreach ($m in @($Rule.matchSet)) { if (-not (Test-WfxRegex $m.Rx (Get-WfxEventField $Event $m.Names))) { return $false } }
+    foreach ($m in @($Rule.matchNotSet)) { if (Test-WfxRegex $m.Rx (Get-WfxEventField $Event $m.Names)) { return $false } }
+    # "differ": [A, B] holds only when the two fields name different files (path and extension ignored), e.g. a renamed binary.
+    $df = @(Get-WfxValue $Rule 'differ' @())
+    if ($df.Count -eq 2) {
+        $a = [IO.Path]::GetFileNameWithoutExtension(((Get-WfxEventField $Event ([string]$df[0] -split '\|')) -replace '.*[\\/]', ''))
+        $b = [IO.Path]::GetFileNameWithoutExtension(((Get-WfxEventField $Event ([string]$df[1] -split '\|')) -replace '.*[\\/]', ''))
+        if (-not $a -or -not $b -or $a -eq $b) { return $false }
+    }
+    return $true
+}
+
+function New-WfxEventRuleFinding {
+    <# Finding for a field-matching event rule. "{Field}" in the title is replaced by the event's value. Evidence lists the rule's fields one by one. #>
+    param($Event, $Rule, [string]$HostName)
+    $id = ConvertTo-WfxInt (Get-WfxValue $Event 'Id' 0)
+    $log = [string](Get-WfxValue $Event 'Log' '')
+    $title = [regex]::Replace([string]$Rule.title, '\{([A-Za-z0-9_|]+)\}', {
+            param($mm)
+            $v = Get-WfxEventField $Event ($mm.Groups[1].Value -split '\|')
+            if (-not $v) { return '(unknown)' }
+            $v = ($v -replace '\s+', ' ').Trim()
+            if ($v.Length -gt 90) { $v = $v.Substring(0, 87) + '...' }
+            $v
+        })
+    $ev = [ordered]@{ EventId = $id; Log = $log; Time = (Get-WfxValue $Event 'TimeCreated') }
+    foreach ($fname in @($Rule.fields)) {
+        $v = Get-WfxEventField $Event ([string]$fname -split '\|')
+        if ($v -eq '') { continue }
+        if ($v.Length -gt 2000) { $v = $v.Substring(0, 2000) + ' ...' }
+        $ev[(([string]$fname -split '\|')[0])] = Protect-WfxText $v
+    }
+    if (Get-WfxValue $Event 'Recovered' $false) { $ev['Recovered'] = 'yes (read from unused space in the log file)' }
+    $keyFields = @(Get-WfxValue $Rule 'key' @())
+    if (-not $keyFields.Count) { $keyFields = @(@($Rule.fields) | Select-Object -First 2) }
+    $entity = "event:$($Rule.id):" + ((@($keyFields | ForEach-Object { (Get-WfxEventField $Event ([string]$_ -split '\|')).ToLowerInvariant() })) -join '|')
+    New-WfxFinding -Id $Rule.id -Title $title -Severity $Rule.severity -Confidence $Rule.confidence `
+        -Category 'EventLog' -Technique $Rule.technique -Description $Rule.description -Recommendation $Rule.recommendation `
+        -Entity $entity -HostName $HostName -Time (Get-WfxValue $Event 'TimeCreated') -Source "evt:$log" -Evidence $ev
+}
+
 function Invoke-WfxEventAnalyzer {
     param([object[]]$Event, [string]$HostName = '')
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     $joined = Join-WfxScriptBlock -Event @($Event | Where-Object { $_ })
     $events = @($joined)
     if ($events.Count -eq 0) { return , $findings.ToArray() }
     $pack = Get-WfxRulePack -Name 'events'
     $byId = @{}
-    foreach ($rule in $pack.rules) { foreach ($i in @($rule.eventIds)) { if (-not $byId.ContainsKey([int]$i)) { $byId[[int]$i] = New-Object System.Collections.Generic.List[object] }; $byId[[int]$i].Add($rule) } }
+    foreach ($rule in $pack.rules) { foreach ($i in @($rule.eventIds)) { if (-not $byId.ContainsKey([int]$i)) { $byId[[int]$i] = [System.Collections.Generic.List[object]]::new() }; $byId[[int]$i].Add($rule) } }
 
     $f = { param($e, $k) [string](Get-WfxValue (Get-WfxValue $e 'Fields' @{}) $k '') }
 
@@ -84,6 +140,10 @@ function Invoke-WfxEventAnalyzer {
                         }
                     }
                 }
+                continue
+            }
+            if (@($rule.matchSet).Count) {
+                if (Test-WfxEventMatch $e $rule) { $findings.Add((New-WfxEventRuleFinding -Event $e -Rule $rule -HostName $HostName)) }
                 continue
             }
             if ($rule.rx -and -not (Test-WfxRegex $rule.rx $text)) { continue }
@@ -134,7 +194,7 @@ function Invoke-WfxEventAnalyzer {
         $failIdx[$k].Add($t)
         $fsrc = & $f $x 'IpAddress'
         if ($fsrc -and $fsrc -ne '-') {
-            if (-not $failBySrc.ContainsKey($fsrc)) { $failBySrc[$fsrc] = New-Object System.Collections.Generic.List[object] }
+            if (-not $failBySrc.ContainsKey($fsrc)) { $failBySrc[$fsrc] = [System.Collections.Generic.List[object]]::new() }
             $failBySrc[$fsrc].Add([pscustomobject]@{ T = $t; U = (& $f $x 'TargetUserName').ToLowerInvariant() })
         }
     }

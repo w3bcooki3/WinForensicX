@@ -523,6 +523,1404 @@
         "match": [],
         "nomatch": []
       }
+    },
+    {
+      "id": "EVT-4662-DCSYNC",
+      "title": "Directory replication requested by {SubjectUserName} (DCSync)",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4662
+      ],
+      "match": {
+        "Properties": "(?i)1131f6aa-9c07-11d1-f79f-00c04fc2dcd2|1131f6ad-9c07-11d1-f79f-00c04fc2dcd2|89e95b76-444d-4c62-991a-0facbeda640c"
+      },
+      "fields": [
+        "SubjectUserName",
+        "SubjectDomainName",
+        "ObjectName",
+        "Properties"
+      ],
+      "technique": [
+        "T1003.006"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "A user account (not a domain controller) used directory replication rights. This is how DCSync tools such as Mimikatz pull password hashes for every account, including krbtgt.",
+      "recommendation": "Confirm whether the account is a legitimate replication tool (for example Azure AD Connect). If not, treat all domain credentials as compromised.",
+      "matchNot": {
+        "SubjectUserName": "\\$$"
+      },
+      "key": [
+        "SubjectUserName"
+      ]
+    },
+    {
+      "id": "EVT-4794-DSRM",
+      "title": "Directory Services Restore Mode password changed",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4794
+      ],
+      "match": {
+        "Status": "^0x0$"
+      },
+      "fields": [
+        "SubjectUserName",
+        "Workstation"
+      ],
+      "technique": [
+        "T1098"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "The DSRM administrator password of a domain controller was set. Attackers set it to keep a local backdoor account on the DC.",
+      "recommendation": "Confirm the change was planned; check DsrmAdminLogonBehavior in the registry."
+    },
+    {
+      "id": "EVT-4765-SIDHISTORY",
+      "title": "SID history added to {TargetUserName}",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4765,
+        4766
+      ],
+      "match": {
+        "TargetUserName": "."
+      },
+      "fields": [
+        "TargetUserName",
+        "SourceUserName",
+        "SourceSid",
+        "SubjectUserName"
+      ],
+      "technique": [
+        "T1134.005"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "A SID was added to an accounts SID history. Outside a domain migration this grants hidden privileges (for example Domain Admins).",
+      "recommendation": "Remove the SID history entry unless a migration is under way; review who made the change."
+    },
+    {
+      "id": "EVT-4826-BOOT-DEBUG",
+      "title": "Kernel debugging or test signing enabled at boot",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4826
+      ],
+      "match": {
+        "KernelDebug|TestSigning|DisableIntegrityChecks|FlightSigning": "%%1842|(?i)^yes$"
+      },
+      "fields": [
+        "KernelDebug",
+        "TestSigning",
+        "DisableIntegrityChecks"
+      ],
+      "technique": [
+        "T1553.006"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "The boot configuration allows kernel debugging, test-signed drivers or disabled integrity checks. This lets unsigned drivers and rootkits load.",
+      "recommendation": "Check bcdedit settings and restore secure defaults."
+    },
+    {
+      "id": "EVT-7045-PIPE-GETSYSTEM",
+      "title": "Service runs a command that writes to a named pipe (GetSystem-style)",
+      "logs": [
+        "System",
+        "Security"
+      ],
+      "eventIds": [
+        7045,
+        4697
+      ],
+      "match": {
+        "ImagePath|ServiceFileName": "(?i)(?:cmd|%comspec%).*\\\\\\\\\\.\\\\pipe\\\\"
+      },
+      "fields": [
+        "ServiceName",
+        "ImagePath|ServiceFileName"
+      ],
+      "technique": [
+        "T1134.001",
+        "T1543.003"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "A service was installed whose command echoes into a named pipe. Meterpreter getsystem and similar tools use this to impersonate SYSTEM.",
+      "recommendation": "Identify the process that owns the pipe and the session that created the service."
+    },
+    {
+      "id": "EVT-7045-BARE-COMMAND",
+      "title": "Service {ServiceName} runs a bare command without a full path",
+      "logs": [
+        "System"
+      ],
+      "eventIds": [
+        7045
+      ],
+      "match": {
+        "ImagePath": "(?i)^(?:\"?(?:cmd|powershell|pwsh|calc|rundll32|mshta|%comspec%)(?:\\.exe)?\"?)(?:\\s|$)"
+      },
+      "fields": [
+        "ServiceName",
+        "ImagePath",
+        "AccountName"
+      ],
+      "technique": [
+        "T1543.003",
+        "T1569.002"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "Real services point at a full program path. A service that just runs cmd, PowerShell or similar is a common remote-execution trick.",
+      "recommendation": "Find the remote session that created it (4624 type 3 at the same time) and remove the service."
+    },
+    {
+      "id": "EVT-5145-REMOTE-EXEC-PIPE",
+      "title": "Remote execution pipe {RelativeTargetName} opened from {IpAddress}",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        5145
+      ],
+      "match": {
+        "ShareName": "(?i)IPC\\$",
+        "RelativeTargetName": "(?i)^(?:svcctl|atsvc|PSEXESVC|RemCom_communicaton|paexec|csexec|winexesvc|.*-(?:stdin|stdout|stderr))$"
+      },
+      "fields": [
+        "RelativeTargetName",
+        "IpAddress",
+        "SubjectUserName"
+      ],
+      "technique": [
+        "T1021.002",
+        "T1569.002"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A remote host opened the service-control or a PsExec-style pipe over SMB. This is how PsExec, Impacket and similar tools start programs on this machine.",
+      "recommendation": "Confirm the source and account are an authorized admin; look for a 7045 service install at the same time.",
+      "key": [
+        "RelativeTargetName",
+        "IpAddress"
+      ]
+    },
+    {
+      "id": "EVT-5145-ADMIN-SHARE-EXE",
+      "title": "Program copied to admin share: {RelativeTargetName} from {IpAddress}",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        5145
+      ],
+      "match": {
+        "ShareName": "(?i)\\\\(?:ADMIN|C)\\$$",
+        "RelativeTargetName": "(?i)\\.(?:exe|dll|bat|ps1|vbs|sys)$",
+        "AccessMask": "(?i)^0x(?:[0-9a-f]*[2367abef])$"
+      },
+      "fields": [
+        "RelativeTargetName",
+        "IpAddress",
+        "SubjectUserName"
+      ],
+      "technique": [
+        "T1570",
+        "T1021.002"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A remote host wrote an executable into ADMIN$ or C$. Remote-execution tools copy their service binary this way before starting it.",
+      "recommendation": "Collect the file and find out which tool or person copied it.",
+      "key": [
+        "RelativeTargetName",
+        "IpAddress"
+      ]
+    },
+    {
+      "id": "EVT-5145-COERCE-PIPE",
+      "title": "Authentication-coercion pipe {RelativeTargetName} opened from {IpAddress}",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        5145
+      ],
+      "match": {
+        "ShareName": "(?i)IPC\\$",
+        "RelativeTargetName": "(?i)^(?:spoolss|efsrpc|lsarpc|netdfs|protected_storage)$"
+      },
+      "fields": [
+        "RelativeTargetName",
+        "IpAddress",
+        "SubjectUserName"
+      ],
+      "technique": [
+        "T1187"
+      ],
+      "severity": "Low",
+      "confidence": "Low",
+      "description": "A remote host opened a pipe used by PrinterBug, PetitPotam or DPAPI backup-key theft. These pipes also have normal uses, so treat this as context.",
+      "recommendation": "Check the source host; correlate with machine-account authentications to unexpected hosts.",
+      "key": [
+        "RelativeTargetName",
+        "IpAddress"
+      ]
+    },
+    {
+      "id": "EVT-4624-RDP-LOOPBACK",
+      "title": "RDP logon for {TargetUserName} from the local machine (tunnelled RDP)",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4624
+      ],
+      "match": {
+        "LogonType": "^10$",
+        "IpAddress": "^(?:127\\.|::1$|0:0:0:0:0:0:0:1)"
+      },
+      "fields": [
+        "TargetUserName",
+        "IpAddress"
+      ],
+      "technique": [
+        "T1572",
+        "T1021.001"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A Remote Desktop logon arrived from 127.0.0.1. This happens when RDP is tunnelled through SSH, plink or a port forward to bypass network controls.",
+      "recommendation": "Find the tunnelling process (plink, ssh, netsh portproxy) and its outside peer."
+    },
+    {
+      "id": "EVT-4624-KRBRELAY",
+      "title": "Kerberos network logon for {TargetUserName} from the local machine (possible KrbRelayUp)",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4624
+      ],
+      "match": {
+        "LogonType": "^3$",
+        "IpAddress": "^(?:127\\.0\\.0\\.1|::1)$",
+        "AuthenticationPackageName": "(?i)kerberos",
+        "TargetUserSid": "^S-1-5-21-.*-500$"
+      },
+      "fields": [
+        "TargetUserName",
+        "IpAddress"
+      ],
+      "technique": [
+        "T1068",
+        "T1558.003"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "The built-in Administrator logged on over the network from this machine using Kerberos. KrbRelayUp and similar local privilege escalations produce exactly this.",
+      "recommendation": "Look for a new machine account or RBCD change and a service created right after."
+    },
+    {
+      "id": "EVT-4624-NEWCREDENTIALS",
+      "title": "Logon with alternate credentials for {TargetUserName} (pass-the-hash pattern)",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4624
+      ],
+      "match": {
+        "LogonType": "^9$",
+        "LogonProcessName": "(?i)^seclogo"
+      },
+      "fields": [
+        "TargetUserName",
+        "SubjectUserName",
+        "ProcessName"
+      ],
+      "technique": [
+        "T1550.002"
+      ],
+      "severity": "Medium",
+      "confidence": "Low",
+      "description": "A type 9 (NewCredentials) logon. runas /netonly does this legitimately; Mimikatz sekurlsa::pth and token-duplication tools do too.",
+      "recommendation": "Check which process requested it and whether the user normally uses runas /netonly."
+    },
+    {
+      "id": "EVT-4663-LSASS-ACCESS",
+      "title": "LSASS opened by {ProcessName}",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4656,
+        4663
+      ],
+      "match": {
+        "ObjectName": "(?i)\\\\lsass\\.exe$",
+        "AccessMask": "(?i)^0x(?:10|1010|1410|1438|143a|1fffff|1f3fff|1f1fff)$"
+      },
+      "fields": [
+        "ProcessName",
+        "AccessMask",
+        "SubjectUserName"
+      ],
+      "technique": [
+        "T1003.001"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A process requested memory-read access to LSASS. Credential dumping tools do this to read password hashes and tickets.",
+      "recommendation": "Identify the process and whether a dump file was written.",
+      "matchNot": {
+        "ProcessName": "(?i)\\\\(?:MsMpEng|MsSense|csrss|wininit|lsm|svchost|wmiprvse|taskmgr|procexp64?|vmtoolsd)\\.exe$"
+      },
+      "key": [
+        "ProcessName"
+      ]
+    },
+    {
+      "id": "EVT-4703-DEBUG-PRIV",
+      "title": "SeDebugPrivilege enabled by {ProcessName}",
+      "logs": [
+        "Security"
+      ],
+      "eventIds": [
+        4703
+      ],
+      "match": {
+        "EnabledPrivilegeList": "(?i)SeDebugPrivilege",
+        "ProcessName": "(?i)\\\\(?:users|programdata|windows\\\\temp|perflogs|\\$recycle\\.bin)\\\\|\\\\appdata\\\\|\\\\temp\\\\|\\\\downloads\\\\"
+      },
+      "fields": [
+        "ProcessName",
+        "SubjectUserName"
+      ],
+      "technique": [
+        "T1134.001"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A program running from a user-writable folder turned on the debug privilege, which lets it open any process including LSASS.",
+      "recommendation": "Identify the program; debug privilege from such a path is typical of credential-theft tools.",
+      "key": [
+        "ProcessName"
+      ]
+    },
+    {
+      "id": "EVT-3001-SILENTEXIT-LSASS",
+      "title": "LSASS dumped through silent process exit monitoring",
+      "logs": [
+        "Application"
+      ],
+      "eventIds": [
+        3001
+      ],
+      "match": {
+        "param1|Param1": "(?i)lsass\\.exe"
+      },
+      "fields": [
+        "param1|Param1",
+        "param2|Param2"
+      ],
+      "technique": [
+        "T1003.001"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "Windows Error Reportings silent-exit monitor was used against LSASS. Tools abuse this to write an LSASS memory dump without opening the process directly.",
+      "recommendation": "Find the dump in the LocalDumps folder, delete it, and treat the credentials on this host as exposed."
+    },
+    {
+      "id": "EVT-ESENT-NTDS-COPY",
+      "title": "NTDS database opened from an unusual location",
+      "logs": [
+        "Application"
+      ],
+      "eventIds": [
+        325,
+        326,
+        327
+      ],
+      "match": {
+        "Provider": "(?i)ESENT",
+        "Param5|param5": "(?i)ntds\\.dit"
+      },
+      "fields": [
+        "Param5|param5"
+      ],
+      "technique": [
+        "T1003.003"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "The Active Directory database was opened from a snapshot or a copied folder. ntdsutil IFM and shadow-copy theft of ntds.dit produce this.",
+      "recommendation": "Find who ran ntdsutil or vssadmin and where the copy went.",
+      "matchNot": {
+        "Param5|param5": "(?i)^[a-z]:\\\\windows\\\\ntds\\\\ntds\\.dit$"
+      },
+      "key": [
+        "Param5|param5"
+      ]
+    },
+    {
+      "id": "EVT-MSSQL-XPCMDSHELL",
+      "title": "SQL Server xp_cmdshell enabled or used",
+      "logs": [
+        "Application"
+      ],
+      "eventIds": [
+        15457,
+        15281,
+        33205
+      ],
+      "match": {
+        "Param1|Param2|Param3|Data": "(?i)xp_cmdshell"
+      },
+      "fields": [
+        "Param1",
+        "Param2",
+        "Param3"
+      ],
+      "technique": [
+        "T1505.001"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "xp_cmdshell lets SQL queries run operating-system commands. Attackers enable it after getting into a database.",
+      "recommendation": "Disable xp_cmdshell and review who connected to SQL Server and what ran."
+    },
+    {
+      "id": "EVT-SYSMON-25-TAMPERING",
+      "title": "Process image tampering: {Image}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        25
+      ],
+      "match": {
+        "Image": "."
+      },
+      "fields": [
+        "Image",
+        "Type"
+      ],
+      "technique": [
+        "T1055.012",
+        "T1055.013"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "Sysmon saw a process whose memory image no longer matches the file on disk: process hollowing, herpaderping or doppelganging.",
+      "recommendation": "Capture the process memory and identify the parent that created it.",
+      "matchNot": {
+        "Image": "(?i)\\\\(?:chrome|msedge|firefox|devenv|code)\\.exe$"
+      },
+      "key": [
+        "Image"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-20-WMI-CONSUMER",
+      "title": "WMI event subscription created or changed: {Name|Consumer}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        19,
+        20,
+        21
+      ],
+      "match": {
+        "EventType|Operation": "(?i)^Wmi(?:Consumer|Binding|Filter)Event$|^created$|^modified$"
+      },
+      "fields": [
+        "Name",
+        "Destination",
+        "Query",
+        "Consumer"
+      ],
+      "technique": [
+        "T1546.003"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A permanent WMI event subscription was created. It runs a command or script whenever its trigger fires and survives reboots.",
+      "recommendation": "List subscriptions (root\\subscription) and remove unknown ones.",
+      "matchNot": {
+        "Name": "(?i)SCM Event Log|BVTConsumer"
+      },
+      "key": [
+        "Name"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-6-UNSIGNED-DRIVER",
+      "title": "Unsigned or invalid driver loaded: {ImageLoaded}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        6
+      ],
+      "match": {
+        "ImageLoaded": "."
+      },
+      "fields": [
+        "ImageLoaded",
+        "Signed",
+        "SignatureStatus",
+        "Signature"
+      ],
+      "technique": [
+        "T1014",
+        "T1068"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A kernel driver without a valid signature loaded. Rootkits and BYOVD tools need this to disable security products.",
+      "recommendation": "Identify the driver file and the process that installed it.",
+      "matchNot": {
+        "SignatureStatus": "(?i)^valid$"
+      },
+      "key": [
+        "ImageLoaded"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-8-REMOTE-THREAD",
+      "title": "Remote thread created in {TargetImage} by {SourceImage}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        8
+      ],
+      "match": {
+        "TargetImage": "(?i)\\\\(?:explorer|notepad|svchost|rundll32|spoolsv|conhost|dllhost|winlogon|keepass|teamviewer|iexplore|msedge|chrome|firefox)\\.exe$"
+      },
+      "fields": [
+        "SourceImage",
+        "TargetImage",
+        "StartModule",
+        "StartFunction"
+      ],
+      "technique": [
+        "T1055"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "One process started a thread inside another. Injectors and C2 implants (Meterpreter migrate, Cobalt Strike) do this to hide in a trusted process.",
+      "recommendation": "Check the source process and dump the targets memory.",
+      "matchNot": {
+        "SourceImage": "(?i)\\\\(?:csrss|wininit|services|MsMpEng|MsSense|vmtoolsd|VBoxService|winlogon|smss)\\.exe$|^System$"
+      },
+      "key": [
+        "SourceImage",
+        "TargetImage"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-10-SHELLCODE-ACCESS",
+      "title": "{SourceImage} opened {TargetImage} from unbacked memory",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        10
+      ],
+      "match": {
+        "CallTrace": "(?i)UNKNOWN\\(",
+        "GrantedAccess": "(?i)^0x(?:1fffff|1f3fff|1f1fff|1f0fff|143a|1438|147a|40|800|1410)$"
+      },
+      "fields": [
+        "SourceImage",
+        "TargetImage",
+        "GrantedAccess",
+        "CallTrace"
+      ],
+      "technique": [
+        "T1055"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A process handle was opened by code that does not belong to any loaded module (UNKNOWN in the call stack). That is the signature of injected shellcode.",
+      "recommendation": "Capture the source process memory.",
+      "key": [
+        "SourceImage",
+        "TargetImage"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-11-CRED-DUMP-FILE",
+      "title": "Credential-dump file written: {TargetFilename}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        11
+      ],
+      "match": {
+        "TargetFilename": "(?i)\\\\(?:lsass[^\\\\]*\\.dmp|mimilsa\\.log|kiwissp\\.log|ntds\\.dit|SAM\\.(?:save|hiv|bak)|SYSTEM\\.(?:save|hiv)|SECURITY\\.(?:save|hiv))$"
+      },
+      "fields": [
+        "TargetFilename",
+        "Image"
+      ],
+      "technique": [
+        "T1003.001",
+        "T1003.002",
+        "T1547.005"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "A file with the name of a credential dump or a Mimikatz SSP log was written.",
+      "recommendation": "Delete the file securely after collecting it and reset the exposed credentials.",
+      "matchNot": {
+        "TargetFilename": "(?i)^[a-z]:\\\\windows\\\\ntds\\\\ntds\\.dit$"
+      },
+      "key": [
+        "TargetFilename"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-11-STARTUP-DROP",
+      "title": "File dropped in a Startup folder: {TargetFilename}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        11
+      ],
+      "match": {
+        "TargetFilename": "(?i)\\\\Start Menu\\\\Programs\\\\Startup\\\\[^\\\\]+\\.(?:exe|dll|bat|cmd|ps1|vbs|vbe|js|jse|hta|lnk|scr|wsf|url)$"
+      },
+      "fields": [
+        "TargetFilename",
+        "Image"
+      ],
+      "technique": [
+        "T1547.001"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A program or script was placed in a Startup folder, so it runs at every logon.",
+      "recommendation": "Review the file; remove it if it is not expected.",
+      "key": [
+        "TargetFilename"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-7-UNSIGNED-USERPATH-DLL",
+      "title": "{Image} loaded an unsigned DLL from a user-writable folder",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        7
+      ],
+      "match": {
+        "ImageLoaded": "(?i)\\\\(?:users|programdata|windows\\\\temp|perflogs|\\$recycle\\.bin)\\\\|\\\\appdata\\\\|\\\\temp\\\\|\\\\downloads\\\\",
+        "Signed": "(?i)^false$"
+      },
+      "fields": [
+        "Image",
+        "ImageLoaded",
+        "SignatureStatus"
+      ],
+      "technique": [
+        "T1574.002"
+      ],
+      "severity": "Medium",
+      "confidence": "Low",
+      "description": "A process loaded an unsigned DLL from a folder normal users can write to. DLL sideloading uses a trusted program to load a malicious DLL like this.",
+      "recommendation": "Check the DLL hash and whether the program is expected to load it.",
+      "key": [
+        "Image",
+        "ImageLoaded"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-7-SYSTEM-UNSIGNED-DLL",
+      "title": "Windows process {Image} loaded unsigned {ImageLoaded}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        7
+      ],
+      "match": {
+        "Image": "(?i)^[a-z]:\\\\windows\\\\(?:system32|syswow64)\\\\",
+        "ImageLoaded": "(?i)^[a-z]:\\\\windows\\\\(?:system32|syswow64)\\\\",
+        "Signed": "(?i)^false$"
+      },
+      "fields": [
+        "Image",
+        "ImageLoaded",
+        "SignatureStatus"
+      ],
+      "technique": [
+        "T1574.001"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A Windows binary loaded an unsigned DLL from System32. Everything Microsoft ships there is signed, so this is typically a planted DLL (search-order hijack).",
+      "recommendation": "Collect the DLL and find out how it was written to System32.",
+      "key": [
+        "ImageLoaded"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-1-OFFICE-CHILD",
+      "title": "{ParentImage} started {Image}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational",
+        "Security"
+      ],
+      "eventIds": [
+        1,
+        4688
+      ],
+      "match": {
+        "ParentImage|ParentProcessName": "(?i)\\\\(?:winword|excel|powerpnt|outlook|msaccess|mspub|onenote|visio|eqnedt32|acrord32|acrobat)\\.exe$",
+        "Image|NewProcessName": "(?i)\\\\(?:cmd|powershell|pwsh|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin|msiexec|schtasks|wmic|curl|msbuild|installutil|forfiles|hh)\\.exe$"
+      },
+      "fields": [
+        "Image|NewProcessName",
+        "CommandLine",
+        "ParentImage|ParentProcessName"
+      ],
+      "technique": [
+        "T1566.001",
+        "T1204.002"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "An Office or PDF application launched a shell, script host or system utility. Malicious documents do this to run their payload.",
+      "recommendation": "Find the document that was open and quarantine it; check what the child process did.",
+      "key": [
+        "ParentImage|ParentProcessName",
+        "Image|NewProcessName"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-1-SERVER-SHELL",
+      "title": "{ParentImage} started a shell (web shell or service exploitation)",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational",
+        "Security"
+      ],
+      "eventIds": [
+        1,
+        4688
+      ],
+      "match": {
+        "ParentImage|ParentProcessName": "(?i)\\\\(?:w3wp|httpd|nginx|tomcat\\d*|php-cgi|java|sqlservr|spoolsv|wsmprovhost|winrshost|UMWorkerProcess|wuauclt|ftp)\\.exe$",
+        "Image|NewProcessName": "(?i)\\\\(?:cmd|powershell|pwsh|whoami|net1?|rundll32|regsvr32|certutil|bitsadmin|wscript|cscript|mshta|calc|notepad)\\.exe$"
+      },
+      "fields": [
+        "Image|NewProcessName",
+        "CommandLine",
+        "ParentImage|ParentProcessName",
+        "ParentCommandLine",
+        "User"
+      ],
+      "technique": [
+        "T1505.003",
+        "T1210"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A server process (web server, SQL Server, print spooler, WinRM host) started a shell. This is how web shells, xp_cmdshell, spooler exploits and remote commands look on the target.",
+      "recommendation": "Review the command, the account it ran as and the server logs at that time.",
+      "key": [
+        "ParentImage|ParentProcessName",
+        "Image|NewProcessName"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-1-WMI-CHILD",
+      "title": "WMI started {Image} (remote WMI execution)",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational",
+        "Security"
+      ],
+      "eventIds": [
+        1,
+        4688
+      ],
+      "match": {
+        "ParentImage|ParentProcessName": "(?i)\\\\wmiprvse\\.exe$",
+        "Image|NewProcessName": "(?i)\\\\(?:cmd|powershell|pwsh|rundll32|regsvr32|mshta|wscript|cscript)\\.exe$"
+      },
+      "fields": [
+        "Image|NewProcessName",
+        "CommandLine",
+        "User"
+      ],
+      "technique": [
+        "T1047"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "WMI started a shell or script host. wmic /node, Impacket wmiexec and many worms run commands this way.",
+      "recommendation": "Correlate with network logons (4624 type 3) at the same time to find the source.",
+      "key": [
+        "Image|NewProcessName",
+        "CommandLine"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-1-AUTOELEVATE-CHILD",
+      "title": "UAC bypass: auto-elevating {ParentImage} started {Image}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational",
+        "Security"
+      ],
+      "eventIds": [
+        1,
+        4688
+      ],
+      "match": {
+        "ParentImage|ParentProcessName": "(?i)\\\\(?:fodhelper|computerdefaults|eventvwr|sdclt|slui|changepk|wsreset|CompMgmtLauncher|perfmon|dism|pkgmgr|sysprep|cliconfg|mcx2prov|migwiz|winsat|taskhostw|consent|werfault|mmc)\\.exe$",
+        "Image|NewProcessName": "(?i)\\\\(?:cmd|powershell|pwsh|wscript|cscript|mshta|rundll32|regsvr32)\\.exe$|\\\\users\\\\|\\\\temp\\\\|\\\\programdata\\\\"
+      },
+      "fields": [
+        "Image|NewProcessName",
+        "CommandLine",
+        "ParentImage|ParentProcessName",
+        "IntegrityLevel"
+      ],
+      "technique": [
+        "T1548.002"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A Windows program that elevates without a UAC prompt started a shell or a program from a user folder. Fodhelper, eventvwr, sdclt and the other UACME techniques work this way.",
+      "recommendation": "Look for the hijacked registry key (HKCU\\Software\\Classes\\...\\shell\\open\\command) or planted DLL and remove it.",
+      "matchNot": {
+        "CommandLine": "(?i)\\\\WerFault\\.exe"
+      },
+      "key": [
+        "ParentImage|ParentProcessName",
+        "Image|NewProcessName"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-1-MASQUERADE",
+      "title": "{Image} has the name of a Windows binary but runs from the wrong folder",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational",
+        "Security"
+      ],
+      "eventIds": [
+        1,
+        4688
+      ],
+      "match": {
+        "Image|NewProcessName": "(?i)\\\\(?:svchost|lsass|csrss|services|smss|wininit|winlogon|spoolsv|taskhostw?|lsm|conhost|dllhost|explorer|rundll32|winSAT|mmc)\\.exe$"
+      },
+      "fields": [
+        "Image|NewProcessName",
+        "CommandLine",
+        "ParentImage|ParentProcessName"
+      ],
+      "technique": [
+        "T1036.005"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A process named like a core Windows program ran from somewhere other than the Windows folder (or from a fake folder such as \"C:\\Windows \\System32\").",
+      "recommendation": "Collect the file and check its signature and hash.",
+      "matchNot": {
+        "Image|NewProcessName": "(?i)^[a-z]:\\\\windows\\\\(?:system32|syswow64|winsxs\\\\[^\\\\]+)?\\\\?[^\\\\]+\\.exe$|^[a-z]:\\\\windows\\\\explorer\\.exe$|^[a-z]:\\\\windows\\\\(?:system32|syswow64)\\\\"
+      },
+      "key": [
+        "Image|NewProcessName"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-1-RENAMED-BINARY",
+      "title": "Renamed system tool: {Image} is really {OriginalFileName}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        1
+      ],
+      "match": {
+        "OriginalFileName": "(?i)^(?:cmd|powershell|pwsh|rundll32|regsvr32|mshta|wscript|cscript|certutil|bitsadmin|msbuild|installutil|regasm|regsvcs|psexec|psexesvc|procdump|wmic|net|net1|reg|schtasks|sc|vssadmin|ntdsutil|winword|excel)(?:\\.exe|\\.c)?$"
+      },
+      "fields": [
+        "Image",
+        "OriginalFileName",
+        "CommandLine"
+      ],
+      "technique": [
+        "T1036.003"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "The programs internal name does not match its file name. Attackers rename tools to dodge name-based detections.",
+      "recommendation": "Collect the file; review what it ran.",
+      "key": [
+        "Image"
+      ],
+      "differ": [
+        "Image",
+        "OriginalFileName"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-13-UAC-HIJACK-KEY",
+      "title": "UAC-bypass registry hijack: {TargetObject}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        12,
+        13
+      ],
+      "match": {
+        "TargetObject": "(?i)(?:_classes|\\\\software\\\\classes)\\\\(?:ms-settings|mscfile|exefile|folder|launcher\\.systemsettings|appx[a-z0-9]+)\\\\shell\\\\(?:open|runas)\\\\command|\\\\App Paths\\\\control\\.exe|\\\\(?:Environment|Volatile Environment)\\\\(?:windir|systemroot)$"
+      },
+      "fields": [
+        "TargetObject",
+        "Details",
+        "Image"
+      ],
+      "technique": [
+        "T1548.002"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "A per-user registry key that auto-elevating Windows programs read was pointed at another command. Fodhelper, eventvwr, sdclt, WSReset and environment-variable UAC bypasses all start this way.",
+      "recommendation": "Delete the value, then find what it launched (look for an elevated shell right after).",
+      "key": [
+        "TargetObject"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-13-DEFENSE-OFF",
+      "title": "Security setting weakened: {TargetObject}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        13
+      ],
+      "match": {
+        "TargetObject": "(?i)\\\\(?:EnableLUA|ConsentPromptBehaviorAdmin|RunAsPPL|EnableScriptBlockLogging|fDenyTSConnections)$",
+        "Details": "(?i)DWORD \\(0x00000000\\)"
+      },
+      "fields": [
+        "TargetObject",
+        "Details",
+        "Image"
+      ],
+      "technique": [
+        "T1562.001",
+        "T1112"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A registry value that controls UAC, credential protection, Defender, RDP, Office macro access or PowerShell logging was changed.",
+      "recommendation": "Check the value against your baseline and revert it if the change was not planned.",
+      "key": [
+        "TargetObject"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-13-DEFENSE-OFF2",
+      "title": "Security setting weakened: {TargetObject}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        13
+      ],
+      "match": {
+        "TargetObject": "(?i)\\\\(?:UseLogonCredential|LocalAccountTokenFilterPolicy|DisableAntiSpyware|DisableRealtimeMonitoring|DisableBehaviorMonitoring|AccessVBOM|VBAWarnings)$",
+        "Details": "(?i)DWORD \\(0x00000001\\)"
+      },
+      "fields": [
+        "TargetObject",
+        "Details",
+        "Image"
+      ],
+      "technique": [
+        "T1562.001",
+        "T1112"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A registry value that controls UAC, credential protection, Defender, RDP, Office macro access or PowerShell logging was changed.",
+      "recommendation": "Check the value against your baseline and revert it if the change was not planned.",
+      "key": [
+        "TargetObject"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-13-PERSIST-KEY",
+      "title": "Persistence registry key set: {TargetObject}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        13
+      ],
+      "match": {
+        "TargetObject": "(?i)\\\\Winlogon\\\\(?:Shell|Userinit|Notify)|\\\\Image File Execution Options\\\\[^\\\\]+\\\\(?:Debugger|GlobalFlag)$|\\\\SilentProcessExit\\\\[^\\\\]+\\\\MonitorProcess$|\\\\Windows\\\\AppInit_DLLs$|\\\\Control\\\\Lsa\\\\(?:Security Packages|Authentication Packages|Notification Packages)$|\\\\Control\\\\Print\\\\Monitors\\\\|\\\\Microsoft\\\\NetSh\\\\|\\\\Active Setup\\\\Installed Components\\\\[^\\\\]+\\\\StubPath$|\\\\User Shell Folders\\\\Startup$|\\\\Office test\\\\Special\\\\Perf|\\\\AppCompatFlags\\\\(?:Custom|InstalledSDB)\\\\|\\\\InprocServer32\\\\\\(Default\\)$|\\\\LocalServer32\\\\\\(Default\\)$|\\\\Services\\\\NTDS\\\\DirectoryServiceExtPt|\\\\LanmanServer\\\\Parameters\\\\NullSessionPipes$|\\\\Orchestrator\\\\UScheduler"
+      },
+      "fields": [
+        "TargetObject",
+        "Details",
+        "Image"
+      ],
+      "technique": [
+        "T1546.012",
+        "T1547.004",
+        "T1547.005",
+        "T1546.015",
+        "T1546.011"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A value used by a known persistence or hijack technique was written: Winlogon, IFEO debugger, LSA packages, print monitors, netsh helpers, Active Setup, shims, COM servers, NTDS extensions or null-session pipes.",
+      "recommendation": "Review the value data and the writing process; remove it if unexpected.",
+      "matchNot": {
+        "Image": "(?i)\\\\(?:msiexec|TrustedInstaller|TiWorker|OneDrive|OneDriveSetup|Teams)\\.exe$"
+      },
+      "key": [
+        "TargetObject"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-13-SAM-SECRETS",
+      "title": "Account database or LSA secret modified: {TargetObject}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        12,
+        13
+      ],
+      "match": {
+        "TargetObject": "(?i)^HKLM\\\\SAM\\\\SAM\\\\Domains\\\\Account\\\\Users\\\\(?:Names\\\\[^\\\\]+\\$|[0-9A-F]{8}\\\\F$)|^HKLM\\\\SECURITY\\\\Policy\\\\Secrets\\\\"
+      },
+      "fields": [
+        "TargetObject",
+        "Image",
+        "EventType"
+      ],
+      "technique": [
+        "T1564.002",
+        "T1078.001",
+        "T1098"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "The SAM or LSA secrets were changed directly in the registry (hidden $ account, RID hijack, machine-account secret). When the writer is not lsass.exe this is almost always malicious.",
+      "recommendation": "Check the account it belongs to and the process that wrote it.",
+      "key": [
+        "TargetObject"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-13-PORTPROXY",
+      "title": "Port forwarding rule added: {TargetObject}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        13
+      ],
+      "match": {
+        "TargetObject": "(?i)\\\\PortProxy\\\\v[46]tov[46]\\\\"
+      },
+      "fields": [
+        "TargetObject",
+        "Details",
+        "Image"
+      ],
+      "technique": [
+        "T1090"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A netsh portproxy rule forwards traffic through this host. Attackers use it to reach RDP or internal services from outside.",
+      "recommendation": "Remove the rule (netsh interface portproxy delete) and find who added it.",
+      "key": [
+        "TargetObject"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-12-MRU-WIPE",
+      "title": "Activity history key deleted: {TargetObject}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        12
+      ],
+      "match": {
+        "EventType": "(?i)DeleteKey",
+        "TargetObject": "(?i)\\\\Explorer\\\\(?:RunMRU|RecentDocs|TypedPaths|ComDlg32|UserAssist|WordWheelQuery)$|\\\\Terminal Server Client\\\\(?:Default|Servers)$|\\\\Shell\\\\BagMRU$"
+      },
+      "fields": [
+        "TargetObject",
+        "Image"
+      ],
+      "technique": [
+        "T1070"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A registry key that records user activity (Run dialog, recent documents, RDP history) was deleted. This is anti-forensics.",
+      "recommendation": "Use other sources (Prefetch, jump lists, shellbags) to rebuild the activity.",
+      "key": [
+        "TargetObject"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-17-PIPE-IMPERSONATION",
+      "title": "Named pipe used for privilege escalation: {PipeName}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        17,
+        18
+      ],
+      "match": {
+        "PipeName": "(?i)\\\\pipe\\\\|/pipe/|\\\\RoguePotato|\\\\kekeo|\\\\lsadump|\\\\cachedump|\\\\PSEXESVC|\\\\RemCom|\\\\paexec|\\\\csexec|-(?:stdin|stdout|stderr)$|\\\\WinPwnagePipe"
+      },
+      "fields": [
+        "PipeName",
+        "Image"
+      ],
+      "technique": [
+        "T1134.001",
+        "T1569.002"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A pipe name used by potato-style privilege escalation (PrintSpoofer, EfsPotato, RoguePotato), Kekeo, or PsExec-style remote execution was created or opened.",
+      "recommendation": "Identify the process that created the pipe and the account it ran as.",
+      "key": [
+        "PipeName"
+      ]
+    },
+    {
+      "id": "EVT-BITS-SUSPICIOUS-URL",
+      "title": "BITS job downloading from {url}",
+      "logs": [
+        "Microsoft-Windows-Bits-Client/Operational"
+      ],
+      "eventIds": [
+        59
+      ],
+      "match": {
+        "url|Url": "(?i)^https?://(?:\\d{1,3}(?:\\.\\d{1,3}){3}|[^/]*(?:pastebin|uguu|transfer\\.sh|ngrok|githubusercontent|discord|anonfiles|mega\\.nz|temp\\.sh))|\\.(?:exe|dll|ps1|bat|hta|vbs|7z|zip|rar)(?:\\?|$)"
+      },
+      "fields": [
+        "url|Url",
+        "Name"
+      ],
+      "technique": [
+        "T1197",
+        "T1105"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "A BITS transfer fetched a program or archive from a raw IP or a file-sharing site. BITS downloads blend in with Windows Update traffic.",
+      "recommendation": "Find what started the job (bitsadmin, PowerShell, desktopimgdownldr) and the saved file.",
+      "matchNot": {
+        "url|Url": "(?i)^https?://[^/]*(?:microsoft|windowsupdate|msedge|office|live|google|adobe|mozilla)\\.(?:com|net)/"
+      },
+      "key": [
+        "url|Url"
+      ]
+    },
+    {
+      "id": "EVT-SHIM-ACCESSIBILITY",
+      "title": "Compatibility shim applied to {ExePath}",
+      "logs": [
+        "Microsoft-Windows-Application-Experience/Program-Telemetry"
+      ],
+      "eventIds": [
+        500
+      ],
+      "match": {
+        "ExePath": "(?i)\\\\(?:osk|sethc|utilman|magnify|narrator|displayswitch|atbroker)\\.exe$"
+      },
+      "fields": [
+        "ExePath",
+        "FixName",
+        "FixID"
+      ],
+      "technique": [
+        "T1546.011",
+        "T1546.008"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "A compatibility fix was applied to an accessibility program that runs at the logon screen. Shim-based backdoors use this to get a SYSTEM shell before logon.",
+      "recommendation": "List installed shim databases (sdbinst / AppPatch\\Custom) and remove unknown ones.",
+      "key": [
+        "ExePath"
+      ]
+    },
+    {
+      "id": "EVT-WINSOCK-LSP",
+      "title": "Winsock provider (LSP) installed: {LSPName}",
+      "logs": [
+        "Microsoft-Windows-Winsock-WS2HELP/Operational"
+      ],
+      "eventIds": [
+        1
+      ],
+      "match": {
+        "LSPName|Installer": "."
+      },
+      "fields": [
+        "LSPName",
+        "Installer"
+      ],
+      "technique": [],
+      "severity": "Medium",
+      "confidence": "Low",
+      "description": "A layered service provider was added to the Winsock catalog. It runs inside every program that uses the network.",
+      "recommendation": "Check the provider with netsh winsock show catalog; remove unknown ones.",
+      "key": [
+        "LSPName"
+      ]
+    },
+    {
+      "id": "EVT-RDP-BLUEKEEP-SCAN",
+      "title": "BlueKeep (CVE-2019-0708) probe: MS_T120 channel requested",
+      "logs": [
+        "Microsoft-Windows-RemoteDesktopServices-RdpCoreTS/Operational"
+      ],
+      "eventIds": [
+        148
+      ],
+      "match": {
+        "ChannelName": "(?i)^MS_T120$"
+      },
+      "fields": [
+        "ChannelName"
+      ],
+      "technique": [
+        "T1210"
+      ],
+      "severity": "High",
+      "confidence": "High",
+      "description": "An RDP client asked for the internal MS_T120 channel. Only BlueKeep scanners and exploits do this.",
+      "recommendation": "Patch CVE-2019-0708, block RDP from untrusted networks and find the scanning host."
+    },
+    {
+      "id": "EVT-SVC-LOGGING-STOPPED",
+      "title": "{param1} service stopped",
+      "logs": [
+        "System"
+      ],
+      "eventIds": [
+        7036
+      ],
+      "match": {
+        "param1|Param1": "(?i)^(?:Windows Event Log|Sysmon64?|Microsoft Defender Antivirus Service|Windows Defender Antivirus Service|Windows Defender Advanced Threat Protection Service)$",
+        "param2|Param2": "(?i)stopped"
+      },
+      "fields": [
+        "param1|Param1"
+      ],
+      "technique": [
+        "T1562.002",
+        "T1562.001"
+      ],
+      "severity": "High",
+      "confidence": "Medium",
+      "description": "The event log, Sysmon or Defender service stopped. Attackers stop or crash these to work without being recorded.",
+      "recommendation": "Check for a matching shutdown; otherwise find what stopped the service and look for a gap in the logs.",
+      "key": [
+        "param1|Param1"
+      ]
+    },
+    {
+      "id": "EVT-SQL-BRUTE",
+      "title": "SQL Server login failed for {Param1}",
+      "logs": [
+        "Application"
+      ],
+      "eventIds": [
+        18456
+      ],
+      "match": {
+        "Param1|param1": "."
+      },
+      "fields": [
+        "Param1",
+        "Param3"
+      ],
+      "technique": [
+        "T1110"
+      ],
+      "severity": "Low",
+      "confidence": "Low",
+      "description": "A SQL Server login failed. Many of these from one client are a password-guessing attack on the database.",
+      "recommendation": "Check the client address and whether a successful login (18454/18453) followed.",
+      "key": [
+        "Param1|param1",
+        "Param3|param3"
+      ]
+    },
+    {
+      "id": "EVT-SYSMON-13-PS-POLICY",
+      "title": "PowerShell restriction removed: {TargetObject}",
+      "logs": [
+        "Microsoft-Windows-Sysmon/Operational"
+      ],
+      "eventIds": [
+        12,
+        13
+      ],
+      "match": {
+        "TargetObject": "(?i)\\\\__PSLockdownPolicy$|\\\\ShellIds\\\\Microsoft\\.PowerShell\\\\ExecutionPolicy$",
+        "EventType": "(?i)DeleteValue|SetValue"
+      },
+      "matchNot": {
+        "Details": "(?i)^(?:AllSigned|RemoteSigned|Restricted)$"
+      },
+      "fields": [
+        "TargetObject",
+        "Details",
+        "Image"
+      ],
+      "technique": [
+        "T1562.001",
+        "T1059.001"
+      ],
+      "severity": "Medium",
+      "confidence": "Medium",
+      "description": "Constrained Language Mode was removed or the machine-wide execution policy was set to Unrestricted or Bypass.",
+      "recommendation": "Restore the policy and find the process that changed it.",
+      "key": [
+        "TargetObject"
+      ]
     }
   ]
 }

@@ -90,16 +90,39 @@ function Get-WfxShimCacheRecord {
     }
 }
 
-function Get-WfxSystemHiveShimCache {
-    param($Hive, [string]$Source)
+function Get-WfxHiveControlSets {
+    <# Control set numbers in a SYSTEM hive, the current one first (Select\Current), then the others (older copies). #>
+    param($Hive)
     $cur = 1
     $sel = Get-WfxHiveKey $Hive 'Select'
     if ($sel) { $c = (Get-WfxHiveValue $Hive $sel -Name 'Current').Data; if ($c) { $cur = [int]$c } }
-    $k = Get-WfxHiveKey $Hive ('ControlSet{0:D3}\Control\Session Manager\AppCompatCache' -f $cur)
-    if (-not $k) { $k = Get-WfxHiveKey $Hive ('ControlSet{0:D3}\Control\Session Manager\AppCompatibility' -f $cur) }
-    if (-not $k) { return }
-    $v = Get-WfxHiveValue $Hive $k -Name 'AppCompatCache'
-    if ($v) { Get-WfxShimCacheRecord -Bytes ([byte[]]$v.Data) -Source "$Source\ControlSet$('{0:D3}' -f $cur)\...\AppCompatCache" }
+    $all = @(Get-WfxHiveSubkey $Hive (Get-WfxHiveNode $Hive $Hive.Root) | Where-Object { $_.Name -match '^ControlSet(\d{3})$' } | ForEach-Object { [int]$_.Name.Substring(10) })
+    @($cur) + @($all | Where-Object { $_ -ne $cur } | Sort-Object)
+}
+
+function Get-WfxSystemHiveShimCache {
+    <#
+    ShimCache from every control set of an offline SYSTEM hive. The current set comes first, in its own order
+    (position 0 = most recent). Other sets (LastKnownGood, older copies) add only the entries the current set no
+    longer holds, which can include programs that have since been pushed out of the cache.
+    #>
+    param($Hive, [string]$Source)
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+    $first = $true
+    foreach ($n in (Get-WfxHiveControlSets $Hive)) {
+        $set = 'ControlSet{0:D3}' -f $n
+        $k = Get-WfxHiveKey $Hive "$set\Control\Session Manager\AppCompatCache"
+        if (-not $k) { $k = Get-WfxHiveKey $Hive "$set\Control\Session Manager\AppCompatibility" }
+        if (-not $k) { continue }
+        $v = Get-WfxHiveValue $Hive $k -Name 'AppCompatCache'
+        if (-not $v) { continue }
+        foreach ($r in (Get-WfxShimCacheRecord -Bytes ([byte[]]$v.Data) -Source "$Source\$set\...\AppCompatCache")) {
+            if (-not $seen.Add("$($r.Path)|$($r.Time)".ToLowerInvariant())) { continue }
+            if (-not $first) { $r.Detail = (($r.Detail, "only in $set (an older copy of the cache)") | Where-Object { $_ }) -join '; ' }
+            $r
+        }
+        $first = $false
+    }
 }
 
 # ───────────────────────────── Amcache ─────────────────────────────
@@ -120,7 +143,7 @@ function Get-WfxAmcacheRecord {
             $sha = ([string]$v['FileId']) -replace '^0000', ''
             $link = [string]$v['LinkDate']
             New-WfxArtifact -Artifact 'Amcache' -Time $k.LastWrite -TimeKind 'Recorded' -Evidence 'Execution' -Path $path -Name ([string]$v['Name']) -Sha1 $sha.ToLowerInvariant() `
-                -Detail (@(@($v['Publisher'], $v['ProductName'], $v['Version']) | Where-Object { $_ }) -join ' · ') -Source "$Source\Root\InventoryApplicationFile" `
+                -Detail (@(@($v['Publisher'], $v['ProductName'], $v['Version']) | Where-Object { $_ }) -join '; ') -Source "$Source\Root\InventoryApplicationFile" `
                 -Extra ([pscustomobject]@{ Publisher = [string]$v['Publisher']; Product = [string]$v['ProductName']; Version = [string]$v['Version']; LinkDate = $link
                     Size = $v['Size']; OsComponent = ([string]$v['IsOsComponent'] -eq '1'); BinaryType = [string]$v['BinaryType']; ProgramId = [string]$v['ProgramId'] })
         }
@@ -132,7 +155,7 @@ function Get-WfxAmcacheRecord {
             $nm = [string]$v['Name']; if (-not $nm) { continue }
             $inst = ConvertTo-WfxDateTime ([string]$v['InstallDate'])
             New-WfxArtifact -Artifact 'AmcacheProgram' -Time $(if ($inst) { $inst } else { $k.LastWrite }) -TimeKind $(if ($inst) { 'Installed' } else { 'Recorded' }) -Evidence 'Install' `
-                -Path ([string]$v['RootDirPath']) -Name $nm -Detail (@(@($v['Publisher'], $v['Version'], $v['Source']) | Where-Object { $_ }) -join ' · ') `
+                -Path ([string]$v['RootDirPath']) -Name $nm -Detail (@(@($v['Publisher'], $v['Version'], $v['Source']) | Where-Object { $_ }) -join '; ') `
                 -Source "$Source\Root\InventoryApplication" -Extra ([pscustomobject]@{ Publisher = [string]$v['Publisher']; Version = [string]$v['Version']; InstallSource = [string]$v['Source']; ProgramId = $k.Name; UninstallString = [string]$v['UninstallString'] })
         }
     }
@@ -145,7 +168,7 @@ function Get-WfxAmcacheRecord {
                 $path = [string]$v['15']; if (-not $path) { continue }
                 $mod = if ($v['17']) { ConvertFrom-WfxFileTime ([long]$v['17']) } else { $null }
                 New-WfxArtifact -Artifact 'Amcache' -Time $k.LastWrite -TimeKind 'Recorded' -Evidence 'Execution' -Path $path -Sha1 ((([string]$v['101']) -replace '^0000', '').ToLowerInvariant()) `
-                    -Detail (@(@($v['1'], $v['0']) | Where-Object { $_ }) -join ' · ') -Source "$Source\Root\File" `
+                    -Detail (@(@($v['1'], $v['0']) | Where-Object { $_ }) -join '; ') -Source "$Source\Root\File" `
                     -Extra ([pscustomobject]@{ Publisher = [string]$v['1']; Product = [string]$v['0']; Modified = (ConvertTo-WfxUtcString $mod) })
             }
         }
@@ -159,7 +182,7 @@ function Get-WfxAmcacheRecord {
             $signed = if ($v.ContainsKey('DriverSigned')) { [string]$v['DriverSigned'] -eq '1' } else { $null }
             New-WfxArtifact -Artifact 'AmcacheDriver' -Time $k.LastWrite -TimeKind 'Recorded' -Evidence 'Presence' -Path $path -Name ([string]$v['DriverName']) `
                 -Sha1 ((([string]$v['DriverId']) -replace '^0000', '').ToLowerInvariant()) `
-                -Detail (@(@($v['DriverCompany'], $v['Product'], $v['DriverVersion'], $(if ($signed -eq $false) { 'unsigned' })) | Where-Object { $_ }) -join ' · ') -Source "$Source\Root\InventoryDriverBinary" `
+                -Detail (@(@($v['DriverCompany'], $v['Product'], $v['DriverVersion'], $(if ($signed -eq $false) { 'unsigned' })) | Where-Object { $_ }) -join '; ') -Source "$Source\Root\InventoryDriverBinary" `
                 -Extra ([pscustomobject]@{ Company = [string]$v['DriverCompany']; Product = [string]$v['Product']; Version = [string]$v['DriverVersion']; Signed = $signed; Service = [string]$v['Service'] })
         }
     }
@@ -182,6 +205,105 @@ $script:WfxKnownFolder = @{
     'F3CE0F7C-4901-4ACC-8648-D5D44B04EF8F' = 'Users Files'; 'DFFACDC5-679F-4156-8947-C5C76BC0B67F' = 'Users Libraries'
     'E31EA727-12ED-4702-820C-4B6445F28E1A' = 'Dropbox'; 'BB06C0E4-D293-4F75-8A90-CB05B6477EEE' = 'System'; '7B81BE6A-CE2B-4676-A29E-EB907A5126C5' = 'Programs and Features'
     'D20EA4E1-3957-11D2-A40B-0C5020524153' = 'Administrative Tools'; '2227A280-3AEA-1069-A2DE-08002B30309D' = 'Printers'; 'ED7BA470-8E54-465E-825C-99712043E01C' = 'All Tasks (God Mode)'
+    # Known folders (KNOWNFOLDERID)
+    '1777F761-68AD-4D8A-87BD-30B759FA33DD' = 'Favorites'; '18989B1D-99B5-455B-841C-AB7C74E4DDFC' = 'Videos'; '2112AB0A-C86A-4FFE-A368-0DE96E47012E' = 'Music Library'
+    '491E922F-5643-4AF4-A7EB-4E7A138D8174' = 'Videos Library'; '4BD8D571-6D19-48D3-BE97-422220080E43' = 'Music'; '4C5C32FF-BB9D-43B0-B5B4-2D72E54EAAA4' = 'Saved Games'
+    '56784854-C6CB-462B-8169-88E350ACB882' = 'Contacts'; '7B0DB17D-9CD2-4A93-9733-46CC89022E7C' = 'Documents Library'; '7D1D3A04-DEBB-4115-95CF-2F29DA2920DA' = 'Searches'
+    'A990AE9F-A03B-4E80-94BC-9912D7504104' = 'Pictures Library'; 'BFB9D5E0-C6A9-404C-B2B2-AE6DB6AF4968' = 'Links'; '1AC14E77-02E7-4E5D-B744-2EB1AE5198B7' = 'System32'
+    'D65231B0-B2F1-4857-A4CE-A8E7C6EA7D27' = 'SysWOW64'; 'F38BF404-1D43-42F2-9305-67DE0B28FC23' = 'Windows'; '6D809377-6AF0-444B-8957-A3773F02200E' = 'Program Files'
+    '7C5A40EF-A0FB-4BFC-874A-C0F2E0B9FA8E' = 'Program Files (x86)'; '905E63B6-C1BF-494E-B29C-65B732D3D21A' = 'Program Files'; '62AB5D82-FDC1-4DC3-A9DD-070D1D495D97' = 'ProgramData'
+    '3EB685DB-65F9-4CF6-A03A-E3EF65729F3D' = 'AppData\Roaming'; 'F1B32785-6FBA-4FCF-9D55-7B8E7F157091' = 'AppData\Local'; 'A520A1A4-1780-4FF6-BD18-167343C5AF16' = 'AppData\LocalLow'
+    'DFDF76A2-C82A-4D63-906A-5644AC457385' = 'Public'; 'C4AA340D-F20F-4863-AFEF-F87EF2E6BA25' = 'Public Desktop'; 'ED4824AF-DCE4-45A8-81E2-FC7965083634' = 'Public Documents'
+    '3D644C9B-1FB8-4F30-9B45-F670235F79C0' = 'Public Downloads'; 'AE50C081-EBD2-438A-8655-8A092E34987A' = 'Recent Items'; 'B97D20BB-F46A-4C97-BA10-5E3608430854' = 'Startup'
+    '82A5EA35-D9CD-47C5-9629-E15D2F714E6E' = 'Startup (all users)'; 'A77F5D77-2E2B-44C3-A6A2-ABA601054A51' = 'Start Menu Programs'; '0139D44E-6AFE-49F2-8690-3DAFCAE6FFB8' = 'Start Menu Programs (all users)'
+    '625B53C3-AB48-4EC1-BA1F-A1EF4146FC19' = 'Start Menu'; 'A4115719-D62E-491D-AA7C-E74B8BE3B067' = 'Start Menu (all users)'; '8983036C-27C0-404B-8F08-102D10DCFD74' = 'SendTo'
+    '52A4F021-7B75-48A9-9F6B-4B87A210BC8F' = 'Quick Launch'; '0AC0837C-BBF8-452A-850D-79D08E667CA7' = 'This PC'; 'C5ABBF53-E17F-4121-8900-86626FC2C973' = 'Network Shortcuts'
+    'D9DC8A3B-B784-432E-A781-5A1130A75963' = 'History'; '352481E8-33BE-4251-BA85-6007CAEDCF9D' = 'Temporary Internet Files'; '2B0F765D-C0E9-4171-908E-08A611B84FF6' = 'Cookies'
+    '1B3EA5DC-B587-4786-B4EF-BD1DC332AEAE' = 'Libraries'; 'A302545D-DEFF-464B-ABE8-61C8648D939B' = 'Libraries'; '9E52AB10-F80D-49DF-ACB8-4330F5687855' = 'CD Burning'
+    '4BFEFB45-347D-4006-A5BE-AC0CB0567192' = 'Conflicts'; '82A74AEB-AEB4-465C-A014-D097EE346D63' = 'Control Panel'; '2C36C0AA-5812-4B87-BFD0-4CD0DFB19B39' = 'Original Images'
+    # Shell folders
+    '17CD9488-1228-4B2F-88CE-4298E93E0966' = 'Default Programs'; '323CA680-C24D-4099-B94D-446DD2D7249E' = 'Common Places'; '871C5380-42A0-1069-A2EA-08002B30309D' = 'Internet Explorer (Homepage)'
+    '9343812E-1C37-4A49-A12E-4B2D810D956B' = 'Search Home'; 'B4FB3F98-C1EA-428D-A78A-D1F5659CBA93' = 'Other Users Folder'; 'ED228FDF-9EA8-4870-83B1-96B02CFE0D52' = 'Games'
+    '04731B67-D933-450A-90E6-4ACD2E9408FE' = 'Search Folder'; '9113A02D-00A3-46B9-BC5F-9C04DADDD5D7' = 'Enhanced Storage Data Source'
+    # Control Panel items
+    '025A5937-A6BE-4686-A844-36FE4BEC8B6D' = 'Power Options'; '05D7B0F4-2121-4EFF-BF6B-ED3F69B894D9' = 'Notification Area Icons'; '1206F5F1-0569-412C-8FEC-3204630DFB70' = 'Credential Manager'
+    '1FA9085F-25A2-489B-85D4-86326EEDCD87' = 'Manage Wireless Networks'; '241D7C96-F8BF-4F85-B01F-E2B043341A4B' = 'RemoteApp and Desktop Connections'; '36EEF7DB-88AD-4E81-AD49-0E313F0C35F8' = 'Windows Update'
+    '4026492F-2F69-46B8-B9BF-5654FC07E423' = 'Windows Firewall'; '58E3C745-D971-4081-9034-86E34B30836A' = 'Speech Recognition'; '60632754-C523-4B62-B45C-4172DA012619' = 'User Accounts'
+    '67CA7650-96E6-4FDD-BB43-A8E774F73A57' = 'HomeGroup'; '7007ACC7-3202-11D1-AAD2-00805FC1270E' = 'Network Connections'; '78F3955E-3B90-4184-BD14-5397C15F1EFC' = 'Performance Information and Tools'
+    '8E908FC9-BECC-40F6-915B-F4CA0E70D03D' = 'Network and Sharing Center'; '96AE8D84-A250-4520-95A5-A47A7E3C548B' = 'Parental Controls'; '9C60DE1E-E5FC-40F4-A487-460851A8D915' = 'AutoPlay'
+    '9FE63AFD-59CF-4419-9775-ABCC3849F861' = 'Recovery'; 'A8A91A66-3A7D-4424-8D24-04E180695C7A' = 'Devices and Printers'; 'B98A2BEA-7D42-4558-8BD1-832F41BAC6FD' = 'Backup and Restore'
+    'BB64F8A7-BEE7-4E1A-AB8D-7D8273F7FDB6' = 'Action Center'; 'C555438B-3C23-4769-A71F-B6D3D9B6053A' = 'Display'; 'C58C4893-3BE0-4B45-ABB5-A63E4B8C8651' = 'Troubleshooting'
+    'D555645E-D4F8-4C29-A827-D93C859C4F2A' = 'Ease of Access Center'; 'E211B736-43FD-11D1-9EFB-0000F8757FCD' = 'Scanners and Cameras'; 'E7DE9B1A-7533-4556-9484-B26FB486475E' = 'Network Map'
+    'ECDB0924-4208-451E-8EE0-373C0956DE16' = 'Work Folders'; 'ED834ED6-4B5A-4BFE-8F11-A626DCB6A921' = 'Personalization'; 'F6B6E965-E9B2-444B-9286-10C9152EDBC5' = 'File History'
+    'F942C606-0914-47AB-BE56-1321B8035096' = 'Storage Spaces'; '0142E4D0-FB7A-11DC-BA4A-000FFE7AB428' = 'Biometric Devices'; '15EAE92E-F17A-4431-9F28-805E482DAFD4' = 'Get Programs'
+    '259EF4B1-E6C9-4176-B574-481532C9BCE8' = 'Game Controllers'; '40419485-C444-4567-851A-2DD7BFA1684D' = 'Phone and Modem'; '62D8ED13-C9D0-4CE8-A914-47DD628FB1B0' = 'Region and Language'
+    '6DFD7C5C-2451-11D3-A299-00C04F8EF6AF' = 'Folder Options'; '74246BFC-4C96-11D0-ABEF-0020AF6B0B7A' = 'Device Manager'; '93412589-74D4-4E4E-AD0E-E0CB621440FD' = 'Fonts'
+    'A3DD4F92-658A-410F-84FD-6FBBBEF2FFFE' = 'Internet Options'; 'A304259D-52B8-4526-8B1A-A1D6CECC8243' = 'iSCSI Initiator'; 'D17D1D6D-CC3F-4815-8FE3-607E7D5D10B3' = 'Text to Speech'
+    'D24F75AA-4F2B-4D07-A3C4-469B3D9030C4' = 'Sync Center'; 'F2DDFC82-8F12-4CDD-B7DC-D4FE1425AA4D' = 'Sound'; '6C8EEC18-8D75-41B2-A177-8831D59D2D50' = 'Mouse'
+    '725BE8F7-668E-4C7B-8F90-46BDB0936430' = 'Keyboard'; 'E9950154-C418-419E-A90A-20C5287AE24B' = 'Location and Other Sensors'; '37EFD44D-EF8D-41B1-940D-96973A50E9E0' = 'Desktop Gadgets'
+}
+
+function Read-WfxPropertyStore {
+    <#
+    Serialized property store ([MS-PROPSTORE]): storages ("1SPS"), each with numbered or named values. Returns
+    @{ Fmt; Id; Value } for string, integer, GUID and FILETIME values; others are skipped. Bounded by $End.
+    #>
+    param([byte[]]$B, [int]$Off, [int]$End)
+    $out = [System.Collections.Generic.List[object]]::new()
+    $p = $Off
+    while ($p + 24 -le $End) {
+        $size = [int][BitConverter]::ToUInt32($B, $p)
+        if ($size -lt 24 -or $p + $size -gt $End -or [BitConverter]::ToUInt32($B, $p + 4) -ne 0x53505331) { break }
+        $g = New-Object byte[] 16; [Array]::Copy($B, $p + 8, $g, 0, 16); $fmt = ([guid]$g).ToString().ToUpperInvariant()
+        $named = $fmt -eq 'D5CDD505-2E9C-101B-9397-08002B2CF9AE'
+        $q = $p + 24; $stop = $p + $size
+        while ($q + 9 -le $stop) {
+            $vs = [int][BitConverter]::ToUInt32($B, $q); if ($vs -lt 9 -or $q + $vs -gt $stop) { break }
+            if ($named) { $ns = [int][BitConverter]::ToUInt32($B, $q + 4); if ($q + 9 + $ns -gt $stop) { break }; $id = [Text.Encoding]::Unicode.GetString($B, $q + 9, $ns).TrimEnd([char]0); $tv = $q + 9 + $ns }
+            else { $id = [BitConverter]::ToUInt32($B, $q + 4); $tv = $q + 9 }
+            $val = $null
+            if ($tv + 4 -le $q + $vs) {
+                $vt = [BitConverter]::ToUInt16($B, $tv)
+                switch ($vt) {
+                    0x1F { if ($tv + 8 -le $q + $vs) { $n = [int][BitConverter]::ToUInt32($B, $tv + 4); if ($n -gt 0 -and $tv + 8 + 2 * $n -le $q + $vs) { $val = [Text.Encoding]::Unicode.GetString($B, $tv + 8, 2 * $n).TrimEnd([char]0) } } }
+                    0x13 { if ($tv + 8 -le $q + $vs) { $val = [BitConverter]::ToUInt32($B, $tv + 4) } }
+                    0x03 { if ($tv + 8 -le $q + $vs) { $val = [BitConverter]::ToInt32($B, $tv + 4) } }
+                    0x48 { if ($tv + 20 -le $q + $vs) { $h = New-Object byte[] 16; [Array]::Copy($B, $tv + 4, $h, 0, 16); $val = ([guid]$h).ToString().ToUpperInvariant() } }
+                    0x40 { if ($tv + 12 -le $q + $vs) { $val = ConvertFrom-WfxFileTime ([BitConverter]::ToInt64($B, $tv + 4)) } }
+                }
+            }
+            if ($null -ne $val) { $out.Add([pscustomobject]@{ Fmt = $fmt; Id = $id; Value = $val }) }
+            $q += $vs
+        }
+        $p += $size
+    }
+    , $out.ToArray()
+}
+
+function ConvertFrom-WfxZipShellItem {
+    <#
+    A compressed-folder shell item (a file or folder inside a ZIP archive the user browsed in Explorer). Its
+    layout is known only from its parent, so the caller asks for it when the parent is a .zip file or another
+    compressed-folder item. Windows 10 layout first, then Windows XP's; $null when neither holds a name.
+    #>
+    param([byte[]]$B)
+    foreach ($at in @(@(84, 92), @(60, 68))) {
+        if ($B.Length -lt $at[1] + 2) { continue }
+        $n = [BitConverter]::ToUInt32($B, $at[0])
+        if ($n -lt 1 -or $n -gt 1024 -or $at[1] + 2 * $n + 2 -gt $B.Length) { continue }
+        if ($B[$at[1] + 2 * $n] -ne 0 -or $B[$at[1] + 2 * $n + 1] -ne 0) { continue }
+        $name = [Text.Encoding]::Unicode.GetString($B, $at[1], 2 * $n)
+        if ($name -match '[\x00-\x1F]' -or $name.IndexOfAny([char[]]'<>:"|?*') -ge 0) { continue }
+        $dt = $null
+        $ds = [Text.Encoding]::Unicode.GetString($B, $(if ($at[0] -eq 84) { 36 } else { 24 }), 40)
+        $m = [regex]::Match($ds, '^(\d\d)/(\d\d)/(\d\d(?:\d\d)?)\s+(\d\d):(\d\d)(?::(\d\d))?')
+        if ($m.Success) {
+            $y = [int]$m.Groups[3].Value; if ($y -lt 100) { $y += $(if ($y -lt 70) { 2000 } else { 1900 }) }
+            try { $dt = [datetime]::new($y, [int]$m.Groups[1].Value, [int]$m.Groups[2].Value, [int]$m.Groups[4].Value, [int]$m.Groups[5].Value, $(if ($m.Groups[6].Success) { [int]$m.Groups[6].Value } else { 0 })) } catch { $dt = $null }
+        }
+        return [pscustomobject]@{ Kind = 'ZipEntry'; Name = $name; Modified = $dt; Created = $null; Accessed = $null; MftEntry = $null }
+    }
+    $null
 }
 
 function ConvertFrom-WfxDosTime {
@@ -271,7 +393,28 @@ function ConvertFrom-WfxShellItem {
         default {
             $x = & $ext
             if ($x -and $x.Name) { $kind = 'Entry'; $name = $x.Name; $created = $x.Created; $accessed = $x.Accessed; $mft = $x.Mft }
-            else { $name = ('(shell item 0x{0:X2})' -f $t) }
+            elseif ($t -eq 0x00 -and $B.Length -ge 30 -and [BitConverter]::ToUInt32($B, 6) -eq 0x23FEBBEE -and [BitConverter]::ToUInt16($B, 12) -eq 16) {
+                # Users property view with a known folder (Downloads, Pictures ... seen from "Users Files" or a library):
+                # data size(2) signature(4) property store size(2) identifier size(2) = 16, then the folder's GUID.
+                $g = ([guid]::new([byte[]]$B[14..29])).ToString().ToUpperInvariant(); $kind = 'Root'
+                $name = if ($script:WfxKnownFolder[$g]) { $script:WfxKnownFolder[$g] } else { "{$g}" }
+            } else { $name = ('(shell item 0x{0:X2})' -f $t) }
+        }
+    }
+    # A property store inside the item (settings pages, search results, phones and cameras over MTP) carries the
+    # name Explorer shows: System.ItemNameDisplay, else a search's AutolistCacheKey.
+    # Users property view items (type 0x00 with a data signature at offset 6) take their name from the store
+    # even when they embed the target folder's own shell item.
+    $upv = $t -eq 0x00 -and $B.Length -ge 10 -and [BitConverter]::ToUInt32($B, 6) -in 0x10141981L, 0x23A3DFD5L, 0x3B93AFBBL, 0xBEEBEE00L, 0x49505241L
+    if ($name -match '^\(shell item 0x' -or $kind -eq 'Other' -or $upv -or ($t -eq 0x1F -and $B.Length -gt 20)) {
+        for ($i = 4; $i + 8 -le $B.Length; $i++) {
+            if ($B[$i] -eq 0x31 -and $B[$i + 1] -eq 0x53 -and $B[$i + 2] -eq 0x50 -and $B[$i + 3] -eq 0x53 -and $i -ge 4) {
+                $props = Read-WfxPropertyStore $B ($i - 4) $B.Length
+                $disp = @($props | Where-Object { $_.Fmt -eq 'B725F130-47EF-101A-A5F1-02608C9EEBAC' -and $_.Id -eq 10 -and $_.Value -is [string] } | Select-Object -First 1)
+                if (-not $disp) { $disp = @($props | Where-Object { $_.Id -eq 'AutolistCacheKey' -and $_.Value -is [string] } | ForEach-Object { [pscustomobject]@{ Value = ($_.Value -replace '\d+$', '') } } | Select-Object -First 1) }
+                if ($disp) { $kind = 'Item'; $name = [string]$disp[0].Value }
+                break
+            }
         }
     }
     [pscustomobject]@{ Kind = $kind; Name = $name; Modified = $mod; Created = $created; Accessed = $accessed; MftEntry = $(if ($mft) { $mft -band 0xFFFFFFFFFFFFL } else { $null }) }
@@ -291,11 +434,15 @@ function Join-WfxShellPath {
 function ConvertFrom-WfxIdList {
     <# Splits an ITEMIDLIST (u16-size-prefixed items, ending with 0) into decoded shell items. #>
     param([byte[]]$Bytes, [int]$Offset = 0)
-    $p = $Offset
+    $p = $Offset; $inZip = $false
     while ($p + 2 -le $Bytes.Length) {
         $sz = [BitConverter]::ToUInt16($Bytes, $p); if ($sz -lt 3 -or $p + $sz -gt $Bytes.Length) { break }
         $item = New-Object byte[] $sz; [Array]::Copy($Bytes, $p, $item, 0, $sz)
-        ConvertFrom-WfxShellItem $item
+        $it = $null
+        if ($inZip) { $it = ConvertFrom-WfxZipShellItem $item }
+        if (-not $it) { $it = ConvertFrom-WfxShellItem $item }
+        $it
+        $inZip = [bool]($it -and ($it.Kind -eq 'ZipEntry' -or ([string]$it.Name -match '(?i)\.zip$')))
         $p += $sz
     }
 }
@@ -309,13 +456,13 @@ function Get-WfxShellBagRecord {
     roughly the last time the folder's view was updated.
     #>
     param($Hive, $LiveKey, [string]$KeyPath, [string]$User = '', [string]$Source = '', [int]$Max = 20000)
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $stack = New-Object System.Collections.Generic.Stack[object]
-    if ($Hive) { $root = Get-WfxHiveKey $Hive $KeyPath; if (-not $root) { return }; $stack.Push(@($root, '', 0)) }
-    elseif ($LiveKey) { $stack.Push(@($LiveKey, '', 0)) } else { return }
+    if ($Hive) { $root = Get-WfxHiveKey $Hive $KeyPath; if (-not $root) { return }; $stack.Push(@($root, '', 0, $false)) }
+    elseif ($LiveKey) { $stack.Push(@($LiveKey, '', 0, $false)) } else { return }
     $seen = 0
     while ($stack.Count -and $seen -lt $Max) {
-        $f = $stack.Pop(); $node = $f[0]; $parentPath = $f[1]; $depth = $f[2]
+        $f = $stack.Pop(); $node = $f[0]; $parentPath = $f[1]; $depth = $f[2]; $inZip = $f[3]
         if ($depth -gt 64) { continue }
         if ($Hive) {
             $vals = @{}; foreach ($v in @(Get-WfxHiveValue $Hive $node)) { if ($v.Name -match '^\d+$') { $vals[$v.Name] = [byte[]]$v.Data } }
@@ -326,7 +473,9 @@ function Get-WfxShellBagRecord {
         }
         foreach ($num in $vals.Keys) {
             $seen++
-            $item = ConvertFrom-WfxShellItem $vals[$num]
+            $item = $null
+            if ($inZip) { $item = ConvertFrom-WfxZipShellItem $vals[$num] }      # below a .zip: entries inside the archive
+            if (-not $item) { $item = ConvertFrom-WfxShellItem $vals[$num] }
             $path = Join-WfxShellPath $parentPath $item
             $child = $subs[$num]
             $childNode = $null; $lw = $null
@@ -337,7 +486,7 @@ function Get-WfxShellBagRecord {
             $out.Add((New-WfxArtifact -Artifact 'ShellBag' -Time $lw -TimeKind 'Folder view updated' -Evidence 'Access' -Path $path -Name ([string]$item.Name) -User $User `
                         -Detail ("{0}{1}" -f $item.Kind, $(if ($item.Accessed) { "; folder accessed $(ConvertTo-WfxUtcString $item.Accessed)" })) -Source $Source `
                         -Extra ([pscustomobject]@{ Kind = $item.Kind; Created = (ConvertTo-WfxUtcString $item.Created); Modified = (ConvertTo-WfxUtcString $item.Modified); Accessed = (ConvertTo-WfxUtcString $item.Accessed); MftEntry = $item.MftEntry })))
-            if ($childNode) { $stack.Push(@($childNode, $path, $depth + 1)) }
+            if ($childNode) { $stack.Push(@($childNode, $path, ($depth + 1), [bool]($item -and ($item.Kind -eq 'ZipEntry' -or ([string]$item.Name -match '(?i)\.zip$'))))) }
         }
     }
     $out.ToArray()
@@ -381,7 +530,7 @@ function Read-WfxCompoundFile {
         $a = $ms.ToArray(); if ($a.Length -gt $Size) { $t = New-Object byte[] $Size; [Array]::Copy($a, $t, $Size); $a = $t }; , $a
     }
     $dir = & $readChain ([BitConverter]::ToUInt32($b, 0x30)) ([long]$b.Length)
-    $entries = New-Object System.Collections.Generic.List[object]
+    $entries = [System.Collections.Generic.List[object]]::new()
     for ($o = 0; $o + 128 -le $dir.Length; $o += 128) {
         $nl = [BitConverter]::ToUInt16($dir, $o + 0x40); $type = $dir[$o + 0x42]
         if ($type -eq 0 -or $nl -lt 2 -or $nl -gt 64) { continue }
@@ -509,7 +658,7 @@ function Get-WfxShortcutRecord {
 # ───────────────────────────── browser downloads ─────────────────────────────
 function ConvertFrom-WfxWebkitTime {
     param($Value)
-    $v = 0L; if (-not [long]::TryParse([string]$Value, [ref]$v) -or $v -le 0) { return $null }
+    $v = 0L; if (-not [long]::TryParse([string]$Value, [ref]$v) -or $v -le 0 -or $v -gt 265046774400000000L) { return $null }
     ConvertFrom-WfxFileTime ($v * 10)
 }
 
@@ -527,43 +676,43 @@ function Get-WfxBrowserDownloadRecord {
     $dl = @(Get-WfxSqliteTable $db 'downloads')
     if ($dl.Count) {
         $chain = @{}
-        foreach ($c in @(Get-WfxSqliteTable $db 'downloads_url_chains')) { if (-not $chain[[long]$c.id]) { $chain[[long]$c.id] = New-Object 'System.Collections.Generic.SortedList[long,string]' }; $chain[[long]$c.id][[long]$c.chain_index] = [string]$c.url }
+        foreach ($c in @(Get-WfxSqliteTable $db 'downloads_url_chains')) { if (-not $chain[(ConvertTo-WfxLong $c.id)]) { $chain[(ConvertTo-WfxLong $c.id)] = New-Object 'System.Collections.Generic.SortedList[long,string]' }; $chain[(ConvertTo-WfxLong $c.id)][(ConvertTo-WfxLong $c.chain_index)] = [string]$c.url }
         foreach ($d in $dl) {
-            $urls = @(if ($chain[[long]$d.id]) { $chain[[long]$d.id].Values })
+            $urls = @(if ($chain[(ConvertTo-WfxLong $d.id)]) { $chain[(ConvertTo-WfxLong $d.id)].Values })
             $final = if ($urls.Count) { $urls[-1] } else { [string]$d.tab_url }
-            $state = switch ([int]$d.state) { 1 { 'complete' } 2 { 'cancelled' } 3 { 'interrupted' } 4 { 'interrupted' } default { 'in progress' } }
-            $dg = [int]$d.danger_type
+            $state = switch ((ConvertTo-WfxInt $d.state)) { 1 { 'complete' } 2 { 'cancelled' } 3 { 'interrupted' } 4 { 'interrupted' } default { 'in progress' } }
+            $dg = (ConvertTo-WfxInt $d.danger_type)
             $bits = @("$Browser download ($state)")
             if ($final) { $bits += "from $final" }
             if ($d.referrer) { $bits += "referrer $($d.referrer)" }
             if ($dg -and $danger[$dg]) { $bits += "browser warning: $($danger[$dg])" }
-            if ([int]$d.opened) { $bits += 'opened from the browser' }
+            if ((ConvertTo-WfxInt $d.opened)) { $bits += 'opened from the browser' }
             New-WfxArtifact -Artifact 'Download' -Time (ConvertFrom-WfxWebkitTime $d.start_time) -TimeKind 'Download started' -Evidence 'Download' -Path ([string]$d.target_path) -User $User `
                 -Detail ($bits -join '; ') -Source $Path `
                 -Extra ([pscustomobject]@{ Browser = $Browser; Url = $final; FirstUrl = $(if ($urls.Count) { $urls[0] }); Referrer = [string]$d.referrer; TabUrl = [string]$d.tab_url; Mime = [string]$d.mime_type
-                    Bytes = $d.received_bytes; TotalBytes = $d.total_bytes; State = $state; Danger = $(if ($dg) { $danger[$dg] }); Opened = [bool][int]$d.opened; Finished = (ConvertTo-WfxUtcString (ConvertFrom-WfxWebkitTime $d.end_time)) })
+                    Bytes = $d.received_bytes; TotalBytes = $d.total_bytes; State = $state; Danger = $(if ($dg) { $danger[$dg] }); Opened = [bool](ConvertTo-WfxInt $d.opened); Finished = (ConvertTo-WfxUtcString (ConvertFrom-WfxWebkitTime $d.end_time)) })
         }
         return
     }
-    $attrs = @{}; foreach ($a in @(Get-WfxSqliteTable $db 'moz_anno_attributes')) { $attrs[[long]$a.id] = [string]$a.name }
+    $attrs = @{}; foreach ($a in @(Get-WfxSqliteTable $db 'moz_anno_attributes')) { $attrs[(ConvertTo-WfxLong $a.id)] = [string]$a.name }
     if (-not $attrs.Count) { return }
     $dest = ($attrs.GetEnumerator() | Where-Object Value -eq 'downloads/destinationFileURI' | Select-Object -First 1).Key
     if (-not $dest) { return }
     $meta = ($attrs.GetEnumerator() | Where-Object Value -eq 'downloads/metaData' | Select-Object -First 1).Key
     $annos = @(Get-WfxSqliteTable $db 'moz_annos')
-    $need = @{}; foreach ($a in $annos) { if ([long]$a.anno_attribute_id -eq $dest) { $need[[long]$a.place_id] = $a } }
+    $need = @{}; foreach ($a in $annos) { if ((ConvertTo-WfxLong $a.anno_attribute_id) -eq $dest) { $need[(ConvertTo-WfxLong $a.place_id)] = $a } }
     if (-not $need.Count) { return }
     # moz_places can hold hundreds of thousands of rows: look up only the downloaded ones by rowid.
     $places = @{}; $ps = Get-WfxSqliteSchema $db 'moz_places'
     if ($ps) { $ui = [array]::IndexOf($ps.Names, 'url'); foreach ($id in $need.Keys) { $v = Find-WfxSqliteRow $db $ps.Root ([long]$id); if ($v -and $ui -ge 0) { $places[[long]$id] = [pscustomobject]@{ url = $v[$ui] } } } }
-    $metaBy = @{}; if ($meta) { foreach ($a in $annos) { if ([long]$a.anno_attribute_id -eq $meta) { $metaBy[[long]$a.place_id] = [string]$a.content } } }
+    $metaBy = @{}; if ($meta) { foreach ($a in $annos) { if ((ConvertTo-WfxLong $a.anno_attribute_id) -eq $meta) { $metaBy[(ConvertTo-WfxLong $a.place_id)] = [string]$a.content } } }
     foreach ($k in $need.Keys) {
         $a = $need[$k]; $url = [string]$places[$k].url
         $file = [string]$a.content
         try { if ($file -match '^file:') { $file = ([uri]$file).LocalPath } } catch { }
         $state = ''; $size = $null
-        if ($metaBy[$k]) { try { $m = $metaBy[$k] | ConvertFrom-Json; $state = switch ([int]$m.state) { 1 { 'complete' } 3 { 'cancelled' } 4 { 'paused' } 8 { 'blocked' } 9 { 'blocked by policy' } 0 { 'in progress' } default { "state $($m.state)" } }; $size = $m.fileSize } catch { } }
-        $added = $null; $us = 0L; if ([long]::TryParse([string]$a.dateAdded, [ref]$us) -and $us -gt 0) { $added = [DateTimeOffset]::FromUnixTimeMilliseconds([long]($us / 1000)).UtcDateTime }
+        if ($metaBy[$k]) { try { $m = $metaBy[$k] | ConvertFrom-Json; $state = switch ((ConvertTo-WfxInt $m.state)) { 1 { 'complete' } 3 { 'cancelled' } 4 { 'paused' } 8 { 'blocked' } 9 { 'blocked by policy' } 0 { 'in progress' } default { "state $($m.state)" } }; $size = $m.fileSize } catch { } }
+        $added = $null; $us = 0L; if ([long]::TryParse([string]$a.dateAdded, [ref]$us) -and $us -gt 0 -and $us -lt 253402300799000000L) { $added = [DateTimeOffset]::FromUnixTimeMilliseconds([long][Math]::Floor($us / 1000)).UtcDateTime }
         New-WfxArtifact -Artifact 'Download' -Time $added -TimeKind 'Download started' -Evidence 'Download' -Path $file -User $User `
             -Detail ("Firefox download$(if ($state) { " ($state)" }); from $url") -Source $Path `
             -Extra ([pscustomobject]@{ Browser = 'Firefox'; Url = $url; Bytes = $size; State = $state })
@@ -602,9 +751,9 @@ function Get-WfxPcaRecord {
         if ($leaf -match '(?i)AppLaunchDic' -and $f.Count -ge 2) {
             New-WfxArtifact -Artifact 'PCA' -Time (ConvertTo-WfxDateTime ($f[1] + 'Z')) -TimeKind 'Last launched' -Evidence 'Execution' -Path $f[0] -Detail 'Launched from Explorer (PcaAppLaunchDic)' -Source $Path
         } elseif ($f.Count -ge 3 -and $f[0] -match '^\d{4}-\d\d-\d\d') {
-            $desc = @(@($f[3], $f[4], $f[5]) | Where-Object { $_ }) -join ' · '
+            $desc = @(@($f[3], $f[4], $f[5]) | Where-Object { $_ }) -join ', '
             $status = switch ($f[1]) { '0' { 'installer' } '1' { 'driver blocked' } '2' { 'abnormal process exit' } '3' { 'PCA resolve call' } default { "status $($f[1])" } }
-            New-WfxArtifact -Artifact 'PCA' -Time (ConvertTo-WfxDateTime ($f[0] + 'Z')) -TimeKind 'Recorded' -Evidence 'Execution' -Path ([Environment]::ExpandEnvironmentVariables($f[2])) `
+            New-WfxArtifact -Artifact 'PCA' -Time (ConvertTo-WfxDateTime ($f[0] + 'Z')) -TimeKind 'Recorded' -Evidence 'Execution' -Path (ConvertFrom-WfxEnvPath $f[2]) `
                 -Detail ("$status$(if ($desc) { "; $desc" }) (PcaGeneralDb)") -Source $Path -Extra ([pscustomobject]@{ Status = $status; Description = $f[3]; Vendor = $f[4]; Version = $f[5]; ExitCode = $(if ($f.Count -gt 7) { $f[7] }) })
         }
     }
@@ -646,6 +795,34 @@ function Get-WfxDefenderLogRecord {
 # ───────────────────────────── user registry (offline NTUSER.DAT) and BAM (offline SYSTEM) ─────────────────────────────
 function ConvertFrom-WfxRot13 { param([string]$Text) -join ($Text.ToCharArray() | ForEach-Object { $c = [int]$_; if ($c -ge 65 -and $c -le 90) { [char](65 + ($c - 52) % 26) } elseif ($c -ge 97 -and $c -le 122) { [char](97 + ($c - 84) % 26) } else { $_ } }) }
 
+function ConvertFrom-WfxKnownFolderPath {
+    <#
+    A path that starts with a known-folder GUID (as UserAssist stores them) as a readable path: machine folders
+    as C:\..., per-user folders as C:\Users\<user>\... when the profile name is known, else %USERPROFILE%\...
+    #>
+    param([string]$Path, [string]$User = '')
+    if ($Path -notmatch '^\{([0-9A-Fa-f-]{36})\}(.*)$') { return $Path }
+    $g = $Matches[1].ToUpperInvariant(); $rest = $Matches[2]
+    $prof = if ($User -and $User -notmatch '^S-1-' -and $User -notmatch '[\\/]') { "C:\Users\$User" } else { '%USERPROFILE%' }
+    $map = @{
+        '1AC14E77-02E7-4E5D-B744-2EB1AE5198B7' = 'C:\Windows\System32'; 'D65231B0-B2F1-4857-A4CE-A8E7C6EA7D27' = 'C:\Windows\SysWOW64'; 'F38BF404-1D43-42F2-9305-67DE0B28FC23' = 'C:\Windows'
+        '6D809377-6AF0-444B-8957-A3773F02200E' = 'C:\Program Files'; '905E63B6-C1BF-494E-B29C-65B732D3D21A' = 'C:\Program Files'; '7C5A40EF-A0FB-4BFC-874A-C0F2E0B9FA8E' = 'C:\Program Files (x86)'
+        'F7F1ED05-9F6D-47A2-AAAE-29D317C6F066' = 'C:\Program Files\Common Files'; 'DE974D24-D9C6-4D3E-BF91-F4455120B917' = 'C:\Program Files (x86)\Common Files'
+        '62AB5D82-FDC1-4DC3-A9DD-070D1D495D97' = 'C:\ProgramData'; 'DFDF76A2-C82A-4D63-906A-5644AC457385' = 'C:\Users\Public'
+        '0139D44E-6AFE-49F2-8690-3DAFCAE6FFB8' = 'C:\ProgramData\Microsoft\Windows\Start Menu\Programs'; 'A4115719-D62E-491D-AA7C-E74B8BE3B067' = 'C:\ProgramData\Microsoft\Windows\Start Menu'
+        '82A5EA35-D9CD-47C5-9629-E15D2F714E6E' = 'C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp'; 'C4AA340D-F20F-4863-AFEF-F87EF2E6BA25' = 'C:\Users\Public\Desktop'
+        '5E6C858F-0E22-4760-9AFE-EA3317B67173' = $prof; 'B4BFCC3A-DB2C-424C-B029-7FE99A87C641' = "$prof\Desktop"; '374DE290-123F-4565-9164-39C4925E467B' = "$prof\Downloads"
+        'FDD39AD0-238F-46AF-ADB4-6C85480369C7' = "$prof\Documents"; '33E28130-4E1E-4676-835A-98395C3BC3BB' = "$prof\Pictures"; '4BD8D571-6D19-48D3-BE97-422220080E43' = "$prof\Music"
+        '18989B1D-99B5-455B-841C-AB7C74E4DDFC' = "$prof\Videos"; '3EB685DB-65F9-4CF6-A03A-E3EF65729F3D' = "$prof\AppData\Roaming"; 'F1B32785-6FBA-4FCF-9D55-7B8E7F157091' = "$prof\AppData\Local"
+        'A520A1A4-1780-4FF6-BD18-167343C5AF16' = "$prof\AppData\LocalLow"; 'A77F5D77-2E2B-44C3-A6A2-ABA601054A51' = "$prof\AppData\Roaming\Microsoft\Windows\Start Menu\Programs"
+        '625B53C3-AB48-4EC1-BA1F-A1EF4146FC19' = "$prof\AppData\Roaming\Microsoft\Windows\Start Menu"; 'B97D20BB-F46A-4C97-BA10-5E3608430854' = "$prof\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup"
+        '9E3995AB-1F9C-4F13-B827-48B24B6C7174' = "$prof\AppData\Roaming\Microsoft\Internet Explorer\Quick Launch\User Pinned"; '52A4F021-7B75-48A9-9F6B-4B87A210BC8F' = "$prof\AppData\Roaming\Microsoft\Internet Explorer\Quick Launch"
+        'AE50C081-EBD2-438A-8655-8A092E34987A' = "$prof\AppData\Roaming\Microsoft\Windows\Recent"; '8983036C-27C0-404B-8F08-102D10DCFD74' = "$prof\AppData\Roaming\Microsoft\Windows\SendTo"
+    }
+    if ($map.ContainsKey($g)) { return $map[$g] + $rest }
+    $Path
+}
+
 function Get-WfxNtuserRecord {
     <#
     .SYNOPSIS From an offline NTUSER.DAT: UserAssist (GUI program launches with run count), RunMRU (commands
@@ -657,11 +834,22 @@ function Get-WfxNtuserRecord {
     foreach ($g in @(Get-WfxHiveSubkey $Hive $ua)) {
         $ck = @(Get-WfxHiveSubkey $Hive $g | Where-Object Name -eq 'Count')[0]; if (-not $ck) { continue }
         foreach ($v in @(Get-WfxHiveValue $Hive $ck)) {
-            $d = [byte[]]$v.Data; if ($d.Length -lt 68) { continue }
-            $ft = ConvertFrom-WfxFileTime ([BitConverter]::ToInt64($d, 60)); if (-not $ft) { continue }
+            $d = [byte[]]$v.Data
             $name = ConvertFrom-WfxRot13 $v.Name
-            $name = $name -replace '^\{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7\}', '%SystemRoot%\System32' -replace '^\{6D809377-6AF0-444B-8957-A3773F02200E\}', '%ProgramFiles%' -replace '^\{7C5A40EF-A0FB-4BFC-874A-C0F2E0B9FA8E\}', '%ProgramFiles(x86)%' -replace '^\{F38BF404-1D43-42F2-9305-67DE0B28FC23\}', '%SystemRoot%'
-            New-WfxArtifact -Artifact 'UserAssist' -Time $ft -TimeKind 'Last run' -Evidence 'Execution' -Path $name -User $User -Detail "run count $([BitConverter]::ToInt32($d, 4)); focus time $([Math]::Round([BitConverter]::ToUInt32($d, 12) / 1000)) s" -Source "$Source\$exp\UserAssist"
+            if ($name -match '^UEME_CTL') { continue }                       # session and counter bookkeeping, not programs
+            # Windows 7 and later: 72 bytes (run count at 4, focus count 8, focus time 12, last run 60).
+            # Windows XP / 2003: 16 bytes (run count at 4, stored 5 higher; last run 8).
+            if ($d.Length -eq 72 -or ($d.Length -ge 68 -and $d.Length -lt 72)) {
+                $ft = ConvertFrom-WfxFileTime ([BitConverter]::ToInt64($d, 60)); if (-not $ft) { continue }
+                $det = "run count $([BitConverter]::ToInt32($d, 4)); focus time $([Math]::Round([BitConverter]::ToUInt32($d, 12) / 1000)) s"
+            } elseif ($d.Length -eq 16) {
+                $ft = ConvertFrom-WfxFileTime ([BitConverter]::ToInt64($d, 8)); if (-not $ft) { continue }
+                $cnt = [BitConverter]::ToInt32($d, 4); if ($cnt -ge 5) { $cnt -= 5 }
+                $det = "run count $cnt"
+                $name = $name -replace '^UEME_(?:RUNPATH|RUNPIDL|RUNCPL|RUNWMH|UISCUT|UIQCUT|UIHOTKEY|UITOOLBAR):', ''
+            } else { continue }
+            $name = ConvertFrom-WfxKnownFolderPath $name $User
+            New-WfxArtifact -Artifact 'UserAssist' -Time $ft -TimeKind 'Last run' -Evidence 'Execution' -Path $name -User $User -Detail $det -Source "$Source\$exp\UserAssist"
         }
     }
     $run = Get-WfxHiveKey $Hive "$exp\RunMRU"
@@ -695,19 +883,29 @@ function Get-WfxNtuserRecord {
 }
 
 function Get-WfxSystemHiveBam {
-    <# BAM/DAM from an offline SYSTEM hive: full path and last execution time per user SID. #>
+    <#
+    BAM/DAM from an offline SYSTEM hive: full path and last execution time per user SID. Both key layouts are read
+    (bam\UserSettings before Windows 10 1809, bam\State\UserSettings after; an upgraded system can have both), in
+    every control set; identical entries are reported once.
+    #>
     param($Hive, [string]$Source)
-    $cur = 1; $sel = Get-WfxHiveKey $Hive 'Select'; if ($sel) { $c = (Get-WfxHiveValue $Hive $sel -Name 'Current').Data; if ($c) { $cur = [int]$c } }
-    foreach ($rel in 'Services\bam\State\UserSettings', 'Services\bam\UserSettings') {
-        $root = Get-WfxHiveKey $Hive ('ControlSet{0:D3}\{1}' -f $cur, $rel); if (-not $root) { continue }
-        foreach ($sid in @(Get-WfxHiveSubkey $Hive $root)) {
-            foreach ($v in @(Get-WfxHiveValue $Hive $sid)) {
-                $d = [byte[]]$v.Data; if ($v.Type -ne 'REG_BINARY' -or $d.Length -lt 8) { continue }
-                $t = ConvertFrom-WfxFileTime ([BitConverter]::ToInt64($d, 0)); if (-not $t) { continue }
-                New-WfxArtifact -Artifact 'BAM' -Time $t -TimeKind 'Last run' -Evidence 'Execution' -Path ($v.Name -replace '^\\Device\\HarddiskVolume\d+', '(volume)') -User $sid.Name -Detail 'Background Activity Moderator' -Source "$Source\...\$rel"
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($n in (Get-WfxHiveControlSets $Hive)) {
+        $set = 'ControlSet{0:D3}' -f $n
+        foreach ($svc in 'bam', 'dam') {
+            foreach ($rel in "Services\$svc\State\UserSettings", "Services\$svc\UserSettings") {
+                $root = Get-WfxHiveKey $Hive "$set\$rel"; if (-not $root) { continue }
+                foreach ($sid in @(Get-WfxHiveSubkey $Hive $root)) {
+                    foreach ($v in @(Get-WfxHiveValue $Hive $sid)) {
+                        $d = [byte[]]$v.Data; if ($v.Type -ne 'REG_BINARY' -or $d.Length -lt 8) { continue }
+                        $t = ConvertFrom-WfxFileTime ([BitConverter]::ToInt64($d, 0)); if (-not $t) { continue }
+                        if (-not $seen.Add("$($sid.Name)|$($v.Name)|$($t.Ticks)".ToLowerInvariant())) { continue }
+                        New-WfxArtifact -Artifact 'BAM' -Time $t -TimeKind 'Last run' -Evidence 'Execution' -Path ($v.Name -replace '^\\Device\\HarddiskVolume\d+', '(volume)') -User $sid.Name `
+                            -Detail $(if ($svc -eq 'dam') { 'Desktop Activity Moderator' } else { 'Background Activity Moderator' }) -Source "$Source\$set\$rel"
+                    }
+                }
             }
         }
-        break
     }
 }
 
@@ -718,7 +916,7 @@ function Get-WfxArtifactData {
     cannot be read is recorded as a gap with the reason.
     #>
     param([int]$MaxPerSource = 5000)
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     if (-not (Test-WfxWindows)) { return , $out.ToArray() }
     $add = { param($rows) foreach ($r in @($rows | Select-Object -First $MaxPerSource)) { if ($r) { $out.Add($r) } } }
     # ShimCache from the live registry value.
@@ -750,7 +948,7 @@ function Get-WfxArtifactData {
         if (-not $logs.Count) { Add-WfxGap -Source 'Defender logs' -Reason 'No MPLog files readable (needs administrator rights).' }
         foreach ($f in $logs) { & $add (Get-WfxDefenderLogRecord -Path $f.FullName) }
     }
-    # Prefetch file names (full parsing of compressed Prefetch is out of scope; name + times are reliable).
+    # Prefetch: parsed (including the compressed Windows 10 and 11 format); name and file times only if a file is unreadable.
     & $add (Get-WfxPrefetchRecord -Folder (Join-Path $env:SystemRoot 'Prefetch'))
     # Per user: ShellBags, Jump Lists, Recent shortcuts, browser downloads.
     $loaded = @{}
@@ -802,14 +1000,41 @@ function Get-WfxBrowserDatabase {
 }
 
 function Get-WfxPrefetchRecord {
-    <# Prefetch: one file per program run from a given path. Name = executable; file times = first / last run. #>
+    <#
+    Prefetch: one record per prefetch file (one per program and folder it ran from). The file is parsed, including
+    the compressed format of Windows 10 and 11: run count, the last run time (the last eight from Windows 8 on),
+    the full path of the program and the files it loaded. When a file cannot be parsed, its name and file times
+    are used and the reason is recorded; file times are less reliable (a copy can reset them).
+    #>
     param([string]$Folder, [object[]]$Files)
     if (-not $Files) { $Files = @(Get-ChildItem -LiteralPath $Folder -Filter *.pf -File -ErrorAction SilentlyContinue) }
+    $failed = 0; $why = ''
     foreach ($f in $Files) {
         $exe = $f.Name -replace '-[0-9A-Fa-f]{8}\.pf$', ''
-        New-WfxArtifact -Artifact 'Prefetch' -Time $f.LastWriteTimeUtc -TimeKind 'Last run' -Evidence 'Execution' -Path $exe -Name $exe `
-            -Detail "first run about $(ConvertTo-WfxUtcString $f.CreationTimeUtc) (file created); prefetch hash $(($f.BaseName -split '-')[-1])" -Source $f.FullName
+        $pf = $null
+        try { $pf = Read-WfxPrefetch -Path $f.FullName } catch { $failed++; if (-not $why) { $why = "$($f.Name): $($_.Exception.Message)" } }
+        if (-not $pf) {
+            New-WfxArtifact -Artifact 'Prefetch' -Time $f.LastWriteTimeUtc -TimeKind 'Last run (file time)' -Evidence 'Execution' -Path $exe -Name $exe `
+                -Detail "contents not readable; first run about $(ConvertTo-WfxUtcString $f.CreationTimeUtc) (file created); prefetch hash $(($f.BaseName -split '-')[-1])" -Source $f.FullName
+            continue
+        }
+        $full = Get-WfxPrefetchExecutable $pf
+        $name = if ($pf.Name) { $pf.Name } else { $exe }
+        $runs = @($pf.RunTimes)
+        $last = if ($runs.Count) { $runs[0] } else { $f.LastWriteTimeUtc }
+        $earlier = @($runs | Select-Object -Skip 1 | ForEach-Object { ConvertTo-WfxUtcString $_ })
+        $files = @($pf.Files | ForEach-Object { ConvertFrom-WfxVolumePath $_ })
+        $detail = "ran $($pf.RunCount) time$(if ($pf.RunCount -ne 1) { 's' })"
+        if ($earlier.Count) { $detail += "; earlier runs $($earlier -join ', ')" }
+        $detail += "; prefetch hash $($pf.Hash)"
+        New-WfxArtifact -Artifact 'Prefetch' -Time $last -TimeKind $(if ($runs.Count) { 'Last run' } else { 'Last run (file time)' }) -Evidence 'Execution' `
+            -Path $(if ($full) { $full } else { $name }) -Name $name -Detail $detail -Source $f.FullName -Extra ([pscustomobject]@{
+                RunCount = $pf.RunCount; RunTimes = @($runs | ForEach-Object { ConvertTo-WfxUtcString $_ }); Version = $pf.Version; Hash = $pf.Hash
+                Volumes = @($pf.Volumes | ForEach-Object { "$($_.Path) serial $($_.Serial)$(if ($_.Created) { ' created ' + (ConvertTo-WfxUtcString $_.Created) })" })
+                FileCount = $files.Count; Files = @($files | Select-Object -First 500)
+            })
     }
+    if ($failed) { Add-WfxGap -Source 'Prefetch' -Reason "$failed prefetch file(s) could not be parsed and were read by name and file times only (first: $why)." }
 }
 
 # ───────────────────────────── collection: files from another system ─────────────────────────────
@@ -955,7 +1180,7 @@ function Import-WfxArtifact {
     $script:WfxImportEvtx = New-Object System.Collections.Generic.List[string]
     if (-not (Test-Path -LiteralPath $Path)) { Add-WfxGap -Source 'artifacts' -Reason "Path not found: $Path"; return }
     $files = if (Test-Path -LiteralPath $Path -PathType Leaf) { @(Get-Item -LiteralPath $Path) } else { @(Get-ChildItem -LiteralPath $Path -File -Recurse -Force -ErrorAction SilentlyContinue | Select-Object -First $MaxFiles) }
-    $pf = New-Object System.Collections.Generic.List[object]
+    $pf = [System.Collections.Generic.List[object]]::new()
     foreach ($f in $files) {
         $name = $f.Name; $full = $f.FullName
         $user = if ($full -match '(?i)[\\/]Users[\\/]([^\\/]+)[\\/]') { $Matches[1] } else { '' }
@@ -979,7 +1204,7 @@ function Import-WfxArtifact {
             switch (Get-WfxHiveKind $h) {
                 'SYSTEM' {
                     Get-WfxSystemHiveShimCache -Hive $h -Source $full; Get-WfxSystemHiveBam -Hive $h -Source $full
-                    $cn = Get-WfxHiveKey $h 'ControlSet001\Control\ComputerName\ComputerName'
+                    $cn = Get-WfxHiveKey $h ('ControlSet{0:D3}\Control\ComputerName\ComputerName' -f @(Get-WfxHiveControlSets $h)[0])
                     if ($cn) { $v = (Get-WfxHiveValue $h $cn -Name 'ComputerName').Data; if ($v) { $script:WfxImportHost = [string]$v } }
                 }
                 'SOFTWARE' {

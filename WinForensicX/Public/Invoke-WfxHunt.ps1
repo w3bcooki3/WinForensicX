@@ -61,7 +61,7 @@
     $hn = [string](Get-WfxValue $bundle 'HostName' ([Environment]::MachineName))
 
     # Build a flat, searchable index of (where, text, context) rows from the bundle.
-    $rows = New-Object System.Collections.Generic.List[object]
+    $rows = [System.Collections.Generic.List[object]]::new()
     $push = { param($Where, $Text, $Ctx) if ($Text) { $rows.Add([pscustomobject]@{ Where = $Where; Text = [string]$Text; Ctx = $Ctx }) } }
     $hashCache = @{}
     $hashFile = {
@@ -114,7 +114,7 @@
         if ($x) { foreach ($k in 'Url', 'FirstUrl', 'Referrer', 'Arguments', 'Threat') { $v = [string](Get-WfxValue $x $k ''); if ($v) { & $push 'artifact' $v "$ctx [$k]" } } }
     }
 
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     foreach ($i in $iocs) {
         $kind = Get-WfxIocKind $i
         $rx = switch ($kind) {

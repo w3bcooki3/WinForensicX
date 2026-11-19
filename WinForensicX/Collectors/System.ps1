@@ -124,7 +124,7 @@ function Get-WfxNetworkData {
     if (-not (Test-WfxWindows)) { return @() }
     $procNames = @{}
     try { Get-Process -ErrorAction SilentlyContinue | ForEach-Object { $procNames[[string]$_.Id] = $_.ProcessName } } catch {}
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $tcp = Invoke-WfxStep 'network:tcp' { Get-NetTCPConnection -ErrorAction Stop } $null
     if ($tcp) {
         foreach ($c in $tcp) {
@@ -164,7 +164,7 @@ function Get-WfxDnsData {
     if ($null -eq $raw) {
         # Fallback: ipconfig /displaydns parsing (English output only; recorded as a gap).
         Add-WfxGap -Source 'dns' -Reason 'Get-DnsClientCache unavailable; used ipconfig /displaydns fallback (English output only).'
-        $out = New-Object System.Collections.Generic.List[object]
+        $out = [System.Collections.Generic.List[object]]::new()
         $dns = Invoke-WfxStep 'dns:ipconfig' { ipconfig /displaydns } @()
         $cur = ''
         foreach ($line in $dns) {
@@ -179,7 +179,7 @@ function Get-WfxDnsData {
 function Get-WfxServiceAndDriver {
     <# Services and kernel drivers → autostart records (Kind Service / Driver). #>
     if (-not (Test-WfxWindows)) { return @() }
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $svc = Invoke-WfxStep 'persist:services' { Get-CimInstance Win32_Service -ErrorAction Stop } @()
     foreach ($s in $svc) {
         $img = Get-WfxImagePath $s.PathName

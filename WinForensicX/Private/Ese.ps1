@@ -72,7 +72,7 @@ function Get-WfxEseNode {
 function Get-WfxEseLeaf {
     <# Every live leaf node of the B+ tree rooted at $Root, in key order. #>
     param($Db, [long]$Root)
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $seen = New-Object System.Collections.Generic.HashSet[long]
     $stack = New-Object System.Collections.Generic.Stack[long]
     $stack.Push($Root)
@@ -214,7 +214,7 @@ function Get-WfxEseLongValue {
         foreach ($n in (Get-WfxEseLeaf $Db $Table.Lv)) {
             if ($n.Key.Length -lt 4) { continue }
             $lid = [BitConverter]::ToString($n.Key, 0, 4)
-            if (-not $cache.ContainsKey($lid)) { $cache[$lid] = [pscustomobject]@{ Size = -1; Chunks = New-Object System.Collections.Generic.List[object] } }
+            if (-not $cache.ContainsKey($lid)) { $cache[$lid] = [pscustomobject]@{ Size = -1; Chunks = [System.Collections.Generic.List[object]]::new() } }
             if ($n.Key.Length -eq 4) { if ($n.Len -ge 8) { $cache[$lid].Size = [BitConverter]::ToUInt32($Db.B, $n.Off + 4) } }
             elseif ($n.Key.Length -ge 8) {
                 $o = ([long]$n.Key[4] -shl 24) -bor ([long]$n.Key[5] -shl 16) -bor ([long]$n.Key[6] -shl 8) -bor [long]$n.Key[7]

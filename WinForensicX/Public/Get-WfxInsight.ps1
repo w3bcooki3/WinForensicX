@@ -121,10 +121,10 @@ $script:WfxInsightTopics = [ordered]@{
             foreach ($p in $all) {
                 $pp = [int]$p.ParentProcessId; $parent = $byPid[$pp]
                 if ($pp -eq [int]$p.ProcessId -or -not $parent -or ($parent.CreationDate -and $p.CreationDate -and $parent.CreationDate -gt $p.CreationDate)) { $pp = -1 }
-                if (-not $kids.ContainsKey($pp)) { $kids[$pp] = New-Object System.Collections.Generic.List[object] }
+                if (-not $kids.ContainsKey($pp)) { $kids[$pp] = [System.Collections.Generic.List[object]]::new() }
                 $kids[$pp].Add($p)
             }
-            $rows = New-Object System.Collections.Generic.List[object]
+            $rows = [System.Collections.Generic.List[object]]::new()
             $walk = $null
             $walk = { param($ppid, $depth)
                 if (-not $kids.ContainsKey($ppid) -or $depth -gt 40) { return }
@@ -343,9 +343,16 @@ $script:WfxInsightTopics = [ordered]@{
         }
     }
     'prefetch'    = @{ Group = 'Files'; Title = 'Program execution history (Prefetch)'; Desc = 'Programs that ran recently, from C:\Windows\Prefetch (needs admin; may be disabled on servers/SSDs).'; Admin = $true; Script = {
-            Get-ChildItem -LiteralPath (Join-Path $env:SystemRoot 'Prefetch') -Filter *.pf -ErrorAction Stop | Sort-Object LastWriteTime -Descending | ForEach-Object {
-                [pscustomobject]@{ LastRun = $_.LastWriteTime; Program = ($_.BaseName -replace '-[0-9A-F]{8}$', ''); FirstSeen = $_.CreationTime; PrefetchFile = $_.Name }
-            }
+            Get-ChildItem -LiteralPath (Join-Path $env:SystemRoot 'Prefetch') -Filter *.pf -ErrorAction Stop | ForEach-Object {
+                $pf = $null; try { $pf = Read-WfxPrefetch -Path $_.FullName } catch { }
+                if ($pf -and @($pf.RunTimes).Count) {
+                    $full = Get-WfxPrefetchExecutable $pf
+                    [pscustomobject]@{ LastRun = $pf.RunTimes[0].ToLocalTime(); Program = $(if ($pf.Name) { $pf.Name } else { $_.BaseName -replace '-[0-9A-F]{8}$', '' }); Runs = $pf.RunCount
+                        EarlierRuns = (@($pf.RunTimes | Select-Object -Skip 1 | ForEach-Object { $_.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss') }) -join ', '); Path = $full; PrefetchFile = $_.Name }
+                } else {
+                    [pscustomobject]@{ LastRun = $_.LastWriteTime; Program = ($_.BaseName -replace '-[0-9A-F]{8}$', ''); Runs = ''; EarlierRuns = ''; Path = ''; PrefetchFile = $_.Name }
+                }
+            } | Sort-Object LastRun -Descending
         }
     }
     'recentfiles' = @{ Group = 'Files'; Title = 'Recently opened files (Recent items)'; Desc = 'Files and folders users opened, from their Recent shortcuts.'; Admin = $false; Days = 30; Script = {
@@ -626,7 +633,7 @@ function Save-WfxInsight {
     $dir = Join-Path $case.Path 'insights'; New-Item -ItemType Directory -Path $dir -Force | Out-Null
     $sections = New-Object System.Text.StringBuilder
     $toc = New-Object System.Text.StringBuilder
-    $flagged = New-Object System.Collections.Generic.List[object]
+    $flagged = [System.Collections.Generic.List[object]]::new()
     $i = 0
     foreach ($k in $keys) {
         $i++
@@ -644,7 +651,7 @@ function Save-WfxInsight {
         [void]$toc.Append("<li><a href=""#$k"">$($enc::HtmlEncode($t.Title))</a> <span>$($rows.Count)$badge</span></li>")
         # ConvertTo-Html encodes every value; the severity cell is then turned into a badge.
         $body = if ($err) { "<p class=""err"">Unavailable: $($enc::HtmlEncode($err))</p>" } elseif (-not $rows.Count) { '<p class="none">Nothing found.</p>' } else { (($rows | Select-Object -First 1000 | ConvertTo-Html -Fragment) -join "`n") -replace '<tr><td>(CRITICAL|HIGH|MEDIUM|LOW)</td>', '<tr class="f-$1"><td><b class="b-$1">$1</b></td>' }
-        [void]$sections.Append("<section id=""$k""><h2>$($enc::HtmlEncode($t.Group)) · $($enc::HtmlEncode($t.Title))</h2><p class=""d"">$($enc::HtmlEncode($t.Desc))</p>$body</section>")
+        [void]$sections.Append("<section id=""$k""><h2>$($enc::HtmlEncode($t.Group)): $($enc::HtmlEncode($t.Title))</h2><p class=""d"">$($enc::HtmlEncode($t.Desc))</p>$body</section>")
     }
     $hn = [System.Net.WebUtility]::HtmlEncode([Environment]::MachineName)
     $enc = [System.Net.WebUtility]
@@ -655,7 +662,7 @@ function Save-WfxInsight {
         "<section id=""flagged""><h2>Suspicious items across all views ($(Get-WfxFlagSummary $flagged))</h2><p class=""d"">Rows that matched a suspicious-activity rule. Each is a lead to verify, not a verdict; the absence of flags is not proof that the host is clean.</p><table><tr><th>Flag</th><th>View</th><th>Why</th><th>ATT&amp;CK</th></tr>$($li -join '')</table></section>"
     } else { "<section id=""flagged""><h2>Suspicious items across all views</h2><p class=""none"">No row matched a suspicious-activity rule. This is not proof that the host is clean — run a full triage for event-log, file and memory-resident analysis.</p></section>" }
     $html = @"
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inventory · $hn</title>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inventory - $hn</title>
 <style>html{font-variant-ligatures:none;font-feature-settings:"calt" 0,"liga" 0,"clig" 0}body{font:14px system-ui,Segoe UI,sans-serif;margin:0;color:#1b1f24;background:#f6f7f9}header{background:#14181f;color:#fff;padding:18px 24px}header small{color:#9aa4b2}
 main{display:grid;grid-template-columns:260px 1fr;gap:20px;padding:20px}nav ul{list-style:none;padding:0;margin:0;position:sticky;top:12px}nav li{display:flex;justify-content:space-between;padding:3px 0}nav a{color:#2457c5;text-decoration:none}nav span{color:#8a93a0}
 section{background:#fff;border:1px solid #e3e6ea;border-radius:10px;padding:14px 16px;margin-bottom:16px;overflow-x:auto}h2{font-size:16px;margin:0 0 4px}.d{color:#5b6470;margin:0 0 10px}.err{color:#b42318}.none{color:#8a93a0}
@@ -664,7 +671,7 @@ nav em{color:#b42318;font-style:normal;font-weight:600;margin-left:4px}tr.f-CRIT
 b[class^=b-]{display:inline-block;white-space:nowrap;font-size:11px;letter-spacing:.04em;padding:2px 6px;border-radius:3px}.b-CRITICAL{background:#7a0e0e;color:#fff}.b-HIGH{background:#c0362c;color:#fff}.b-MEDIUM{background:#e8a33d;color:#1b1300}.b-LOW{background:#d5e3f2;color:#123}
 @media(max-width:800px){main{grid-template-columns:1fr}}*,*::before,*::after{font-variant-ligatures:none!important;font-feature-settings:"calt" 0,"liga" 0,"clig" 0!important}
 </style></head><body>
-<header><b>WinForensicX · system inventory</b> — $hn<br><small>Collected $(Get-WfxUtcNow) UTC · read-only snapshot · WinForensicX $script:WfxVersion</small></header>
+<header><b>WinForensicX system inventory</b> — $hn<br><small>Collected $(Get-WfxUtcNow) UTC, read-only snapshot, WinForensicX $script:WfxVersion</small></header>
 <main><nav><ul><li><a href="#flagged"><b>Suspicious items</b></a> <span>$(if ($flagged.Count) { "<em>$($flagged.Count)</em>" } else { '0' })</span></li>$($toc.ToString())</ul></nav><div>$summary$($sections.ToString())</div></main></body></html>
 "@
     [IO.File]::WriteAllText((Join-Path $case.Path 'inventory.html'), $html, (New-Object Text.UTF8Encoding($false)))

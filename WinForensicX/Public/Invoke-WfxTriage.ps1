@@ -119,7 +119,7 @@ function Invoke-WfxTriage {
 
     # ── Remote: collect each host over WinRM, analyze locally ──
     if ($PSCmdlet.ParameterSetName -eq 'Remote') {
-        $results = New-Object System.Collections.Generic.List[object]
+        $results = [System.Collections.Generic.List[object]]::new()
         $src = Get-WfxPortableSource
         $srcHash = -join ([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($src)) | ForEach-Object { $_.ToString('x2') })
         $sb = {

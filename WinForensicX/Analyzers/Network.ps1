@@ -5,7 +5,7 @@
 
 function Invoke-WfxNetworkAnalyzer {
     param([object[]]$Connection, [string]$HostName = '', [hashtable]$DnsMap = @{})
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     $conns = @($Connection | Where-Object { $_ })
     if ($conns.Count -eq 0) { return , $findings.ToArray() }
 
@@ -88,7 +88,7 @@ function Invoke-WfxNetworkAnalyzer {
 
 function Invoke-WfxDnsAnalyzer {
     param([object[]]$DnsEntry, [string]$HostName = '')
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     $entries = @($DnsEntry | Where-Object { $_ })
     if ($entries.Count -eq 0) { return , $findings.ToArray() }
     $dns = Get-WfxRulePack -Name 'dns'
@@ -143,7 +143,7 @@ function Invoke-WfxBeaconAnalyzer {
     .PARAMETER Beacon  Objects with Remote (string) and Times (datetime[] of connection events).
     #>
     param([object[]]$Beacon, [string]$HostName = '')
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     foreach ($b in @($Beacon | Where-Object { $_ })) {
         $times = @(Get-WfxValue $b 'Times' @() | ForEach-Object { [datetime]$_ } | Sort-Object)
         if ($times.Count -lt 6) { continue }

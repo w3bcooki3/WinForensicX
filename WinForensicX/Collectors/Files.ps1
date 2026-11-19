@@ -67,7 +67,7 @@ function Get-WfxFileData {
     #>
     param([string[]]$ExtraPath = @(), [int]$MaxFiles = 4000, [int]$MaxReadKB = 256, [int]$MaxContentMB = 32, [int]$Hours = 168)
     if (-not (Test-WfxWindows)) { return @() }
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $seen = @{}
     $budget = [ref]$MaxFiles
     $contentBudget = [ref]([int64]$MaxContentMB * 1MB)
@@ -168,8 +168,8 @@ function Get-WfxRansomwareData {
     .PARAMETER Hours  Window for "recent" (default 48).
     #>
     param([int]$Hours = 48, [int]$MaxNotes = 50, [int]$MaxRecent = 4000, [int]$MaxScan = 60000, [int]$NoteMinCopies = 5)
-    $notes = New-Object System.Collections.Generic.List[object]
-    $recent = New-Object System.Collections.Generic.List[object]
+    $notes = [System.Collections.Generic.List[object]]::new()
+    $recent = [System.Collections.Generic.List[object]]::new()
     if (-not (Test-WfxWindows)) { return [pscustomobject]@{ Note = @(); RecentFile = @() } }
     $cutoff = (Get-Date).AddHours(-[Math]::Abs($Hours))
     $noteNameRx = '(?i)(?:read[\s_\-]?me|how[\s_\-]?to[\s_\-]?(?:decrypt|recover|restore)|decrypt|recover[\s_\-]?(?:files|instruction)|restore[\s_\-]?(?:my[\s_\-]?)?files|your[\s_\-]?files|unlock|ransom|_readme|help_decrypt|!!!)'

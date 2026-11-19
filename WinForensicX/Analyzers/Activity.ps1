@@ -3,7 +3,7 @@
 
 function Invoke-WfxActivityAnalyzer {
     param([object[]]$Activity, [string]$HostName = '')
-    $findings = New-Object System.Collections.Generic.List[object]
+    $findings = [System.Collections.Generic.List[object]]::new()
     $acts = @($Activity | Where-Object { $_ })
     if (-not $acts.Count) { return , $findings.ToArray() }
     $threats = $null; try { $threats = Get-WfxRulePack -Name 'threats' } catch {}

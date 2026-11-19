@@ -129,7 +129,7 @@ footer{color:var(--slate);font-size:13.5px;border-top:1px solid var(--rule);padd
 <div class="frame">
 <nav class="rail" aria-label="Contents">
   <span class="mark"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 20V6h14M44 6h14v14M58 44v14H44M20 58H6V44" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="square"/><path d="M20 20l24 24M44 20L20 44" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="32" cy="32" r="9" fill="var(--paper)" stroke="currentColor" stroke-width="5"/><circle cx="32" cy="32" r="3" fill="currentColor"/></svg>WinForensicX</span>
-  <div class="ver">Field guide for version 3.2.0</div>
+  <div class="ver">Field guide for version 3.3.0</div>
   <ol>
     <li><a href="#start">Start it</a></li>
     <li><a href="#map">Find your way</a></li>
@@ -161,11 +161,11 @@ footer{color:var(--slate);font-size:13.5px;border-top:1px solid var(--rule);padd
       <li><strong>Start the menu</strong>Change to the extracted folder and run the launcher. Everything else is a key press away.</li>
     </ol>
     <div>
-<pre class="console has-copy"><button class="copy" type="button" data-copy="cd &quot;$HOME\Downloads\WinForensicX-3.2.0&quot;&#10;.\Start-WinForensicX.ps1">Copy</button><span class="ps">PS C:\&gt;</span> cd "$HOME\Downloads\WinForensicX-3.2.0"
-<span class="ps">PS …\WinForensicX-3.2.0&gt;</span> .\Start-WinForensicX.ps1
+<pre class="console has-copy"><button class="copy" type="button" data-copy="cd &quot;$HOME\Downloads\WinForensicX-3.3.0&quot;&#10;.\Start-WinForensicX.ps1">Copy</button><span class="ps">PS C:\&gt;</span> cd "$HOME\Downloads\WinForensicX-3.3.0"
+<span class="ps">PS …\WinForensicX-3.3.0&gt;</span> .\Start-WinForensicX.ps1
 
-  WinForensicX  v3.2.0 <span class="dim">· read-only DFIR toolkit</span>
-  <span class="dim">Host PC-0412 · elevated · output E:\cases</span>
+  WinForensicX  v3.3.0<span class="dim">, read-only DFIR toolkit</span>
+  <span class="dim">Host PC-0412, elevated, output E:\cases</span>
 
   ── Main menu ──────────────────────────────────
    <span class="key">1</span>  Investigate this computer  <span class="dim">triage and report</span>
@@ -255,7 +255,7 @@ footer{color:var(--slate);font-size:13.5px;border-top:1px solid var(--rule);padd
     <p class="when">You know roughly when something happened and want everything that changed around it, in one list.</p>
     <p>The combined timeline merges registry writes in persistence and security keys, installs, services, scheduled tasks, accounts, firewall and Defender changes, program executions, connections and deletions. Set a shorter look-back with <span class="tag"><kbd>6</kbd><span class="sep">›</span><kbd>3</kbd></span>.</p>
 <pre class="console wide">  ── Explore › Everything that changed recently (combined timeline) ──
-  <span class="r">Suspicious: 4 HIGH · 1 MEDIUM   (S = show only these)</span>
+  <span class="r">Suspicious: 4 HIGH, 1 MEDIUM   (S = show only these)</span>
 
 Flag   Why                                              Time                 Action                 Target
 ----   ---                                              ----                 ------                 ------
@@ -267,7 +267,7 @@ Flag   Why                                              Time                 Act
 <span class="y">MEDIUM Remote-access software installed: anydesk        2026-11-07T14:32:11Z Software installed     Product: AnyDesk -- Installation completed…</span>
 
   6 row(s).
-   <span class="key">S</span>  Show suspicious rows only    <span class="dim">4 HIGH · 1 MEDIUM</span>
+   <span class="key">S</span>  Show suspicious rows only    <span class="dim">4 HIGH, 1 MEDIUM</span>
    <span class="key">G</span>  Open in browser (sort, filter, copy)</pre>
     <p>Press <kbd>S</kbd> to hide everything that matched no rule, and <kbd>G</kbd> to open the view as a page you can sort, filter and copy from. The page works offline and treats every value as plain text, so a hostile file name cannot run script in it.</p>
     <figure>
@@ -430,13 +430,13 @@ Flag   Why                                              Time                 Act
   <h3>What it will and will not do</h3>
 <ul class="plain"><li>Read-only: it changes no settings and executes nothing it finds. It sends no network traffic of its own (remote mode uses WinRM you initiate; -ExposureScan reads the domain SYSVOL share).</li><li>Its only writes are its own case folder (default Desktop\WinForensicX) — use -OutputPath on external media for evidence work. Reading files can update NTFS last-access times.</li><li>PowerShell 7 itself (not WinForensicX) sends anonymous start-up telemetry to Microsoft unless POWERSHELL_TELEMETRY_OPTOUT=1 is set; set it for evidence work, or use Windows PowerShell 5.1, which does not.</li><li>Credential exposure is AUDITED, never extracted: it reports THAT a secret is exposed with the value redacted to type + length.</li><li>No LSASS dumping, no SAM/NTDS hash parsing, no DPAPI/browser decryption, no exfiltration.</li><li>Command lines, event messages and file contents are secret-scrubbed at collection time, so the raw bundle is safe to keep and ship.</li></ul>
   <h3>What to keep in mind</h3>
-<ul class="plain"><li>Findings are LEADS for an analyst, not verdicts. A finding means &quot;look here,&quot; not &quot;this host is compromised.&quot;</li><li>Read findings alongside the collection gaps: with no process auditing and no Sysmon, &quot;nothing found&quot; mostly means &quot;nothing could be seen&quot; - the report says so.</li><li>It is a TRIAGE tool, not a forensic imager. It does not acquire disk/memory images or carve deleted files.</li><li>Detections are heuristic: expect some false positives and false negatives. Tune with custom rule packs ($env:WFX_RULES) and an allowlist (-AllowlistPath / $env:WFX_ALLOWLIST).</li><li>Two scores: Compromise risk (evidence of attacker activity) and Posture (hardening/visibility gaps). A clean but un-hardened host scores low risk, high posture.</li><li>Only loaded user registry hives (logged-on users) are inspected; event collection is capped per query and caps are reported as gaps.</li><li>Administrator rights are recommended; without them some data is unavailable (recorded as gaps). Remote mode needs WinRM enabled on the target.</li><li>It will not extract, decrypt, or dump secrets - that is a deliberate boundary, not a missing feature.</li><li>The manifest is not signed: record its SHA-256 (printed at the end of each run) out-of-band to make the case tamper-evident.</li><li>Artifacts: Amcache.hve is locked on a running system (collect it with a raw-copy tool and use -ArtifactPath); dirty hives are repaired from .LOG1/.LOG2 only when the logs continue the hive; browser rows still in the -wal file and compressed Prefetch contents are not read (Prefetch gives name and times); SRUDB.dat is usually locked live (collect it); $MFT is read from collected files only, and deleted SRUM records are skipped.</li><li>Sigma: rules run only on the event logs and IDs the tool collects (rules can add Security/System IDs they need); aggregations and correlation rules are skipped and counted as a gap. YARA needs a yara executable you provide.</li></ul>
+<ul class="plain"><li>Findings are LEADS for an analyst, not verdicts. A finding means &quot;look here,&quot; not &quot;this host is compromised.&quot;</li><li>Read findings alongside the collection gaps: with no process auditing and no Sysmon, &quot;nothing found&quot; mostly means &quot;nothing could be seen&quot; - the report says so.</li><li>It is a TRIAGE tool, not a forensic imager. It does not acquire disk/memory images or carve deleted files.</li><li>Detections are heuristic: expect some false positives and false negatives. Tune with custom rule packs ($env:WFX_RULES) and an allowlist (-AllowlistPath / $env:WFX_ALLOWLIST).</li><li>Two scores: Compromise risk (evidence of attacker activity) and Posture (hardening/visibility gaps). A clean but un-hardened host scores low risk, high posture.</li><li>Only loaded user registry hives (logged-on users) are inspected; event collection is capped per query and caps are reported as gaps.</li><li>Administrator rights are recommended; without them some data is unavailable (recorded as gaps). Remote mode needs WinRM enabled on the target.</li><li>It will not extract, decrypt, or dump secrets - that is a deliberate boundary, not a missing feature.</li><li>The manifest is not signed: record its SHA-256 (printed at the end of each run) out-of-band to make the case tamper-evident.</li><li>Artifacts: Amcache.hve is locked on a running system (collect it with a raw-copy tool and use -ArtifactPath); dirty hives are repaired from .LOG1/.LOG2 only when the logs continue the hive; SRUDB.dat is usually locked live (collect it); $MFT is read from collected files only, and deleted SRUM records are skipped.</li><li>Sigma: rules run only on the event logs and IDs the tool collects (rules can add Security/System IDs they need); aggregations and correlation rules are skipped and counted as a gap. YARA needs a yara executable you provide.</li></ul>
   <h3>Requirements</h3>
 <ul class="plain"><li>Windows PowerShell 5.1 or PowerShell 7+. No external modules. Live collection needs Windows; analysis, re-analysis, hunting in saved cases, timelines, diffs and file triage also run on Linux/macOS (PowerShell 7).</li></ul>
 </section>
 
 <footer>
-  WinForensicX 3.2.0. This guide is generated from the tool's own help and view definitions, so commands and keys match this version. Sample output in it is synthetic.
+  WinForensicX 3.3.0. This guide is generated from the tool's own help and view definitions, so commands and keys match this version. Sample output in it is synthetic.
 </footer>
 </main>
 </div>

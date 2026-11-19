@@ -45,7 +45,7 @@ function ConvertTo-WfxCorroborationKey {
 function Get-WfxObservation {
     <# Flattens the collected evidence into { Source; Key; Time; Detail } records, one per program sighting. #>
     param($Bundle, [object[]]$Event = @(), [object[]]$Artifact = @())
-    $out = New-Object System.Collections.Generic.List[object]
+    $out = [System.Collections.Generic.List[object]]::new()
     $add = {
         param([string]$Source, [string]$Path, $Time, [string]$Detail)
         $k = ConvertTo-WfxCorroborationKey $Path; if (-not $k) { return }
@@ -86,7 +86,7 @@ function Get-WfxObservation {
 function Get-WfxFindingFileKey {
     <# The programs / files a finding is about, as corroboration keys. #>
     param($Finding)
-    $keys = New-Object System.Collections.Generic.List[object]
+    $keys = [System.Collections.Generic.List[object]]::new()
     $ev = $Finding.Evidence
     $vals = New-Object System.Collections.Generic.List[string]
     if ($ev) {
@@ -113,8 +113,8 @@ function Add-WfxCorroboration {
     $obs = @(Get-WfxObservation -Bundle $Bundle -Event $Event -Artifact $Artifact | Expand-WfxRecord)
     $byFull = @{}; $byLeaf = @{}
     foreach ($o in $obs) {
-        if ($o.Key.Full) { if (-not $byFull.ContainsKey($o.Key.Full)) { $byFull[$o.Key.Full] = New-Object System.Collections.Generic.List[object] }; $byFull[$o.Key.Full].Add($o) }
-        if (-not $byLeaf.ContainsKey($o.Key.Leaf)) { $byLeaf[$o.Key.Leaf] = New-Object System.Collections.Generic.List[object] }; $byLeaf[$o.Key.Leaf].Add($o)
+        if ($o.Key.Full) { if (-not $byFull.ContainsKey($o.Key.Full)) { $byFull[$o.Key.Full] = [System.Collections.Generic.List[object]]::new() }; $byFull[$o.Key.Full].Add($o) }
+        if (-not $byLeaf.ContainsKey($o.Key.Leaf)) { $byLeaf[$o.Key.Leaf] = [System.Collections.Generic.List[object]]::new() }; $byLeaf[$o.Key.Leaf].Add($o)
     }
     $up = @{ Low = 'Medium'; Medium = 'High' }
     foreach ($f in $Finding) {
