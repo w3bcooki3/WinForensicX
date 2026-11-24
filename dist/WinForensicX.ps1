@@ -556,16 +556,28 @@ $script:WfxRedactRules = @(
     # key=value / "key value" credentials. The key name may be embedded in a larger identifier
     # (aws_secret_access_key, db-password, MYSQL_PWD), so allow an identifier prefix/suffix.
     , @('(?i)([A-Za-z0-9_.\-]{0,40}(?:password|passwd|pwd|secret|api[_-]?key|apikey|client[_-]?secret|access[_-]?key|token)[A-Za-z0-9_.\-]{0,20})(\s*[:=]\s*|\s+)("[^"]*"|''[^'']*''|[^\s;,&]+)', '$1$2***')
-    # mysql/openssl-style concatenated password flag: -pSecret  (but not a lone -p)
-    , @('(?i)(\s-p)(?!assword\b)([^\s]{2,})', '$1***')
+    # A password glued to -p (mysql -pSecret, 7z a -pSecret, rar -hpSecret, sshpass -pSecret). Only for the
+    # programs that take it that way: a bare "-p" elsewhere is -Path, -ProcessName, -PassThru, ssh -p 2222 ...
+    # and must stay readable. The switch itself is case-sensitive (mysql -P is the port).
+    , @('(?i)(\b(?:mysql\w*|mariadb\w*|7z[ar]?|7zg|rar|winrar|sshpass)(?:\.exe)?["'']?(?:\s[^\n|;&]{0,200}?)?\s(?-i:-h?p))(?!assword\b)("[^"]*"|''[^'']*''|[^\s"''][^\s]*)', '$1***')
+    # The password as the next argument: psexec -p Secret, sshpass -p Secret, zip -P Secret
+    , @('(?i)(\b(?:psexec(?:64)?|paexec|csexec|remcom|sshpass)(?:\.exe)?["'']?(?:\s[^\n|;&]{0,200}?)?\s(?-i:-p)\s+)("[^"]*"|''[^'']*''|\S+)', '$1***')
+    , @('(?i)(\bzip(?:\.exe)?["'']?(?:\s[^\n|;&]{0,200}?)?\s(?-i:-P)\s+)("[^"]*"|''[^'']*''|\S+)', '$1***')
+    # plink / pscp / putty -pw Secret; openssl -pass pass:Secret / -passin pass:Secret
+    , @('(?i)(\s-pw\s+)("[^"]*"|''[^'']*''|\S+)', '$1***')
+    , @('(?i)(\s-pass(?:in|out)?\s+pass:)("[^"]*"|''[^'']*''|\S+)', '$1***')
     , @('(?i)(-(?:Password|Pass|Secret|Token|Key)\s+)("[^"]*"|''[^'']*''|\S+)', '$1***')
-    , @('(?i)(/p(?:ass(?:word)?)?:)(\S+)', '$1***')
+    # /pass: and /password: (cmdkey, wmic). Not a bare /p:, which is msbuild /p:Property=... and net use /p:no.
+    , @('(?i)(/pass(?:word)?:)("[^"]*"|\S+)', '$1***')
     , @('(?i)(\bnet1?(?:\.exe)?\s+user\s+[^\s/]+\s+)([^\s/][^\s]*)', '$1***')
+    # net use \\host\share Secret /user:x   and   net use \\host\share /user:x Secret  ("*" prompts; switches are kept)
+    , @('(?i)(\bnet1?(?:\.exe)?\s+use\s+(?:[a-z]:\s+|\*\s+)?\\\\\S+\s+)(?!/|\*(?:\s|$))("[^"]*"|\S+)', '$1***')
+    , @('(?i)(\bnet1?(?:\.exe)?\s+use\b[^\n|;&]{0,200}?\s/u(?:ser)?:(?:"[^"]*"|\S+)\s+)(?!/|\*(?:\s|$))("[^"]*"|\S+)', '$1***')
     , @('(?i)(\bschtasks[^\n]*\s/rp\s+)(\S+)', '$1***')
     , @('(?i)(https?://[^:/\s]+:)([^@\s]+)(@)', '$1***$3')
 )
 
-$script:WfxRedactHint = '(?i)sk-|aiza|hf_|gsk_|xai-|r8_|akia|asia|gh[pousr]_|github_pat|xox|_live_|eyj|begin|pass|pwd|secret|key|token|\s-p|/p|net1?(?:\.exe)?\s+user|schtasks|://'
+$script:WfxRedactHint = '(?i)sk-|aiza|hf_|gsk_|xai-|r8_|akia|asia|gh[pousr]_|github_pat|xox|_live_|eyj|begin|pass|pwd|secret|key|token|\s-p|\s-hp|/p|net1?(?:\.exe)?\s+use|schtasks|://'
 
 function Protect-WfxText {
     <# Redacts secrets and key=value credentials in free text before it is stored, displayed or reported.
@@ -9974,11 +9986,14 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
   var S = D.summary || {};
   var accounts = {};
   attackF.forEach(function (f) { var e = f.Evidence || {}; ['User', 'Users', 'Actor', 'Account', 'TargetUserName', 'SubjectUserName', 'MemberName'].forEach(function (k) { if (e[k]) String(e[k]).split(/,\s*/).forEach(function (u) { if (isAcct(u)) accounts[u.trim()] = 1; }); }); });
+  // One account per person: "analyst" is dropped when "CORP\analyst" is also listed, and case variants count once.
+  var acctList = (function () { var ks = Object.keys(accounts), qual = {}, seen = {}; ks.forEach(function (k) { var l = k.toLowerCase(); if (l.indexOf('\\') >= 0) qual[l.split('\\').pop()] = 1; });
+    return ks.filter(function (k) { var l = k.toLowerCase(); if (seen[l] || (l.indexOf('\\') < 0 && qual[l])) return false; seen[l] = 1; return true; }); })();
   var facts = [
     ['Findings', '<span class="sevcount">' + (SEV.filter(function (x) { return S[x]; }).map(function (x) { return sevHtml(x, S[x] + ' ' + x.toLowerCase()); }).join('') || 'none') + '</span>'],
     ['Suspicious activity', timed.length ? esc(fmt(timed[0]._d)) + (timed.length > 1 ? ' to ' + esc(fmt(timed[timed.length - 1]._d)) : '') + ' UTC' : '<span class="muted">no time-stamped findings</span>'],
     ['Incidents', N.length ? '<a href="#incidents">' + N.length + '</a>' : '0'],
-    ['Accounts involved', Object.keys(accounts).length ? esc(Object.keys(accounts).slice(0, 4).join(', ')) + (Object.keys(accounts).length > 4 ? ' and ' + (Object.keys(accounts).length - 4) + ' more' : '') : '<span class="muted">none identified</span>'],
+    ['Accounts involved', acctList.length ? esc(acctList.slice(0, 4).join(', ')) + (acctList.length > 4 ? ' and ' + (acctList.length - 4) + ' more' : '') : '<span class="muted">none identified</span>'],
     ['External addresses', '<span id="f-ext">0</span>'],
     ['Changes recorded', esc(D.activityTotal || A.length || 0)],
     ['Execution artifacts', (D.artifactTotal || (D.artifacts || []).length) ? '<a href="#execution">' + esc(D.artifactTotal || D.artifacts.length) + '</a>' : '0'],

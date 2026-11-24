@@ -526,11 +526,14 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
   var S = D.summary || {};
   var accounts = {};
   attackF.forEach(function (f) { var e = f.Evidence || {}; ['User', 'Users', 'Actor', 'Account', 'TargetUserName', 'SubjectUserName', 'MemberName'].forEach(function (k) { if (e[k]) String(e[k]).split(/,\s*/).forEach(function (u) { if (isAcct(u)) accounts[u.trim()] = 1; }); }); });
+  // One account per person: "analyst" is dropped when "CORP\analyst" is also listed, and case variants count once.
+  var acctList = (function () { var ks = Object.keys(accounts), qual = {}, seen = {}; ks.forEach(function (k) { var l = k.toLowerCase(); if (l.indexOf('\\') >= 0) qual[l.split('\\').pop()] = 1; });
+    return ks.filter(function (k) { var l = k.toLowerCase(); if (seen[l] || (l.indexOf('\\') < 0 && qual[l])) return false; seen[l] = 1; return true; }); })();
   var facts = [
     ['Findings', '<span class="sevcount">' + (SEV.filter(function (x) { return S[x]; }).map(function (x) { return sevHtml(x, S[x] + ' ' + x.toLowerCase()); }).join('') || 'none') + '</span>'],
     ['Suspicious activity', timed.length ? esc(fmt(timed[0]._d)) + (timed.length > 1 ? ' to ' + esc(fmt(timed[timed.length - 1]._d)) : '') + ' UTC' : '<span class="muted">no time-stamped findings</span>'],
     ['Incidents', N.length ? '<a href="#incidents">' + N.length + '</a>' : '0'],
-    ['Accounts involved', Object.keys(accounts).length ? esc(Object.keys(accounts).slice(0, 4).join(', ')) + (Object.keys(accounts).length > 4 ? ' and ' + (Object.keys(accounts).length - 4) + ' more' : '') : '<span class="muted">none identified</span>'],
+    ['Accounts involved', acctList.length ? esc(acctList.slice(0, 4).join(', ')) + (acctList.length > 4 ? ' and ' + (acctList.length - 4) + ' more' : '') : '<span class="muted">none identified</span>'],
     ['External addresses', '<span id="f-ext">0</span>'],
     ['Changes recorded', esc(D.activityTotal || A.length || 0)],
     ['Execution artifacts', (D.artifactTotal || (D.artifacts || []).length) ? '<a href="#execution">' + esc(D.artifactTotal || D.artifacts.length) + '</a>' : '0'],

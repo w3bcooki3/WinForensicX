@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — redaction fixes
+
+### Fixed
+- **Command-line redaction no longer destroys evidence.** The rule for passwords glued to `-p`
+  (`mysql -pSecret`) applied to every argument starting with `-p`, so `-Path C:\x.ps1`,
+  `-ProcessName lsass`, `-PassThru` and `ssh -p2222` were stored as `-P***`. It now applies only to the
+  programs that take a password that way (mysql/mariadb tools, 7-Zip, RAR, sshpass), and the switch is
+  case-sensitive (`mysql -P 3306` is the port). A bare `/p:` is no longer redacted either: it is
+  `msbuild /p:Property=…` and `net use /p:no`.
+- **Passwords that were stored in clear are now redacted:** `plink`/`pscp -pw`, `psexec`/`paexec -p`,
+  `sshpass -p`, `zip -P`, `openssl -pass pass:` / `-passin` / `-passout`, and the password argument of
+  `net use \\host\share <password> /user:x` in either position (`*` and switches are kept).
+- Report summary: "Accounts involved" lists `CORP\analyst` once instead of also listing `analyst`, and
+  counts case variants once.
+
 ## 3.3.0 — parser accuracy and event detections
 
 ### Parsers

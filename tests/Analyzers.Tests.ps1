@@ -28,6 +28,34 @@ Describe 'Core helpers' {
         (Protect-WfxText 'mysql -uroot -pSup3rSecretPw dbname') | Should -Not -Match 'Sup3rSecretPw'
         (Protect-WfxText 'MYSQL_PWD=Hunter2Hunter2') | Should -Not -Match 'Hunter2Hunter2'
     }
+    It 'scrubs passwords given to remote-access, archive and share tools' {
+        (Protect-WfxText 'plink.exe -pw hunter2 -P 443 -R 3389:127.0.0.1:3389 x@203.0.113.7') | Should -Not -Match 'hunter2'
+        (Protect-WfxText 'net use \\srv\c$ /user:a Passw0rd') | Should -Not -Match 'Passw0rd'
+        (Protect-WfxText 'net use Z: \\10.0.0.5\c$ Winter2026! /user:admin /persistent:no') | Should -Not -Match 'Winter2026'
+        (Protect-WfxText 'PsExec64.exe \\srv01 -u CORP\admin -p Summer2026 -accepteula cmd') | Should -Not -Match 'Summer2026'
+        (Protect-WfxText 'sshpass -p Hunt99x ssh root@h') | Should -Not -Match 'Hunt99x'
+        (Protect-WfxText 'openssl enc -aes-256-cbc -in a -out b -pass pass:Hunter22') | Should -Not -Match 'Hunter22'
+        (Protect-WfxText 'cmdkey /generic:srv /user:admin /pass:Hunter33') | Should -Not -Match 'Hunter33'
+        (Protect-WfxText '7z.exe a -pInfected123 -mhe=on out.7z C:\data') | Should -Not -Match 'Infected123'
+        (Protect-WfxText 'rar.exe a -hpRarPw77 out.rar docs') | Should -Not -Match 'RarPw77'
+        (Protect-WfxText 'zip -r -P ZipPw88 out.zip dir') | Should -Not -Match 'ZipPw88'
+    }
+    It 'keeps parameters and ports that only look like a -p password' {
+        (Protect-WfxText 'Get-Content -Path C:\Users\Public\x.ps1 -Token 1') | Should -Match ([regex]::Escape('-Path C:\Users\Public\x.ps1'))
+        (Protect-WfxText 'Stop-Process -ProcessName lsass -PassThru') | Should -Be 'Stop-Process -ProcessName lsass -PassThru'
+        (Protect-WfxText 'ssh -p2222 user@1.2.3.4 password') | Should -Match '-p2222'
+        (Protect-WfxText 'plink.exe -pw x -P 443 -R 3389:127.0.0.1:3389 a@b') | Should -Match '-P 443 -R 3389:127\.0\.0\.1:3389'
+        (Protect-WfxText 'msbuild.exe evil.csproj /p:TaskName=Run /p:pwd=1') | Should -Match '/p:TaskName=Run'
+        (Protect-WfxText 'net use z: \\srv\share /persistent:no') | Should -Be 'net use z: \\srv\share /persistent:no'
+        (Protect-WfxText 'net use \\srv\c$ * /user:admin') | Should -Match ([regex]::Escape('* /user:admin'))
+        (Protect-WfxText 'mysql -h db -P 3306 -uroot -pDbPw0') | Should -Match '-P 3306'
+    }
+    It 'redaction of a large script with many look-alike switches finishes and is not withheld' {
+        $big = ('Get-Item -Path C:\x -PassThru | mysql -uroot; ' * 2000)
+        $sw = [Diagnostics.Stopwatch]::StartNew(); $r = Protect-WfxText $big
+        $sw.Elapsed.TotalSeconds | Should -BeLessThan 10
+        $r | Should -Not -Match 'content withheld'
+    }
     It 'identifies user-writable and system paths' {
         (Test-WfxUserWritablePath 'C:\Users\bob\AppData\Local\Temp\x.exe') | Should -BeTrue
         (Test-WfxUserWritablePath 'C:\Windows\System32\svchost.exe') | Should -BeFalse
