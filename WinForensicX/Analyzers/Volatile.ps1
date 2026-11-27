@@ -88,5 +88,25 @@ function Invoke-WfxVolatileAnalyzer {
                     -Entity "module:$($proc.ToLowerInvariant()):$($mod.ToLowerInvariant())" -HostName $HostName -Source 'volatile' `
                     -Evidence ([ordered]@{ Pid = (Get-WfxValue $m 'Pid' ''); Process = $proc; ProcessPath = (Get-WfxValue $m 'ProcessPath' ''); Module = $mod; Signature = (Get-WfxValue $m 'Signature' '') })))
     }
+    # ── injected code (-DeepScan): one finding per process and kind, so a busy process cannot flood the report ──
+    foreach ($g in @(Get-WfxValue $Volatile 'Injected' @() | Where-Object { $_ } | Group-Object Pid)) {
+        $rs = @($g.Group); $first = $rs[0]
+        $proc = [string](Get-WfxValue $first 'Process' ''); $jit = [bool](Get-WfxValue $first 'Jit' $false)
+        $pe = @($rs | Where-Object { $_.PeHeader })
+        $rwx = @($rs | Where-Object { $_.Protect -eq 'RWX' -and -not $_.PeHeader -and [long]$_.Size -ge 4096 })
+        $ev = { param($set) [ordered]@{ Pid = (Get-WfxValue $first 'Pid' ''); Process = $proc; Path = (Get-WfxValue $first 'Path' ''); Regions = @($set | Select-Object -First 10 | ForEach-Object { "$($_.Address) $($_.Size) bytes $($_.Protect) $($_.Type)" }); Count = $set.Count; Jit = $jit } }
+        if ($pe.Count) {
+            $findings.Add((New-WfxFinding -Id 'MEM-PE-IN-PRIVATE' -Title "Program image in unbacked executable memory of $proc ($($pe.Count) region(s))" -Severity $(if ($jit) { 'Medium' } else { 'High' }) -Confidence 'Medium' -Category 'Process' -Technique @('T1055.001', 'T1620') `
+                        -Description 'Executable memory that no file on disk accounts for starts with a Windows program header. Reflective DLL injection, process hollowing and in-memory loaders put code there. .NET programs that load assemblies from memory do it too (lower severity when the process runs .NET, Java or a browser engine).' `
+                        -Recommendation 'Capture this process''s memory (or the whole computer''s) before stopping it, then analyse the region with a memory-forensics tool.' `
+                        -Entity "mem:pe:$($proc.ToLowerInvariant())" -HostName $HostName -Source 'volatile' -Evidence (& $ev $pe)))
+        }
+        if ($rwx.Count -and -not $jit) {
+            $findings.Add((New-WfxFinding -Id 'MEM-RWX-PRIVATE' -Title "Writable and executable private memory in $proc ($($rwx.Count) region(s))" -Severity 'Medium' -Confidence 'Low' -Category 'Process' -Technique @('T1055') `
+                        -Description 'Memory that can be both written and run, and that no file accounts for, is how shellcode is usually staged. Some legitimate software (plug-in hosts, game anti-cheat, older JIT engines) does this too.' `
+                        -Recommendation 'Check what the process is and whether it should be running; capture its memory before stopping it.' `
+                        -Entity "mem:rwx:$($proc.ToLowerInvariant())" -HostName $HostName -Source 'volatile' -Evidence (& $ev $rwx)))
+        }
+    }
     , $findings.ToArray()
 }

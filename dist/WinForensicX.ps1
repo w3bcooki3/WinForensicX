@@ -2319,7 +2319,7 @@ function Get-WfxHelpModel {
         Tagline  = 'Read-only DFIR toolkit for Windows. Start it from a PowerShell window with .\Start-WinForensicX.ps1 (it offers to restart as administrator), then use the menu: Investigate, Explore, Hunt & analyze, Cases.'
         Commands = @(
             [pscustomobject]@{ Name = 'Invoke-WfxTriage'; Summary = 'Collects, analyzes, scores and writes the case report. The main command.'
-                Params = @('[-FileScan] [-ExposureScan] [-OutputPath <external media>] [-AllowlistPath <json>] [-SigmaPath <rules>] [-YaraRules <rules>]', '-Plan  (list what it would read, then stop: reads nothing)', '-ComputerName <hosts> [-Credential <cred>]  (remote, WinRM)', '-ArtifactPath <folder>  (collected evidence: hives, Amcache, Jump Lists, .lnk, browsers, SRUM, $MFT, .evtx)', '-EvtxPath <path>  (offline event logs only; nothing collected locally)', '-InputPath <case>  (re-analyze saved evidence)')
+                Params = @('[-FileScan] [-ExposureScan] [-DeepScan] [-OutputPath <external media>] [-AllowlistPath <json>] [-SigmaPath <rules>] [-YaraRules <rules>]', '-Plan  (list what it would read, then stop: reads nothing)', '-ComputerName <hosts> [-Credential <cred>]  (remote, WinRM)', '-ArtifactPath <folder>  (collected evidence: hives, Amcache, Jump Lists, .lnk, browsers, SRUM, $MFT, .evtx)', '-EvtxPath <path>  (offline event logs only; nothing collected locally)', '-InputPath <case>  (re-analyze saved evidence)')
                 Examples = @('Invoke-WfxTriage', 'Invoke-WfxTriage -FileScan -Plan', 'Invoke-WfxTriage -FileScan -ExposureScan', 'Invoke-WfxTriage -ArtifactPath D:\kape\C -CaseName ctf-01', 'Invoke-WfxTriage -SigmaPath D:\sigma\rules\windows -YaraRules D:\yara', 'Invoke-WfxTriage -ComputerName srv01,srv02 -Credential (Get-Credential)', 'Invoke-WfxTriage -EvtxPath D:\evidence\Security.evtx', 'Invoke-WfxTriage -InputPath C:\cases\WFX_host_20260101-000000Z') }
             [pscustomobject]@{ Name = 'Invoke-WfxAnalyze'; Summary = 'Run all analyzers over a collected bundle (object, bundle.json, or case folder). OS-neutral.'
                 Params = @('-Bundle <path|object>'); Examples = @('Invoke-WfxAnalyze -Bundle .\WFX_host\raw\bundle.json') }
@@ -2333,7 +2333,7 @@ function Get-WfxHelpModel {
                 Params = @('[-Days <n>] [-Journal]'); Examples = @('Get-WfxActivity -Days 2', "Get-WfxActivity -Days 1 -Journal | Where-Object Category -eq 'File'") }
             [pscustomobject]@{ Name = 'New-WfxFileBaseline / Compare-WfxFileBaseline'; Summary = 'File-integrity baseline: hash folders now, later list added, deleted, content-changed and timestamp-only files.'
                 Params = @('-Path <folders> [-OutputPath <json>]', '-Baseline <json>'); Examples = @('New-WfxFileBaseline -Path C:\inetpub\wwwroot -OutputPath E:\bl\web.json', 'Compare-WfxFileBaseline -Baseline E:\bl\web.json') }
-            [pscustomobject]@{ Name = 'Get-WfxInsight'; Summary = '60 live read-only views, each suspicious row flagged with severity, reason and ATT&CK technique: system, updates, software, users, groups, sessions, USB, processes, process tree, ports, connections, DNS, routes, proxy, Wi-Fi, firewall, autostarts, services, tasks, WMI, logons, failed logons, RDP, account changes, Defender, downloads, Prefetch, recent files, PS history, posture, memory-capture readiness.'
+            [pscustomobject]@{ Name = 'Get-WfxInsight'; Summary = '61 live read-only views, each suspicious row flagged with severity, reason and ATT&CK technique: system, updates, software, users, groups, sessions, USB, processes, process tree, ports, connections, DNS, routes, proxy, Wi-Fi, firewall, autostarts, services, tasks, WMI, logons, failed logons, RDP, account changes, Defender, downloads, Prefetch, recent files, PS history, posture, memory-capture readiness.'
                 Params = @('-List', '<topic> [-Days <n>]'); Examples = @('Get-WfxInsight -List', 'Get-WfxInsight logons -Days 3 | Format-Table', "Get-WfxInsight listeners | Where-Object Exposure -eq 'all interfaces'") }
             [pscustomobject]@{ Name = 'Save-WfxInsight'; Summary = 'Export every live view to a hashed inventory case: inventory.html + one CSV per view.'
                 Params = @('[-Topic <list>] [-OutputPath <folder>]'); Examples = @('Save-WfxInsight -OutputPath E:\cases') }
@@ -2344,6 +2344,15 @@ function Get-WfxHelpModel {
             [pscustomobject]@{ Name = 'Find-WfxFile'; Summary = 'Fast file and folder search across all drives: name wildcards or regex, extensions, no extension, size, dates, hidden. As administrator it lists NTFS drives straight from the master file table (seconds). Optional SHA-256, real type and signature. Read-only.'
                 Params = @('[-Name <patterns>] [-Extension <list> | -NoExtension] [-Path <folders>] [-ItemType File|Folder|Any] [-MinSize <n>] [-MaxSize <n>] [-ModifiedAfter <date>] [-Hidden] [-Hash] [-CheckType] [-Signature]')
                 Examples = @('Find-WfxFile -Extension ps1,hta,js,vbs -ModifiedAfter (Get-Date).AddDays(-7)', "Find-WfxFile -Name '*invoice*' -ItemType Any", 'Find-WfxFile -NoExtension -Path C:\Users -CheckType | Where-Object TrueType') }
+            [pscustomobject]@{ Name = 'Invoke-WfxRespond'; Summary = 'Contain a threat (administrator): stop a process, quarantine a file (encrypted into Downloads\WinForensicX-Quarantine), disable a Run-key value, task, service or WMI binding, block an address or program, disable a local account. Each action is confirmed and recorded first; -WhatIf previews. Never touches critical Windows processes, services or files.'
+                Params = @('-PlanPath <case>  (the actions the triage suggested)', '-KillProcess <pid> | -QuarantineFile <path> | -DisableRunKey <key\value> | -DisableTask <\path\name> | -DisableService <name> | -DisableWmiConsumer <name> | -BlockAddress <ip> | -BlockProgram <path> | -DisableAccount <name>', '[-WhatIf] [-Force] [-QuarantinePath <local folder>]')
+                Examples = @('Invoke-WfxRespond -PlanPath E:\cases\WFX_PC01_20261127-101500Z -WhatIf', 'Invoke-WfxRespond -KillProcess 4242 -QuarantineFile C:\Users\ana\AppData\Roaming\upd\upd.exe') }
+            [pscustomobject]@{ Name = 'Get-WfxAction / Undo-WfxAction'; Summary = 'What Respond mode did here, and putting it back: restores quarantined files (times and download mark included), Run-key values, tasks, service start types, WMI bindings, accounts; removes blocks; ends isolation. Stopped processes cannot come back.'
+                Params = @('Get-WfxAction [-Days <n>]', 'Undo-WfxAction -Id <id> [-RestorePath <file>]'); Examples = @('Get-WfxAction | Format-Table Time, Type, Target, Status, Undone', 'Undo-WfxAction -Id 20261127101500-3fa2c1') }
+            [pscustomobject]@{ Name = 'Start-WfxIsolation / Stop-WfxIsolation'; Summary = 'Block all network traffic except your own session, the DHCP server and addresses you allow (firewall block rules that win over allow rules). Ends by itself after 30 minutes unless -Minutes says otherwise.'
+                Params = @('Start-WfxIsolation [-Minutes <n>] [-Allow <ip>] [-AllowDns]', 'Stop-WfxIsolation'); Examples = @('Start-WfxIsolation -Minutes 30 -Allow 10.0.0.15') }
+            [pscustomobject]@{ Name = 'Invoke-WfxDefenderScan'; Summary = 'A second opinion from Microsoft Defender on files or folders (Defender acts on what it finds by its own settings).'
+                Params = @('-Path <paths> | -Quick'); Examples = @('Invoke-WfxDefenderScan -Path C:\Users\ana\AppData\Roaming\upd') }
             [pscustomobject]@{ Name = 'Get-WfxFileTriage'; Summary = 'What is this file? Hashes, true type vs extension, entropy, MOTW download URL, ADS, signature, PE facts, strings + IOCs. Never executes.'
                 Params = @('-Path <files> [-Strings] [-MaxReadMB <n>]'); Examples = @('Get-WfxFileTriage .\sample.bin -Strings | Format-List', 'Get-ChildItem .\Downloads -File | Get-WfxFileTriage | Where-Object ExtensionMismatch') }
             [pscustomobject]@{ Name = 'ConvertFrom-WfxEncodedCommand'; Summary = 'Decode -EncodedCommand / Base64 / gzip / nested FromBase64String payloads (decode only).'
@@ -2374,7 +2383,8 @@ function Get-WfxHelpModel {
             '<case>-timesketch.csv / -ecs.ndjson / -stix.json / -indicators.csv - Export-WfxCase, written next to the case'
         )
         Safety   = @(
-            'Read-only: it changes no settings and executes nothing it finds. It sends no network traffic of its own (remote mode uses WinRM you initiate; -ExposureScan reads the domain SYSVOL share).',
+            'Respond mode (Invoke-WfxRespond, Start-WfxIsolation, menu 7) is the only part that changes anything. Each change is shown, confirmed and recorded before it happens, and everything except stopping a process can be undone. Critical Windows processes, services and files, security products and the account in use are never touched.',
+            'Everything else is read-only: it changes no settings and executes nothing it finds. It sends no network traffic of its own (remote mode uses WinRM you initiate; -ExposureScan reads the domain SYSVOL share).',
             'It never elevates without asking: at start it offers to restart as administrator through the normal Windows prompt (-Elevate asks no question first, -NoElevate never asks). The new window runs without your PowerShell profile and with the execution policy you already have.',
             'Its only writes are its own case folder (default Desktop\WinForensicX) — use -OutputPath on external media for evidence work. Reading files can update NTFS last-access times.',
             'PowerShell 7 itself (not WinForensicX) sends anonymous start-up telemetry to Microsoft unless POWERSHELL_TELEMETRY_OPTOUT=1 is set; set it for evidence work, or use Windows PowerShell 5.1, which does not.',
@@ -3561,6 +3571,9 @@ $script:WfxPlanStage = @(
     [ordered]@{ Stage = 'Pipes, sessions, neighbours, loaded DLLs'; Steps = @('volatile:*')
         Reads = 'Names of open named pipes (none is opened), signed-in and disconnected sessions, the ARP neighbour cache, and DLLs loaded from user-writable folders with their signatures. LSASS, other critical system processes and security products are never opened.'
         Runs = 'quser (list sessions)'; Admin = 'Better: modules of other users'' and system processes'; Option = '' }
+    [ordered]@{ Stage = 'Injected-code scan'; Steps = @('memory:*')
+        Reads = 'Which memory regions of each process are executable without coming from a file on disk, and the first 1 KB of those regions (to see a program header). No other memory is read or kept. LSASS, critical system processes and security products are never opened.'
+        Runs = ''; Admin = 'Yes for other users'' and system processes'; Option = 'DeepScan' }
     [ordered]@{ Stage = 'Autostarts, services, drivers'; Steps = @('persist:*')
         Reads = 'Run and RunOnce keys (machine and signed-in users), Startup folders, scheduled tasks, WMI subscriptions, Winlogon, AppInit, IFEO debuggers, LSA packages, BootExecute, Run-box history, services and drivers.'
         Runs = ''; Admin = 'Better: some task and service details'; Option = '' }
@@ -3579,6 +3592,9 @@ $script:WfxPlanStage = @(
     [ordered]@{ Stage = 'Credential exposure audit'; Steps = @('expo:*')
         Reads = 'Whether secrets are exposed, never their values: Group Policy passwords, unattend files, access to SAM/SYSTEM/NTDS (permissions only), auto-logon, unencrypted SSH keys, keys in environment variables and PowerShell history. With -ExposureScan, also common config files and the domain SYSVOL share (network).'
         Runs = ''; Admin = 'Better'; Option = '' }
+    [ordered]@{ Stage = 'Earlier containment'; Steps = @('respond:*')
+        Reads = 'The record of actions WinForensicX Respond mode took on this computer in the last 90 days (Downloads\WinForensicX-Quarantine\actions), to show them in the report.'
+        Runs = ''; Admin = 'Yes (the folder is locked to administrators)'; Option = '' }
     [ordered]@{ Stage = 'Security posture and memory-capture readiness'; Steps = @('posture:*', 'ready:*')
         Reads = 'Defender status and exclusions, registered antivirus, firewall profiles, audit and PowerShell logging policy, Sysmon, LSA protection and Credential Guard, RDP settings, BitLocker status (never the recovery key), installed AI tools; crash-dump, page-file, hibernation and Fast Startup settings, virtual machine, uptime.'
         Runs = 'auditpol /get (read the audit policy)'; Admin = 'Yes for exclusions, audit policy and BitLocker'; Option = '' }
@@ -3596,6 +3612,7 @@ function Get-WfxTriagePlan {
         [int]$Hours = 72,
         [switch]$FileScan,
         [switch]$ExposureScan,
+        [switch]$DeepScan,
         [bool]$Admin = $true,
         [string[]]$YaraRules = @(),
         [string[]]$SigmaPath = @(),
@@ -3614,7 +3631,7 @@ function Get-WfxTriagePlan {
         $logs = @($script:WfxEventQuery | ForEach-Object { $_.Log -replace '^Microsoft-Windows-', '' -replace '/Operational$', '' } | Select-Object -Unique)
         foreach ($s in $script:WfxPlanStage) {
             $opt = [string]$s.Option
-            $inc = if ($opt -eq 'FileScan' -and -not $FileScan) { 'No (add -FileScan)' } else { 'Yes' }
+            $inc = if ($opt -eq 'FileScan' -and -not $FileScan) { 'No (add -FileScan)' } elseif ($opt -eq 'DeepScan' -and -not $DeepScan) { 'No (add -DeepScan)' } else { 'Yes' }
             $reads = ([string]$s.Reads).Replace('__EVENTLOGS__', ("Last {0} hours of selected event IDs from: {1}." -f $Hours, ($logs -join ', ')))
             if (@($SigmaPath).Count -and $s.Stage -eq 'Event logs') { $reads += ' Your Sigma rules may add Security and System event IDs.' }
             if ($ExposureScan -and $s.Stage -eq 'Credential exposure audit') { $reads += ' (-ExposureScan is on.)' }
@@ -3851,6 +3868,270 @@ function ConvertFrom-WfxVolumePath {
     <# \VOLUME{...}\X or \DEVICE\HARDDISKVOLUME2\X -> (volume)\X. #>
     param([string]$Path)
     $Path -replace '^\\(?:VOLUME\{[^}]*\}|DEVICE\\HARDDISKVOLUME\d+|DEVICE\\[^\\]+)(?=\\)', '(volume)'
+}
+
+
+# ===== Private/Respond.ps1 =====
+# Respond mode: the rules that keep containment from hurting the computer, and the response plan.
+#
+# Everything here is decided before anything is changed, and most of it is pure so it can be tested on
+# any OS. Invoke-WfxRespond (Public) does the changing, one confirmed action at a time.
+#
+# Never touched, whatever the plan or the operator says:
+#   * processes Windows cannot run without (killing them crashes the computer), security products,
+#     svchost.exe as a whole (stop the one service instead) and WinForensicX itself;
+#   * files under the Windows folder that Microsoft signed, and anything inside the quarantine;
+#   * firewall blocks for loopback, "everything", or this computer's own addresses;
+#   * the account in use, built-in system accounts, and the last enabled local administrator;
+#   * services Windows needs to start, log on, network or protect itself;
+#   * registry values outside the Run / RunOnce keys.
+
+$script:WfxCriticalProcess = @('system', 'idle', 'registry', 'memory compression', 'secure system', 'smss', 'csrss', 'wininit', 'winlogon',
+    'services', 'lsass', 'lsaiso', 'svchost', 'fontdrvhost', 'dwm', 'sihost', 'ctfmon', 'conhost', 'audiodg', 'spoolsv', 'wudfhost', 'searchindexer',
+    'msmpeng', 'mpdefendercoreservice', 'nissrv', 'mssense', 'senseir', 'sensecncproxy', 'securityhealthservice', 'securityhealthsystray', 'smartscreen',
+    'csfalconservice', 'csfalconcontainer', 'sentinelagent', 'sentinelservicehost', 'cb', 'repmgr', 'elastic-agent', 'elastic-endpoint', 'xagt',
+    'cylancesvc', 'taniumclient', 'cyserver', 'cytray', 'ekrn', 'avp', 'bdagent', 'vsserv', 'savservice', 'sophoshealth', 'mbamservice')
+
+$script:WfxCriticalService = @('rpcss', 'dcomlaunch', 'rpceptmapper', 'lsm', 'samss', 'eventlog', 'eventsystem', 'plugplay', 'power', 'profsvc', 'usermanager',
+    'gpsvc', 'schedule', 'winmgmt', 'cryptsvc', 'brokerinfrastructure', 'systemeventsbroker', 'coremessagingregistrar', 'staterepository', 'bfe', 'mpssvc',
+    'dhcp', 'dnscache', 'nsi', 'netprofm', 'nlasvc', 'lanmanworkstation', 'lanmanserver', 'tcpip', 'afd', 'netbt', 'windefend', 'wdnissvc', 'sense',
+    'securityhealthservice', 'wscsvc', 'keyiso', 'vaultsvc', 'netlogon', 'kdc', 'ntds', 'dns', 'w32time', 'appinfo', 'trustedinstaller', 'wuauserv',
+    'bits', 'termservice', 'winrm', 'audiosrv', 'themes', 'wdiservicehost', 'sysmain', 'fontcache', 'camsvc', 'msiserver', 'vss', 'swprv', 'sysmon', 'sysmon64', 'sysmondrv')
+
+$script:WfxProtectedAccount = @('system', 'local service', 'network service', 'defaultaccount', 'wdagutilityaccount', 'trustedinstaller')
+
+$script:WfxResponseTypes = @('Kill', 'Quarantine', 'DisableRunKey', 'DisableTask', 'DisableService', 'DisableWmi', 'BlockAddress', 'BlockProgram', 'DisableAccount', 'Isolate')
+
+function Test-WfxRefusedProcess {
+    <# '' when a process may be stopped; otherwise the reason it never is. Pure. #>
+    param([string]$Name, [int]$ProcessId = -1, [int]$Self = -1)
+    $n = ([string]$Name).ToLowerInvariant() -replace '\.exe$', ''
+    if ($ProcessId -in 0, 4) { return 'Windows itself (System / Idle).' }
+    if ($Self -ge 0 -and $ProcessId -eq $Self) { return 'This is the PowerShell running WinForensicX.' }
+    if ($n -eq 'svchost') { return 'svchost.exe hosts many Windows services; stopping it can crash the computer. Disable the one suspicious service instead (-DisableService).' }
+    if ($script:WfxCriticalProcess -contains $n) { return "$Name is a critical Windows process or a security product. Stopping it can crash the computer or blind your defences." }
+    return ''
+}
+
+function Test-WfxRefusedService {
+    param([string]$Name)
+    if ($script:WfxCriticalService -contains ([string]$Name).ToLowerInvariant()) { return "$Name is a service Windows or its security depends on; disabling it can stop the computer from starting, logging on or networking." }
+    return ''
+}
+
+function Test-WfxRunKeyPath {
+    <# $true only for the Run / RunOnce keys Respond may remove values from. Pure. #>
+    param([string]$Path)
+    return [bool]($Path -match '(?i)^(?:HKLM:|HKCU:|Registry::HKEY_(?:LOCAL_MACHINE|CURRENT_USER|USERS\\[^\\]+))\\Software\\(?:Wow6432Node\\)?Microsoft\\Windows\\CurrentVersion\\(?:Run|RunOnce|Policies\\Explorer\\Run)$')
+}
+
+function Test-WfxRefusedFile {
+    <# '' when a file may be quarantined. $Signer: Authenticode signer subject, if known. Pure apart from no I/O. #>
+    param([string]$Path, [string]$SystemRoot = $env:SystemRoot, [string]$QuarantineRoot = '', [string]$Signature = '', [string]$Signer = '')
+    if (-not $Path) { return 'No path.' }
+    $p = $Path.TrimEnd('\')
+    if ($QuarantineRoot -and ($p + '\').StartsWith($QuarantineRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { return 'It is already in the quarantine.' }
+    if ($p -match '^(?i)[a-z]:$' -or $p -match '(?i)^[a-z]:\\(?:pagefile|hiberfil|swapfile)\.sys$') { return 'A drive root or a Windows system file.' }
+    if ($SystemRoot -and ($p + '\').StartsWith($SystemRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        if ($Signature -eq 'Valid' -and $Signer -match '(?i)O=Microsoft (?:Corporation|Windows)') { return 'A Microsoft-signed file in the Windows folder: removing it can break Windows.' }
+    }
+    return ''
+}
+
+function Test-WfxRefusedAddress {
+    <# '' when an address may be blocked; otherwise why not. $Own: this computer's addresses. Pure. #>
+    param([string]$Address, [string[]]$Own = @())
+    $a = ([string]$Address).Trim()
+    if (-not $a) { return 'No address.' }
+    $ip = $null; $hostPart = ($a -split '/')[0]
+    if (-not [System.Net.IPAddress]::TryParse($hostPart, [ref]$ip)) { return "'$a' is not an IP address or range." }
+    if ($a -match '/(\d+)$' -and [int]$Matches[1] -lt 8) { return 'That range is too wide (most of the internet).' }
+    if ([System.Net.IPAddress]::IsLoopback($ip) -or $hostPart -in '0.0.0.0', '::', '255.255.255.255') { return 'Loopback, "any" or broadcast.' }
+    if ($Own -contains $hostPart) { return 'That is this computer''s own address.' }
+    return ''
+}
+
+function Test-WfxRefusedAccount {
+    param([string]$Name, [string]$Current = [Environment]::UserName, [bool]$IsLastAdmin = $false)
+    $n = ([string]$Name).ToLowerInvariant()
+    if ($n -match '\\') { $n = ($n -split '\\')[-1] }
+    if ($n -eq ([string]$Current).ToLowerInvariant()) { return 'That is the account you are using now.' }
+    if ($script:WfxProtectedAccount -contains $n) { return 'A built-in system account.' }
+    if ($IsLastAdmin) { return 'It is the last enabled local administrator; you could lock yourself out.' }
+    return ''
+}
+
+function Get-WfxQuarantineRoot {
+    <# Downloads\WinForensicX-Quarantine of the account running the tool (or -Path). #>
+    param([string]$Path = '')
+    if ($Path) { return [IO.Path]::GetFullPath($Path) }
+    $dl = ''
+    try { $dl = [string](Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -Name '{374DE290-123F-4565-9164-39C4925E467B}' -ErrorAction Stop).'{374DE290-123F-4565-9164-39C4925E467B}' } catch {}
+    if ($dl) { $dl = [Environment]::ExpandEnvironmentVariables($dl) } else { $dl = Join-Path $env:USERPROFILE 'Downloads' }
+    Join-Path $dl 'WinForensicX-Quarantine'
+}
+
+function Get-WfxActionRecord {
+    <# The saved action records (newest first). Read-only; used by Get-WfxAction and by triage. #>
+    param([string]$Root = '', [int]$Days = 0)
+    if (-not $Root) { $Root = Get-WfxQuarantineRoot }
+    $dir = Join-Path $Root 'actions'
+    if (-not (Test-Path -LiteralPath $dir)) { return }
+    $since = if ($Days -gt 0) { (Get-Date).ToUniversalTime().AddDays(-$Days) } else { [datetime]::MinValue }
+    Get-ChildItem -LiteralPath $dir -Filter '*.json' -File -ErrorAction SilentlyContinue | ForEach-Object {
+        try { Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch {}
+    } | Where-Object { $_ -and (ConvertTo-WfxDateTime $_.Time) -ge $since } | Sort-Object { [string]$_.Time } -Descending
+}
+
+function Test-WfxQuarantineFolder {
+    <# '' when a folder may become the quarantine (it is about to be locked to administrators): a new or empty
+       folder, or one this tool already made (it holds the .wfx-quarantine marker). Never a drive root, a
+       system folder or a folder with other content, whose permissions it would otherwise take away. #>
+    param([Parameter(Mandatory)][string]$Path)
+    $full = [IO.Path]::GetFullPath($Path).TrimEnd('\', '/')
+    if ($full -eq '' -or $full -match '^[A-Za-z]:$' -or $full -eq '/') { return 'A drive root cannot be the quarantine.' }
+    $eq = { param($x) $x -and $full -eq ([string]$x).TrimEnd('\', '/') }
+    $under = { param($x) $x -and ($full + '\').StartsWith(([string]$x).TrimEnd('\', '/') + '\', [StringComparison]::OrdinalIgnoreCase) }
+    foreach ($sys in @($env:SystemRoot, $env:ProgramFiles, ${env:ProgramFiles(x86)})) { if (& $under $sys) { return "The quarantine cannot be inside $sys." } }
+    $usersDir = if ($env:USERPROFILE) { Split-Path -Parent $env:USERPROFILE } else { '' }
+    foreach ($top in @($env:ProgramData, $env:USERPROFILE, $usersDir, $env:PUBLIC)) { if (& $eq $top) { return "The quarantine cannot be $full itself (a system or profile folder)." } }
+    if (Test-Path -LiteralPath $full -PathType Leaf) { return "$full is a file." }
+    if (Test-Path -LiteralPath $full -PathType Container) {
+        if (Test-Path -LiteralPath (Join-Path $full '.wfx-quarantine')) { return '' }
+        if (@(Get-ChildItem -LiteralPath $full -Force -ErrorAction SilentlyContinue | Select-Object -First 1).Count) { return "$full already holds other files; its permissions would be replaced. Choose a new or empty folder." }
+    }
+    return ''
+}
+
+function Test-WfxCloudPath {
+    <# '' when the folder is local; otherwise the sync service that would copy quarantined files off the computer. Pure. #>
+    param([string]$Path, [string[]]$CloudRoots = @($env:OneDrive, $env:OneDriveCommercial, $env:OneDriveConsumer))
+    if ($Path -match '^\\\\') { return 'a network share' }
+    foreach ($r in @($CloudRoots | Where-Object { $_ })) { if (($Path + '\').StartsWith($r.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { return 'OneDrive' } }
+    if ($Path -match '(?i)\\(?:OneDrive(?: - [^\\]+)?|Dropbox|Google Drive|My Drive|iCloudDrive|Box)\\') { return ($Matches[0].Trim('\')) }
+    return ''
+}
+
+# ── quarantine file format ──
+# "WFXQ" + version 2 + AES-256 key (32 bytes) + IV (16 bytes) + the content encrypted with AES-CBC. The key
+# travels in the file: this is not secrecy, it makes the file unrunnable and invisible to scanner
+# signatures, and it is restored byte for byte. AES is built into .NET, so nothing is compiled.
+$script:WfxQuarantineMagic = [byte[]](0x57, 0x46, 0x58, 0x51, 2)
+
+function Write-WfxQuarantineFile {
+    <# Encrypts $Source into $Target (which must not exist). Returns the SHA-256 of the original content. #>
+    param([Parameter(Mandatory)][string]$Source, [Parameter(Mandatory)][string]$Target)
+    $aes = [Security.Cryptography.Aes]::Create(); $aes.KeySize = 256; $aes.GenerateKey(); $aes.GenerateIV()
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $in = [IO.File]::Open($Source, 'Open', 'Read', 'Read')
+    try {
+        $out = [IO.File]::Open($Target, 'CreateNew', 'Write', 'None')
+        try {
+            $out.Write($script:WfxQuarantineMagic, 0, 5); $out.Write($aes.Key, 0, 32); $out.Write($aes.IV, 0, 16)
+            $cs = New-Object Security.Cryptography.CryptoStream($out, $aes.CreateEncryptor(), 'Write')
+            $buf = New-Object byte[] 1048576
+            while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) { [void]$sha.TransformBlock($buf, 0, $n, $null, 0); $cs.Write($buf, 0, $n) }
+            $cs.FlushFinalBlock(); $cs.Dispose()
+            [void]$sha.TransformFinalBlock((New-Object byte[] 0), 0, 0)
+        } finally { $out.Dispose() }
+    } finally { $in.Dispose(); $aes.Dispose() }
+    -join ($sha.Hash | ForEach-Object { $_.ToString('x2') })
+}
+
+function Read-WfxQuarantineFile {
+    <# Decrypts a .wfxq file to $Target (or, with no $Target, only hashes it). Returns the SHA-256 of the content. #>
+    param([Parameter(Mandatory)][string]$Source, [string]$Target = '')
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $in = [IO.File]::Open($Source, 'Open', 'Read', 'Read')
+    $out = $null; $aes = $null
+    try {
+        $hdr = New-Object byte[] 53
+        if ($in.Read($hdr, 0, 53) -ne 53 -or (Compare-Object $hdr[0..4] $script:WfxQuarantineMagic -SyncWindow 0)) { throw "Not a WinForensicX quarantine file: $Source" }
+        $aes = [Security.Cryptography.Aes]::Create(); $aes.KeySize = 256; $aes.Key = $hdr[5..36]; $aes.IV = $hdr[37..52]
+        $cs = New-Object Security.Cryptography.CryptoStream($in, $aes.CreateDecryptor(), 'Read')
+        if ($Target) { $out = [IO.File]::Open($Target, 'CreateNew', 'Write', 'None') }
+        $buf = New-Object byte[] 1048576
+        while (($n = $cs.Read($buf, 0, $buf.Length)) -gt 0) { [void]$sha.TransformBlock($buf, 0, $n, $null, 0); if ($out) { $out.Write($buf, 0, $n) } }
+        [void]$sha.TransformFinalBlock((New-Object byte[] 0), 0, 0)
+    } finally { if ($out) { $out.Dispose() }; $in.Dispose(); if ($aes) { $aes.Dispose() } }
+    -join ($sha.Hash | ForEach-Object { $_.ToString('x2') })
+}
+
+# ── response plan ──
+function Get-WfxRemoteIp {
+    <# The IP in "host (1.2.3.4):443", "1.2.3.4:443" or "[2001:db8::1]:443". '' if none. Pure. #>
+    param([string]$Remote)
+    $c = @()
+    if ($Remote -match '\(([^)]+)\):\d+$') { $c += $Matches[1] }
+    if ($Remote -match '^\[([^\]]+)\]:\d+$') { $c += $Matches[1] }
+    if ($Remote -match '^([^\s()\[\]]+):\d+$') { $c += $Matches[1] }
+    $c += $Remote
+    foreach ($x in $c) { $ip = $null; if ([System.Net.IPAddress]::TryParse([string]$x, [ref]$ip)) { return $ip.ToString() } }
+    ''
+}
+
+function ConvertTo-WfxResponsePlan {
+    <#
+    .SYNOPSIS Suggests containment actions from a triage result: stop the processes, quarantine the files,
+    disable the autostarts and block the public addresses that findings point at. Pure: nothing is done.
+    Critical and High findings are selected; the rest are listed unselected. Every action is checked again,
+    and confirmed one by one, when Invoke-WfxRespond runs it.
+    #>
+    param($Result, $Bundle = $null)
+    $actions = [ordered]@{}
+    $procs = @{}; foreach ($p in @(Get-WfxValue $Bundle 'Process' @())) { $procs[[string](Get-WfxValue $p 'Pid' '')] = $p }
+    $add = {
+        param($Type, $Target, [hashtable]$Params, $F)
+        $k = "$Type|$([string]$Target)".ToLowerInvariant()
+        $sel = [string]$F.Severity -in 'Critical', 'High'
+        if ($actions.Contains($k)) { if ($sel) { $actions[$k].Selected = $true }; $actions[$k].Findings += [string]$F.Id; return }
+        $actions[$k] = [pscustomobject]@{ Type = $Type; Target = [string]$Target; Params = $Params; Reason = [string]$F.Title; Severity = [string]$F.Severity; Findings = @([string]$F.Id); Selected = $sel }
+    }
+    foreach ($f in @(Get-WfxValue $Result 'Findings' @())) {
+        if (Test-WfxPostureFinding $f) { continue }
+        $e = Get-WfxValue $f 'Evidence' $null
+        $src = [string](Get-WfxValue $f 'Source' '')
+        $path = [string](Get-WfxValue $e 'Path' '')
+        $procId = [string](Get-WfxValue $e 'Pid' '')
+        if ($procId -match '^\d+$' -and [int]$procId -gt 4 -and $src -in 'process', 'volatile', 'network') {
+            $p = $procs[$procId]
+            $name = if ($p) { [string](Get-WfxValue $p 'Name' '') } else { [string](Get-WfxValue $e 'Process' '') }
+            if (-not (Test-WfxRefusedProcess -Name $name -ProcessId ([int]$procId))) {
+                & $add 'Kill' "$name ($procId)" @{ Pid = [int]$procId; Name = $name; Path = [string](Get-WfxValue $p 'Path' $path); StartTime = [string](Get-WfxValue $p 'CreateTime' ''); Sha256 = [string](Get-WfxValue $p 'Sha256' '') } $f
+            }
+        }
+        if ($src -eq 'persistence') {
+            $kind = [string](Get-WfxValue $e 'Kind' ''); $nm = [string](Get-WfxValue $e 'Name' ''); $loc = [string](Get-WfxValue $e 'Location' '')
+            switch ($kind) {
+                'RunKey' { if (Test-WfxRunKeyPath $loc) { & $add 'DisableRunKey' "$loc\$nm" @{ Key = $loc; Name = $nm } $f } }
+                'ScheduledTask' { & $add 'DisableTask' $nm @{ Task = $nm } $f }
+                'Service' { if (-not (Test-WfxRefusedService $nm)) { & $add 'DisableService' $nm @{ Name = $nm } $f } }
+                'WmiSubscription' { & $add 'DisableWmi' $nm @{ Consumer = $nm } $f }
+                'Startup' { if ($loc -and $nm) { & $add 'Quarantine' (Join-Path $loc $nm) @{ Path = (Join-Path $loc $nm) } $f } }
+            }
+            if ($path -and (Test-WfxUserWritablePath $path)) { & $add 'Quarantine' $path @{ Path = $path } $f }
+        }
+        if ($src -eq 'files' -and $path) { & $add 'Quarantine' $path @{ Path = $path } $f }
+        if ($src -eq 'volatile') {
+            $m = [string](Get-WfxValue $e 'Module' '')
+            if ($m) { & $add 'Quarantine' $m @{ Path = $m } $f }
+        }
+        $remote = [string](Get-WfxValue $e 'Remote' '')
+        if ($remote -and $src -eq 'network') {
+            $ip = Get-WfxRemoteIp $remote
+            if ($ip -and -not (Test-WfxPrivateIp $ip) -and -not (Test-WfxRefusedAddress $ip)) { & $add 'BlockAddress' $ip @{ Address = $ip } $f }
+        }
+    }
+    $i = 0
+    $list = foreach ($a in $actions.Values) { $i++; $a | Add-Member -NotePropertyName Id -NotePropertyValue ('A{0:D3}' -f $i) -PassThru }
+    [pscustomobject]@{
+        Schema    = 'winforensicx.respond-plan/1'
+        Host      = [string](Get-WfxValue $Result 'HostName' '')
+        Case      = [string](Get-WfxValue (Get-WfxValue $Result 'Case' $null) 'Id' '')
+        Created   = (Get-WfxUtcNow)
+        Note      = 'Suggestions only. Nothing has been done. Run: Invoke-WfxRespond -PlanPath <this file>. Each action is checked again and confirmed one by one.'
+        Actions   = @($list)
+    }
 }
 
 
@@ -6916,6 +7197,26 @@ function Invoke-WfxVolatileAnalyzer {
                     -Entity "module:$($proc.ToLowerInvariant()):$($mod.ToLowerInvariant())" -HostName $HostName -Source 'volatile' `
                     -Evidence ([ordered]@{ Pid = (Get-WfxValue $m 'Pid' ''); Process = $proc; ProcessPath = (Get-WfxValue $m 'ProcessPath' ''); Module = $mod; Signature = (Get-WfxValue $m 'Signature' '') })))
     }
+    # ── injected code (-DeepScan): one finding per process and kind, so a busy process cannot flood the report ──
+    foreach ($g in @(Get-WfxValue $Volatile 'Injected' @() | Where-Object { $_ } | Group-Object Pid)) {
+        $rs = @($g.Group); $first = $rs[0]
+        $proc = [string](Get-WfxValue $first 'Process' ''); $jit = [bool](Get-WfxValue $first 'Jit' $false)
+        $pe = @($rs | Where-Object { $_.PeHeader })
+        $rwx = @($rs | Where-Object { $_.Protect -eq 'RWX' -and -not $_.PeHeader -and [long]$_.Size -ge 4096 })
+        $ev = { param($set) [ordered]@{ Pid = (Get-WfxValue $first 'Pid' ''); Process = $proc; Path = (Get-WfxValue $first 'Path' ''); Regions = @($set | Select-Object -First 10 | ForEach-Object { "$($_.Address) $($_.Size) bytes $($_.Protect) $($_.Type)" }); Count = $set.Count; Jit = $jit } }
+        if ($pe.Count) {
+            $findings.Add((New-WfxFinding -Id 'MEM-PE-IN-PRIVATE' -Title "Program image in unbacked executable memory of $proc ($($pe.Count) region(s))" -Severity $(if ($jit) { 'Medium' } else { 'High' }) -Confidence 'Medium' -Category 'Process' -Technique @('T1055.001', 'T1620') `
+                        -Description 'Executable memory that no file on disk accounts for starts with a Windows program header. Reflective DLL injection, process hollowing and in-memory loaders put code there. .NET programs that load assemblies from memory do it too (lower severity when the process runs .NET, Java or a browser engine).' `
+                        -Recommendation 'Capture this process''s memory (or the whole computer''s) before stopping it, then analyse the region with a memory-forensics tool.' `
+                        -Entity "mem:pe:$($proc.ToLowerInvariant())" -HostName $HostName -Source 'volatile' -Evidence (& $ev $pe)))
+        }
+        if ($rwx.Count -and -not $jit) {
+            $findings.Add((New-WfxFinding -Id 'MEM-RWX-PRIVATE' -Title "Writable and executable private memory in $proc ($($rwx.Count) region(s))" -Severity 'Medium' -Confidence 'Low' -Category 'Process' -Technique @('T1055') `
+                        -Description 'Memory that can be both written and run, and that no file accounts for, is how shellcode is usually staged. Some legitimate software (plug-in hosts, game anti-cheat, older JIT engines) does this too.' `
+                        -Recommendation 'Check what the process is and whether it should be running; capture its memory before stopping it.' `
+                        -Entity "mem:rwx:$($proc.ToLowerInvariant())" -HostName $HostName -Source 'volatile' -Evidence (& $ev $rwx)))
+        }
+    }
     , $findings.ToArray()
 }
 
@@ -8774,6 +9075,7 @@ function Get-WfxCollectionBundle {
         [int]$Hours = 72,
         [switch]$FileScan,
         [switch]$ExposureScan,
+        [switch]$DeepScan,
         [ValidateSet('Host', 'Process', 'Network', 'Dns', 'Volatile', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security')]
         [string[]]$Sections = @('Host', 'Process', 'Network', 'Dns', 'Volatile', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security')
     )
@@ -8801,7 +9103,7 @@ function Get-WfxCollectionBundle {
     $dns = if ($want.Dns) { @(& $stage 'DNS cache' { Get-WfxDnsData }) } else { @() }
     $net = if ($want.Network) { @(& $stage 'Network connections' { Get-WfxNetworkData }) } else { @() }
     $procs = if ($want.Process) { @(& $stage 'Processes (+ signatures, hashes)' { Get-WfxProcessData }) } else { @() }
-    $volatile = if ($want.Volatile) { & $stage 'Pipes, sessions, ARP, loaded DLLs' { Get-WfxVolatileData } } else { $null }
+    $volatile = if ($want.Volatile) { & $stage $(if ($DeepScan) { 'Pipes, sessions, ARP, DLLs, injected code' } else { 'Pipes, sessions, ARP, loaded DLLs' }) { Get-WfxVolatileData -DeepScan:$DeepScan } } else { $null }
 
     $persist = @()
     if ($want.Persistence) { $persist = @(& $stage 'Autostarts, services, drivers' { @(Get-WfxPersistenceData) + @(Get-WfxServiceAndDriver) }) }
@@ -8826,6 +9128,8 @@ function Get-WfxCollectionBundle {
     if ($want.Exposure) { $exposure = @(& $stage 'Credential exposure audit (redacted)' { Get-WfxExposureData -IncludeFileScan:$ExposureScan }) }
 
     $security = if ($want.Security) { & $stage 'Security posture' { Get-WfxSecurityData } } else { $null }
+    # Containment already done here by WinForensicX (Respond mode), so the report shows it next to the findings.
+    $responses = @(Invoke-WfxStep 'respond:history' { @(Get-WfxActionRecord -Days 90 | Select-Object Id, Time, Type, Target, Status, Message, Undone, Operator) } @())
     if (-not $script:WfxQuiet) { Write-Progress -Activity 'WinForensicX collection' -Completed }
 
     [pscustomobject]@{
@@ -8847,8 +9151,9 @@ function Get-WfxCollectionBundle {
         Ransom      = $ransom
         Exposure    = $exposure
         Security    = $security
+        Responses   = $responses
         Gaps        = @(Get-WfxGap | Expand-WfxRecord)
-        Meta        = [pscustomobject]@{ Mode = 'live'; Hours = $Hours; FileScan = [bool]$FileScan; ExposureScan = [bool]$ExposureScan; Sections = @($Sections) }
+        Meta        = [pscustomobject]@{ Mode = 'live'; Hours = $Hours; FileScan = [bool]$FileScan; ExposureScan = [bool]$ExposureScan; DeepScan = [bool]$DeepScan; Sections = @($Sections) }
     }
 }
 
@@ -9622,6 +9927,121 @@ function Get-WfxRansomwareData {
 }
 
 
+# ===== Collectors/Memory.ps1 =====
+# Injected-code scan (-DeepScan, opt-in): executable memory that no file on disk accounts for.
+#
+# For each process it may open, it lists the memory regions (VirtualQueryEx) and keeps the ones that are
+# executable but private or mapped rather than loaded from a program file: that is where injected shellcode,
+# reflectively loaded DLLs and hollowed code live. Of those regions it reads at most the first 1 KB, only to
+# see whether a program header (MZ ... PE) sits there. No other memory is read, nothing is saved but the
+# region's address, size and protection, and nothing is written.
+# Never opened: LSASS, the other critical system processes and security products (same list as the loaded-DLL
+# check). Protected processes refuse to be opened anyway. Browsers, .NET and Java compile code at run time
+# into exactly this kind of memory, so they are marked (Jit) and judged more leniently.
+# Opt-in because reading other processes' memory is slow and some EDR products report it.
+
+$script:WfxMemSource = @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+
+public sealed class WfxMemRegion {
+    public int Pid;
+    public long Base;
+    public long Size;
+    public uint Protect;
+    public uint Type;
+    public bool PeHeader;
+}
+
+public static class WfxMemScan {
+    [StructLayout(LayoutKind.Sequential)]
+    struct MBI { public IntPtr BaseAddress; public IntPtr AllocationBase; public uint AllocationProtect; public IntPtr RegionSize; public uint State; public uint Protect; public uint Type; }
+
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern UIntPtr VirtualQueryEx(IntPtr h, IntPtr addr, out MBI info, UIntPtr len);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool ReadProcessMemory(IntPtr h, IntPtr addr, byte[] buf, IntPtr size, out IntPtr read);
+
+    const uint QUERY_INFORMATION = 0x400, VM_READ = 0x10, MEM_COMMIT = 0x1000, MEM_PRIVATE = 0x20000, MEM_MAPPED = 0x40000;
+    const uint EXEC = 0x10 | 0x20 | 0x40 | 0x80, GUARD = 0x100, NOACCESS = 0x01;
+
+    // Returns null when the process cannot be opened. Read-only: query and read access only.
+    public static List<WfxMemRegion> Scan(int pid, int maxRegions) {
+        IntPtr h = OpenProcess(QUERY_INFORMATION | VM_READ, false, pid);
+        if (h == IntPtr.Zero) return null;
+        var res = new List<WfxMemRegion>();
+        try {
+            long addr = 0;
+            long max = IntPtr.Size == 8 ? 0x7FFFFFFFFFFFL : 0x7FFFFFFFL;
+            uint mbiSize = (uint)Marshal.SizeOf(typeof(MBI));
+            while (addr < max) {
+                MBI m;
+                if (VirtualQueryEx(h, new IntPtr(addr), out m, new UIntPtr(mbiSize)) == UIntPtr.Zero) break;
+                long size = m.RegionSize.ToInt64();
+                if (size <= 0) break;
+                if (m.State == MEM_COMMIT && (m.Type == MEM_PRIVATE || m.Type == MEM_MAPPED) && (m.Protect & EXEC) != 0 && (m.Protect & (GUARD | NOACCESS)) == 0) {
+                    var r = new WfxMemRegion { Pid = pid, Base = m.BaseAddress.ToInt64(), Size = size, Protect = m.Protect, Type = m.Type };
+                    byte[] buf = new byte[(int)Math.Min(1024L, size)];
+                    IntPtr read;
+                    if (ReadProcessMemory(h, m.BaseAddress, buf, new IntPtr(buf.Length), out read) && read.ToInt64() >= 64 && buf[0] == 0x4D && buf[1] == 0x5A) {
+                        int lfanew = BitConverter.ToInt32(buf, 0x3C);
+                        if (lfanew > 0 && lfanew + 4 <= read.ToInt64() && buf[lfanew] == 0x50 && buf[lfanew + 1] == 0x45 && buf[lfanew + 2] == 0 && buf[lfanew + 3] == 0) r.PeHeader = true;
+                    }
+                    res.Add(r);
+                    if (res.Count >= maxRegions) break;
+                }
+                long next = m.BaseAddress.ToInt64() + size;
+                if (next <= addr) break;
+                addr = next;
+            }
+        } finally { CloseHandle(h); }
+        return res;
+    }
+}
+'@
+
+$script:WfxJitProcess = @('chrome', 'msedge', 'msedgewebview2', 'firefox', 'brave', 'opera', 'vivaldi', 'iexplore', 'java', 'javaw', 'node', 'electron',
+    'code', 'teams', 'ms-teams', 'slack', 'discord', 'spotify', 'whatsapp', 'signal', 'obsidian', 'notion', 'figma', 'postman', 'powershell', 'pwsh',
+    'powershell_ise', 'devenv', 'msbuild', 'dotnet', 'w3wp', 'searchapp', 'searchhost', 'startmenuexperiencehost', 'shellexperiencehost', 'widgets', 'msteams')
+
+function Get-WfxInjectedCode {
+    <# Executable private / mapped memory regions per process (see the header). Opt-in, read-only. #>
+    param([int]$MaxRegionsPerProcess = 64)
+    if (-not (Test-WfxWindows)) { return }
+    if ([IntPtr]::Size -eq 4 -and [Environment]::Is64BitOperatingSystem) { Add-WfxGap -Source 'memory:scan' -Reason 'A 32-bit PowerShell cannot read the memory of 64-bit processes.' -Fix 'Run the 64-bit PowerShell.'; return }
+    if (-not ('WfxMemScan' -as [type])) {
+        try { Add-Type -TypeDefinition $script:WfxMemSource -ErrorAction Stop }
+        catch { Add-WfxGap -Source 'memory:scan' -Reason "The memory scanner could not be compiled: $($_.Exception.Message)"; return }
+    }
+    $skip = @{}; foreach ($n in $script:WfxModuleSkip) { $skip[$n.ToLowerInvariant()] = $true }
+    $jit = @{}; foreach ($n in $script:WfxJitProcess) { $jit[$n] = $true }
+    $denied = 0
+    foreach ($p in @(Get-Process -ErrorAction SilentlyContinue | Sort-Object Id)) {
+        $n = ([string]$p.ProcessName).ToLowerInvariant()
+        if ($p.Id -le 4 -or $p.Id -eq $PID -or $skip.ContainsKey($n)) { continue }
+        $regions = [WfxMemScan]::Scan($p.Id, $MaxRegionsPerProcess)
+        if ($null -eq $regions) { $denied++; continue }
+        if (-not $regions.Count) { continue }
+        $path = ''; try { $path = [string]$p.MainModule.FileName } catch {}
+        $isJit = $jit.ContainsKey($n)
+        if (-not $isJit) { try { $isJit = [bool](@($p.Modules | Where-Object { $_.ModuleName -in 'clr.dll', 'coreclr.dll', 'jvm.dll', 'v8.dll', 'libcef.dll', 'mscorwks.dll' }).Count) } catch {} }
+        foreach ($r in $regions) {
+            # JIT memory in browsers, .NET and Java is expected; only a program header there is worth keeping.
+            if ($isJit -and -not $r.PeHeader) { continue }
+            [pscustomobject]@{
+                Pid = $p.Id; Process = [string]$p.ProcessName; Path = $path
+                Address = ('0x{0:X}' -f $r.Base); Size = $r.Size
+                Protect = $(switch ($r.Protect -band 0xFF) { 0x10 { 'X' } 0x20 { 'RX' } 0x40 { 'RWX' } 0x80 { 'WCX' } default { '0x{0:X}' -f $r.Protect } })
+                Type = $(if ($r.Type -eq 0x20000) { 'Private' } else { 'Mapped' })
+                PeHeader = [bool]$r.PeHeader; Jit = $isJit
+            }
+        }
+    }
+    if ($denied) { Add-WfxGap -Source 'memory:scan' -Reason "$denied process(es) could not be opened for the injected-code scan$(if (-not (Test-WfxAdmin)) { ' (run as administrator for other users'' and system processes)' } else { ' (protected processes)' })." }
+}
+
+
 # ===== Collectors/Persistence.ps1 =====
 # Persistence collector — enumerates autostart locations into normalized records.
 # Covers Run keys, Startup folders, scheduled tasks, WMI subscriptions, Winlogon, AppInit,
@@ -10333,6 +10753,7 @@ function Get-WfxModuleData {
 }
 
 function Get-WfxVolatileData {
+    param([switch]$DeepScan)
     if (-not (Test-WfxWindows)) { return $null }
     $pipes = Invoke-WfxStep 'volatile:pipes' { Get-WfxPipeName } @()
     $sessions = Invoke-WfxStep 'volatile:sessions' {
@@ -10345,11 +10766,14 @@ function Get-WfxVolatileData {
             ForEach-Object { [pscustomobject]@{ IPAddress = [string]$_.IPAddress; LinkLayerAddress = [string]$_.LinkLayerAddress; State = [string]$_.State; Interface = [string]$_.InterfaceAlias } })
     } @()
     $modules = Invoke-WfxStep 'volatile:modules' { Get-WfxModuleData } @()
+    $injected = if ($DeepScan) { Invoke-WfxStep 'memory:scan' { @(Get-WfxInjectedCode) } @() } else { @() }
     [pscustomobject]@{
         Pipes    = @($pipes)
         Sessions = @($sessions)
         Arp      = @($arp)
         Modules  = @($modules)
+        Injected = @($injected)
+        DeepScan = [bool]$DeepScan
     }
 }
 
@@ -10466,6 +10890,7 @@ function New-WfxReport {
         readiness     = @(Get-WfxValue $Result 'Readiness' @())
         readySummary  = [string](Get-WfxValue $Result 'ReadinessSummary' '')
         card          = @(Get-WfxValue $Result 'IncidentCard' @())
+        responses     = @(Get-WfxValue $Result 'Responses' @())
         gaps          = @(Get-WfxValue $Result 'Gaps' @())
         limits        = @($help.Limits)
     }
@@ -10775,6 +11200,7 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
   <h3 style="margin-top:30px">Can its memory be kept?</h3>
   <p class="desc">Settings that decide whether memory survives if this computer has to go off, and protections a responder must know about before capturing it. Read only: nothing was changed. Most fixes need a restart, so make them before an incident, never on a suspect machine.</p>
   <div class="tbl" id="rbox"></div>
+  <div id="respbox"></div>
 </section>
 
 <section id="incidents">
@@ -11394,13 +11820,14 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
   var G = D.gaps || []; $('n-g').textContent = G.length || '';
   /* act now: incident card and memory-capture readiness (live and remote triage only) */
   (function () {
-    var R = D.readiness || [], C = D.card || [];
-    if (!R.length && !C.length) { ['act', 'nav-act'].forEach(function (id) { var e = $(id); if (e) e.parentNode.removeChild(e); }); return; }
+    var R = D.readiness || [], C = D.card || [], RS = D.responses || [];
+    if (RS.length) $('respbox').innerHTML = '<h3 style="margin-top:30px">Containment already done here (WinForensicX Respond)</h3><ul class="list">' + RS.map(function (x) { return '<li><b>' + esc(x.Type) + '</b> ' + esc(x.Target) + ' <span class="small">' + esc(fmt(dt(x.Time))) + ' UTC, ' + esc(x.Status) + (x.Undone ? ', undone ' + esc(fmt(dt(x.Undone))) + ' UTC' : '') + (x.Operator ? ', by ' + esc(x.Operator) : '') + '</span>' + (x.Message ? '<div class="fix">' + esc(x.Message) + '</div>' : '') + '</li>'; }).join('') + '</ul>';
+    if (!R.length && !C.length && !RS.length) { ['act', 'nav-act'].forEach(function (id) { var e = $(id); if (e) e.parentNode.removeChild(e); }); return; }
     $('actsub').textContent = D.readySummary || '';
     $('card').innerHTML = C.filter(function (x) { return x.Kind === 'Do'; }).map(function (x) { return '<li><div>' + esc(x.Text) + '</div></li>'; }).join('');
     $('avoid').innerHTML = C.filter(function (x) { return x.Kind === 'Avoid'; }).map(function (x) { return '<li>' + esc(x.Text) + '</li>'; }).join('');
     var cls = { 'Ready': 'r', 'Not ready': 'n', 'Note': 'o', 'Unknown': 'u' };
-    $('rbox').innerHTML = '<table><thead><tr><th>Check</th><th>Status</th><th>Value</th><th>Why it matters</th></tr></thead><tbody>' + R.map(function (r) {
+    $('rbox').innerHTML = !R.length ? '' : '<table><thead><tr><th>Check</th><th>Status</th><th>Value</th><th>Why it matters</th></tr></thead><tbody>' + R.map(function (r) {
       return '<tr><td>' + esc(r.Check) + '</td><td><span class="st ' + (cls[r.Status] || 'u') + '">' + esc(r.Status) + '</span></td><td>' + esc(r.Value) + '</td><td>' + esc(r.Why) + (r.Fix ? '<div class="fix">Fix: ' + esc(r.Fix) + '</div>' : '') + '</td></tr>';
     }).join('') + '</tbody></table>';
   })();
@@ -13214,6 +13641,10 @@ $script:WfxInsightTopics = [ordered]@{
             Get-WfxModuleData | Expand-WfxRecord | Select-Object Pid, Process, Module, Signature, ProcessPath
         }
     }
+    'injected'    = @{ Group = 'Processes'; Title = 'Injected code (memory scan, slow)'; Desc = 'Executable memory no file on disk accounts for: program headers there (reflective loading, hollowing) and writable+executable regions. Reads only region headers; never LSASS or security products. Some EDRs report this kind of scan.'; Admin = $true; Script = {
+            Get-WfxInjectedCode | Select-Object Pid, Process, Address, Size, Protect, Type, PeHeader, Jit, Path
+        }
+    }
     'pipes'       = @{ Group = 'Processes'; Title = 'Open named pipes'; Desc = 'Names of the named pipes open right now. Default names of C2 frameworks (Cobalt Strike, Meterpreter) and of potato / PsExec-style tools are flagged. Names only: no pipe is opened.'; Admin = $false; Script = {
             Get-WfxPipeName | ForEach-Object { [pscustomobject]@{ Pipe = $_; Path = "\\.\pipe\$_" } }
         }
@@ -13513,7 +13944,7 @@ $script:WfxFlagTopic = [ordered]@{
     software = 'first'; users = 'first'; shares = 'first'; hosts = 'first'; firewall = 'first'; prefetch = 'first'
     downloads = 'first'; recentexe = 'first'; failedlogons = 'first'
     pshistory = 'keep'; powershell = 'keep'; newservices = 'keep'; logclears = 'keep'; accounts = 'keep'; rdp = 'keep'; defender = 'keep'
-    execution = 'first'; useractivity = 'first'; browserdl = 'first'; defenderlog = 'first'; modules = 'first'; pipes = 'first'
+    execution = 'first'; useractivity = 'first'; browserdl = 'first'; defenderlog = 'first'; modules = 'first'; pipes = 'first'; injected = 'first'
     changes = 'keep'; regchanges = 'keep'; filechanges = 'keep'; deleted = 'keep'; installs = 'keep'; executions = 'keep'; connhistory = 'keep'; configchanges = 'keep'
 }
 $script:WfxRiskyExt = '(?i)\.(?:iso|img|vhdx?|lnk|hta|js|jse|vbs|vbe|wsf|wsh|one|xll|cpl|scr|pif|bat|cmd|ps1|msc|jar|appref-ms|library-ms|search-ms|url)$'
@@ -13552,6 +13983,10 @@ function Test-WfxProductName {
 }
 
 $script:WfxInsightChecks = @{
+    injected = { param($r)
+        if ($r.PeHeader) { Add-WfxVerdict $r $(if ($r.Jit) { 'Medium' } else { 'High' }) 'Program header in executable memory no file accounts for' @('T1055.001', 'T1620') 'MEM-PE-IN-PRIVATE' }
+        elseif ($r.Protect -eq 'RWX' -and -not $r.Jit -and [long]$r.Size -ge 4096) { Add-WfxVerdict $r 'Medium' 'Writable and executable private memory' @('T1055') 'MEM-RWX-PRIVATE' }
+    }
     pipes = { param($r) $v = Test-WfxSuspiciousPipe -Name ([string]$r.Pipe); if ($v) { Add-WfxVerdict $r $v.Severity $v.Why $v.Technique $v.Rule } }
     modules = { param($r) $v = Test-WfxModuleLoad -Module $r; if ($v) { Add-WfxVerdict $r $v.Severity $v.Why $v.Technique $v.Rule } }
     tasks = { param($r) Add-WfxCommandVerdict -InputObject $r -Text $r._Text -Context 'scheduled task' -CheckImagePath }
@@ -13945,6 +14380,7 @@ function Invoke-WfxAnalyze {
             Readiness      = @($readiness)
             ReadinessSummary = $readySummary
             IncidentCard   = @($card)
+            Responses      = @(Get-WfxValue $Bundle 'Responses' @())
             Gaps           = @($gaps.ToArray())
             Meta           = (Get-WfxValue $Bundle 'Meta' $null)
         }
@@ -14167,6 +14603,451 @@ function Get-WfxIocKind {
 }
 
 
+# ===== Public/Invoke-WfxRespond.ps1 =====
+# Respond mode: containment you choose and confirm, one action at a time, with a record and an undo.
+#
+#   Invoke-WfxRespond -PlanPath <case>          the actions a triage suggested (respond-plan.json)
+#   Invoke-WfxRespond -KillProcess 4242 ...     or name them directly
+#   Get-WfxAction / Undo-WfxAction -Id ...      what was done, and putting it back
+#
+# How it stays safe:
+#   * Nothing happens without confirmation: every action asks (PowerShell's -Confirm), -WhatIf shows what
+#     would happen, and riskier actions (Windows programs, Microsoft tasks, private addresses) ask a second
+#     time unless -Force. The never-touch rules in Private/Respond.ps1 cannot be overridden.
+#   * A target is checked again just before acting: a process must still be the same program (name, path,
+#     start time, hash) so a reused PID is never killed; a Run-key value must still be there.
+#   * Before each change, what is about to be changed is recorded (process details, file hash and times,
+#     the registry value, the task XML, the service start type ...) in
+#     Downloads\WinForensicX-Quarantine\actions, a folder only administrators and SYSTEM can open.
+#   * Everything except stopping a process can be undone with Undo-WfxAction.
+#   * Quarantined files are encrypted into that folder (they cannot run and scanners do not re-detect
+#     them) and the folder is refused if Downloads is synced to OneDrive, Dropbox or Google Drive.
+
+function Initialize-WfxQuarantineRoot {
+    <# Creates the quarantine (files\, actions\) locked to Administrators and SYSTEM. Returns its path. #>
+    param([string]$Path = '')
+    $root = Get-WfxQuarantineRoot -Path $Path
+    $cloud = Test-WfxCloudPath $root
+    if ($cloud) { throw "The quarantine folder '$root' is inside $cloud, which would copy quarantined malware off this computer. Use -QuarantinePath with a local folder (for example C:\WinForensicX-Quarantine)." }
+    $bad = Test-WfxQuarantineFolder -Path $root
+    if ($bad) { throw $bad }
+    foreach ($d in $root, (Join-Path $root 'files'), (Join-Path $root 'actions')) { if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null } }
+    $marker = Join-Path $root '.wfx-quarantine'
+    if (-not (Test-Path -LiteralPath $marker)) { Set-Content -LiteralPath $marker -Value 'WinForensicX quarantine and action records. Locked to Administrators and SYSTEM. Do not delete while actions may need undoing.' -Encoding UTF8 }
+    $acl = New-Object System.Security.AccessControl.DirectorySecurity
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($sid in 'S-1-5-32-544', 'S-1-5-18') {
+        $id = New-Object System.Security.Principal.SecurityIdentifier($sid)
+        $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($id, 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')))
+    }
+    $acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')))
+    Set-Acl -LiteralPath $root -AclObject $acl
+    $root
+}
+
+function Save-WfxActionRecord {
+    param([Parameter(Mandatory)]$Record, [Parameter(Mandatory)][string]$Root)
+    Save-WfxJson -InputObject $Record -Path (Join-Path (Join-Path $Root 'actions') "$($Record.Id).json") -Depth 8
+    try { Add-Content -LiteralPath (Join-Path $Root 'actions.log') -Value ($Record | ConvertTo-Json -Compress -Depth 8) -Encoding UTF8 } catch {}
+}
+
+function Get-WfxOwnAddress {
+    @(try {
+            [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() | ForEach-Object { $_.GetIPProperties().UnicastAddresses } | ForEach-Object { $_.Address.ToString() -replace '%\d+$', '' }
+        } catch { })
+}
+
+function Test-WfxMicrosoftSigned {
+    <# $true when a file has a valid Microsoft Authenticode signature. #>
+    param([string]$Path)
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    try { $s = Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop; return ($s.Status -eq 'Valid' -and [string]$s.SignerCertificate.Subject -match '(?i)O=Microsoft (?:Corporation|Windows)') } catch { return $false }
+}
+
+# ───────────────────────────── one action ─────────────────────────────
+function Invoke-WfxResponseAction {
+    <# Checks, confirms, records and performs one action. Returns its record (or $null when skipped by -WhatIf / No). #>
+    param([Parameter(Mandatory)]$Action, [Parameter(Mandatory)]$Cmdlet, [string]$Root, [switch]$Force)
+    $type = [string]$Action.Type
+    $p = $Action.Params
+    $get = { param($n, $d = '') $v = Get-WfxValue $p $n $d; if ($null -eq $v) { $d } else { $v } }
+    $rec = [ordered]@{
+        Id = ('{0}-{1}' -f (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'), [guid]::NewGuid().ToString('N').Substring(0, 6))
+        Type = $type; Target = [string]$Action.Target; Reason = [string](Get-WfxValue $Action 'Reason' ''); Findings = @(Get-WfxValue $Action 'Findings' @())
+        Status = ''; Message = ''; Time = (Get-WfxUtcNow); Operator = [Environment]::UserName; Host = [Environment]::MachineName
+        Reversible = $true; Evidence = $null; Undo = $null; Undone = ''
+    }
+    $refuse = { param($why) $rec.Status = 'Refused'; $rec.Message = $why; Write-Warning ("Refused {0} {1}: {2}" -f $type, $rec.Target, $why); $rec }
+    # The second question for riskier actions. -WhatIf never asks (ShouldProcess then only reports).
+    $second = { param($q) if ($Force -or $WhatIfPreference) { return $true }; return $Cmdlet.ShouldContinue($q, 'WinForensicX: are you sure?') }
+
+    try {
+        switch ($type) {
+            'Kill' {
+                $procId = [int](& $get 'Pid' -1)
+                $rec.Reversible = $false
+                $w = Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction SilentlyContinue
+                if (-not $w) { $rec.Status = 'NotFound'; $rec.Message = "No process with PID $procId is running."; return $rec }
+                $why = Test-WfxRefusedProcess -Name ([string]$w.Name) -ProcessId $procId -Self $PID
+                if ($why) { return (& $refuse $why) }
+                $myParent = -1; try { $myParent = [int](Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop).ParentProcessId } catch {}
+                if ($procId -eq $myParent) { return (& $refuse 'This is the window WinForensicX is running in.') }
+                $path = [string]$w.ExecutablePath
+                $want = [string](& $get 'Name'); if ($want -and ($want -replace '\.exe$', '') -ne ([string]$w.Name -replace '\.exe$', '')) { return (& $refuse "PID $procId is now $($w.Name), not $want: the process has ended and the number was reused.") }
+                $wantPath = [string](& $get 'Path'); if ($wantPath -and $path -and $wantPath -ne $path) { return (& $refuse "PID $procId now runs $path, not $wantPath.") }
+                $start = ConvertTo-WfxDateTime $w.CreationDate
+                $wantStart = ConvertTo-WfxDateTime (& $get 'StartTime')
+                if ($wantStart -and $start -and [Math]::Abs(($start - $wantStart).TotalSeconds) -gt 2) { return (& $refuse "PID $procId started at $(ConvertTo-WfxUtcString $start), not $(ConvertTo-WfxUtcString $wantStart): a different process with the same number.") }
+                $sha = Get-WfxBinaryHash $path
+                $wantSha = [string](& $get 'Sha256'); if ($wantSha -and $sha -and $wantSha -ne $sha) { return (& $refuse "The program file's SHA-256 changed since triage.") }
+                $conns = @(try { Get-NetTCPConnection -OwningProcess $procId -ErrorAction Stop | ForEach-Object { "$($_.LocalAddress):$($_.LocalPort) -> $($_.RemoteAddress):$($_.RemotePort) $($_.State)" } } catch { })
+                $owner = ''; try { $o = Invoke-CimMethod -InputObject $w -MethodName GetOwner -ErrorAction Stop; if ($o.User) { $owner = "$($o.Domain)\$($o.User)" } } catch {}
+                $rec.Target = "$($w.Name) (PID $procId)"
+                $rec.Evidence = [ordered]@{ Pid = $procId; Name = [string]$w.Name; Path = $path; CommandLine = (Protect-WfxText ([string]$w.CommandLine)); ParentPid = [int]$w.ParentProcessId; Owner = $owner; Started = (ConvertTo-WfxUtcString $start); Sha256 = $sha; Signature = (Get-WfxSignature $path); Connections = $conns }
+                if ($path -and $path -match '(?i)^[a-z]:\\windows\\' -and (Test-WfxMicrosoftSigned $path)) {
+                    if (-not (& $second "$($w.Name) is a Microsoft program from the Windows folder (PID $procId). Stopping the wrong one can disrupt Windows. Stop it anyway?")) { return $null }
+                }
+                if (-not $Cmdlet.ShouldProcess($rec.Target, 'Stop the process (cannot be undone; capture memory first if you need it)')) { return $null }
+                Stop-Process -Id $procId -Force -Confirm:$false -ErrorAction Stop
+                $gone = $false; for ($i = 0; $i -lt 25; $i++) { if (-not (Get-Process -Id $procId -ErrorAction SilentlyContinue)) { $gone = $true; break }; Start-Sleep -Milliseconds 200 }
+                $rec.Status = if ($gone) { 'Done' } else { 'Failed' }
+                $rec.Message = if ($gone) { 'Stopped.' } else { 'Asked to stop, but it is still running (protected, or restarted by something else).' }
+            }
+            'Quarantine' {
+                $path = [string](& $get 'Path')
+                if (-not $path -or -not (Test-Path -LiteralPath $path -PathType Leaf)) { $rec.Status = 'NotFound'; $rec.Message = "No file at $path."; return $rec }
+                $fi = Get-Item -LiteralPath $path -Force
+                $path = $fi.FullName; $rec.Target = $path
+                $sig = $null; try { $sig = Get-AuthenticodeSignature -LiteralPath $path -ErrorAction Stop } catch {}
+                $why = Test-WfxRefusedFile -Path $path -QuarantineRoot $Root -Signature $(if ($sig) { [string]$sig.Status } else { '' }) -Signer $(if ($sig -and $sig.SignerCertificate) { [string]$sig.SignerCertificate.Subject } else { '' })
+                if ($why) { return (& $refuse $why) }
+                if ($fi.Length -gt 2GB) { return (& $refuse 'Larger than 2 GB; collect it with an imaging tool instead.') }
+                if ($env:SystemRoot -and $path.StartsWith((Join-Path $env:SystemRoot 'System32\drivers') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+                    $leaf = Split-Path -Leaf $path
+                    $boot = @(Get-CimInstance Win32_SystemDriver -ErrorAction SilentlyContinue | Where-Object { [string]$_.StartMode -in 'Boot', 'System' -and [string]$_.PathName -match ('(?i)\\' + [regex]::Escape($leaf) + '"?$') })
+                    if ($boot.Count) { return (& $refuse "A driver Windows loads at boot ($($boot[0].Name)); removing it can stop Windows from starting. Disable or replace it offline instead.") }
+                }
+                if ($env:SystemRoot -and $path.StartsWith($env:SystemRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+                    if (-not (& $second "$path is in the Windows folder. Removing the wrong file there can break Windows. Quarantine it anyway?")) { return $null }
+                }
+                if (-not $Cmdlet.ShouldProcess($path, 'Move the file into the quarantine (encrypted; Undo-WfxAction puts it back)')) { return $null }
+                $zone = ''; try { $zone = [string](Get-Content -LiteralPath $path -Stream Zone.Identifier -Raw -ErrorAction Stop) } catch {}
+                $blob = Join-Path (Join-Path $Root 'files') "$($rec.Id).wfxq"
+                $sha = Write-WfxQuarantineFile -Source $path -Target $blob
+                if ((Read-WfxQuarantineFile -Source $blob) -ne $sha) { Remove-Item -LiteralPath $blob -Force -ErrorAction SilentlyContinue; throw 'The quarantined copy did not verify; the original was left in place.' }
+                $rec.Evidence = [ordered]@{ Path = $path; Size = $fi.Length; Sha256 = $sha; Created = (ConvertTo-WfxUtcString $fi.CreationTimeUtc); Modified = (ConvertTo-WfxUtcString $fi.LastWriteTimeUtc); Accessed = (ConvertTo-WfxUtcString $fi.LastAccessTimeUtc)
+                    Attributes = [string]$fi.Attributes; Signature = $(if ($sig) { [string]$sig.Status } else { '' }); Signer = $(if ($sig -and $sig.SignerCertificate) { [string]$sig.SignerCertificate.Subject } else { '' }); ZoneIdentifier = $zone }
+                $rec.Undo = [ordered]@{ Path = $path; Blob = "files\$($rec.Id).wfxq"; Sha256 = $sha; Created = $fi.CreationTimeUtc.Ticks; Modified = $fi.LastWriteTimeUtc.Ticks; Accessed = $fi.LastAccessTimeUtc.Ticks; Attributes = [int]$fi.Attributes; Zone = $zone }
+                $attrs = $fi.Attributes
+                try {
+                    if ($attrs -band [IO.FileAttributes]::ReadOnly) { $fi.Attributes = $attrs -bxor [IO.FileAttributes]::ReadOnly }
+                    Remove-Item -LiteralPath $path -Force -Confirm:$false -ErrorAction Stop
+                } catch {
+                    try { if (Test-Path -LiteralPath $path) { (Get-Item -LiteralPath $path -Force).Attributes = $attrs } } catch {}
+                    Remove-Item -LiteralPath $blob -Force -Confirm:$false -ErrorAction SilentlyContinue
+                    throw "The file could not be removed ($($_.Exception.Message)). If a program is using it, stop that process first. The original was left in place."
+                }
+                $rec.Status = 'Done'; $rec.Message = "Quarantined as $($rec.Undo.Blob)."
+            }
+            'DisableRunKey' {
+                $key = [string](& $get 'Key'); $name = [string](& $get 'Name')
+                if (-not (Test-WfxRunKeyPath $key)) { return (& $refuse 'Only values in the Run and RunOnce keys can be removed here.') }
+                $k = Get-Item -LiteralPath $key -ErrorAction SilentlyContinue
+                $vn = if ($name -eq '(Default)') { '' } else { $name }
+                if (-not $k -or @($k.GetValueNames()) -notcontains $vn) { $rec.Status = 'NotFound'; $rec.Message = 'The value is not there any more.'; return $rec }
+                $kind = [string]$k.GetValueKind($vn)
+                $val = $k.GetValue($vn, $null, 'DoNotExpandEnvironmentNames')
+                if ($kind -eq 'Binary') { $val = [Convert]::ToBase64String([byte[]]$val) }
+                $rec.Evidence = [ordered]@{ Key = $key; Name = $name; Kind = $kind; Value = (Protect-WfxText ([string](@($val) -join ' '))) }
+                if (-not $Cmdlet.ShouldProcess("$key\$name", 'Remove the Run-key value (backed up; Undo-WfxAction restores it)')) { return $null }
+                $rec.Undo = [ordered]@{ Key = $key; Name = $vn; Kind = $kind; Value = $val }
+                Remove-ItemProperty -LiteralPath $key -Name $vn -Confirm:$false -ErrorAction Stop
+                $rec.Status = 'Done'; $rec.Message = 'Removed.'
+            }
+            'DisableTask' {
+                $t = [string](& $get 'Task')
+                $i = $t.LastIndexOf('\')
+                $tp = if ($i -ge 0) { $t.Substring(0, $i + 1) } else { '\' }; $tn = $t.Substring($i + 1)
+                if (-not $tp.StartsWith('\')) { $tp = '\' + $tp }
+                $task = Get-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction SilentlyContinue
+                if (-not $task) { $rec.Status = 'NotFound'; $rec.Message = "No scheduled task $tp$tn."; return $rec }
+                $rec.Target = "$tp$tn"
+                if ($tp -like '\Microsoft\*') { if (-not (& $second "$tp$tn is in the Microsoft task folder (attackers hide there, but Windows needs many of these). Disable it anyway?")) { return $null } }
+                $xml = ''; try { $xml = [string](Export-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction Stop) } catch {}
+                $rec.Evidence = [ordered]@{ Task = "$tp$tn"; State = [string]$task.State; Actions = @($task.Actions | ForEach-Object { Protect-WfxText ("$($_.Execute) $($_.Arguments)".Trim()) }); RunAs = [string]$task.Principal.UserId; Xml = $xml }
+                if (-not $Cmdlet.ShouldProcess("$tp$tn", 'Disable the scheduled task (Undo-WfxAction enables it again)')) { return $null }
+                $rec.Undo = [ordered]@{ TaskPath = $tp; TaskName = $tn; WasEnabled = ([string]$task.State -ne 'Disabled') }
+                Disable-ScheduledTask -TaskPath $tp -TaskName $tn -Confirm:$false -ErrorAction Stop | Out-Null
+                $rec.Status = 'Done'; $rec.Message = 'Disabled.'
+            }
+            'DisableService' {
+                $name = [string](& $get 'Name')
+                if ($name -notmatch '^[\w .\-\$]+$') { return (& $refuse 'Not a valid service name.') }
+                $why = Test-WfxRefusedService $name; if ($why) { return (& $refuse $why) }
+                $svc = Get-CimInstance Win32_Service -Filter ("Name='{0}'" -f ($name -replace "'", "''")) -ErrorAction SilentlyContinue
+                if (-not $svc) { $rec.Status = 'NotFound'; $rec.Message = "No service named $name."; return $rec }
+                if ([string]$svc.StartMode -in 'Boot', 'System') { return (& $refuse 'A boot or system driver; disabling it can stop Windows from starting.') }
+                $img = Get-WfxImagePath $svc.PathName
+                if ($img -and $img -match '(?i)\\system32\\svchost\.exe$' -or (Test-WfxMicrosoftSigned $img)) {
+                    if (-not (& $second "$name runs a Microsoft-signed Windows program. Malware can register a service this way, but so does Windows. Disable it anyway?")) { return $null }
+                }
+                $delayed = $null; try { $delayed = (Get-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$name" -Name DelayedAutostart -ErrorAction Stop).DelayedAutostart } catch {}
+                $rec.Target = $name
+                $rec.Evidence = [ordered]@{ Name = $name; DisplayName = [string]$svc.DisplayName; Command = (Protect-WfxText ([string]$svc.PathName)); StartMode = [string]$svc.StartMode; State = [string]$svc.State; RunAs = [string]$svc.StartName; Signature = (Get-WfxSignature $img) }
+                if (-not $Cmdlet.ShouldProcess($name, 'Set the service to Disabled and stop it (Undo-WfxAction restores the start type)')) { return $null }
+                $rec.Undo = [ordered]@{ Name = $name; StartMode = [string]$svc.StartMode; Delayed = $delayed; WasRunning = ([string]$svc.State -eq 'Running') }
+                Set-Service -Name $name -StartupType Disabled -Confirm:$false -ErrorAction Stop
+                $rec.Status = 'Done'; $rec.Message = 'Disabled.'
+                if ([string]$svc.State -eq 'Running') {
+                    try { Stop-Service -Name $name -Confirm:$false -ErrorAction Stop -WarningAction SilentlyContinue; $rec.Message = 'Disabled and stopped.' }
+                    catch { $rec.Message = "Disabled, but not stopped ($($_.Exception.Message)); other services may depend on it. It will not start again." }
+                }
+            }
+            'DisableWmi' {
+                $consumer = [string](& $get 'Consumer')
+                $binds = @(Get-CimInstance -Namespace 'root\subscription' -ClassName __FilterToConsumerBinding -ErrorAction Stop | Where-Object { [string]$_.Consumer.Name -eq $consumer })
+                if (-not $binds.Count) { $rec.Status = 'NotFound'; $rec.Message = "No WMI binding to a consumer named $consumer."; return $rec }
+                $saved = @($binds | ForEach-Object { [ordered]@{ Filter = [string]$_.Filter.Name; ConsumerClass = [string]$_.Consumer.CimClass.CimClassName; Consumer = [string]$_.Consumer.Name } })
+                if (-not $saved[0].ConsumerClass) { $saved = @($binds | ForEach-Object { [ordered]@{ Filter = [string]$_.Filter.Name; ConsumerClass = [string]$_.Consumer.CimSystemProperties.ClassName; Consumer = [string]$_.Consumer.Name } }) }
+                $rec.Evidence = [ordered]@{ Consumer = $consumer; Bindings = $saved }
+                if (-not $Cmdlet.ShouldProcess("WMI consumer $consumer", 'Remove its event binding(s); the filter and consumer stay, inert (Undo-WfxAction re-binds them)')) { return $null }
+                $rec.Undo = [ordered]@{ Bindings = $saved }
+                $binds | Remove-CimInstance -Confirm:$false -ErrorAction Stop
+                $rec.Status = 'Done'; $rec.Message = "Removed $($binds.Count) binding(s)."
+            }
+            'BlockAddress' {
+                $addr = [string](& $get 'Address')
+                $why = Test-WfxRefusedAddress -Address $addr -Own (Get-WfxOwnAddress); if ($why) { return (& $refuse $why) }
+                if (@(Get-WfxSessionAddress) -contains (($addr -split '/')[0])) { return (& $refuse 'That is the computer you are connected from (RDP / WinRM / SSH); blocking it would cut you off.') }
+                $rec.Target = $addr
+                if (Test-WfxPrivateIp (($addr -split '/')[0])) { if (-not (& $second "$addr is on a private network. Blocking it can cut this computer off from file servers, DNS or the domain controller. Block it anyway?")) { return $null } }
+                if (-not $Cmdlet.ShouldProcess($addr, 'Block all traffic to and from this address (firewall rules in group WinForensicX)')) { return $null }
+                $names = @("WFX-$($rec.Id)-in", "WFX-$($rec.Id)-out")
+                New-NetFirewallRule -Name $names[0] -DisplayName "WinForensicX: block $addr (in)" -Group 'WinForensicX' -Direction Inbound -RemoteAddress $addr -Action Block -Profile Any -ErrorAction Stop | Out-Null
+                try { New-NetFirewallRule -Name $names[1] -DisplayName "WinForensicX: block $addr (out)" -Group 'WinForensicX' -Direction Outbound -RemoteAddress $addr -Action Block -Profile Any -ErrorAction Stop | Out-Null }
+                catch { Remove-NetFirewallRule -Name $names[0] -ErrorAction SilentlyContinue; throw }
+                $rec.Undo = [ordered]@{ Rules = $names }
+                $off = @(try { Get-NetFirewallProfile -ErrorAction Stop | Where-Object { -not $_.Enabled } | ForEach-Object Name } catch { })
+                $rec.Status = 'Done'; $rec.Message = 'Blocked in and out.' + $(if ($off.Count) { " The firewall is OFF for: $($off -join ', '); the block does not apply there." } else { '' })
+            }
+            'BlockProgram' {
+                $path = [string](& $get 'Path')
+                if (-not $path -or -not (Test-Path -LiteralPath $path -PathType Leaf)) { $rec.Status = 'NotFound'; $rec.Message = "No file at $path."; return $rec }
+                $path = (Get-Item -LiteralPath $path -Force).FullName; $rec.Target = $path
+                if ($env:SystemRoot -and $path.StartsWith($env:SystemRoot + '\', [StringComparison]::OrdinalIgnoreCase) -and (Test-WfxMicrosoftSigned $path)) { return (& $refuse 'A Microsoft-signed Windows program; blocking it can break networking for Windows itself (block the address instead).') }
+                if (-not $Cmdlet.ShouldProcess($path, 'Block this program from making network connections (firewall rule in group WinForensicX)')) { return $null }
+                $names = @("WFX-$($rec.Id)-prog")
+                New-NetFirewallRule -Name $names[0] -DisplayName "WinForensicX: block $(Split-Path -Leaf $path)" -Group 'WinForensicX' -Direction Outbound -Program $path -Action Block -Profile Any -ErrorAction Stop | Out-Null
+                $rec.Evidence = [ordered]@{ Path = $path; Sha256 = (Get-WfxBinaryHash $path); Signature = (Get-WfxSignature $path) }
+                $rec.Undo = [ordered]@{ Rules = $names }
+                $rec.Status = 'Done'; $rec.Message = 'Outbound connections blocked.'
+            }
+            'DisableAccount' {
+                $name = [string](& $get 'Name')
+                if (-not (Get-Command Get-LocalUser -ErrorAction SilentlyContinue)) { return (& $refuse 'Local account cmdlets are not available in this PowerShell (use 64-bit Windows PowerShell).') }
+                $u = Get-LocalUser -Name ($name -replace '^.*\\', '') -ErrorAction SilentlyContinue
+                if (-not $u) { return (& $refuse "$name is not a local account on this computer. Disable domain or Entra accounts in Active Directory / Entra ID.") }
+                $last = $false
+                try {
+                    $admins = @(Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction Stop | Where-Object { $_.PrincipalSource -eq 'Local' -and $_.ObjectClass -eq 'User' } | ForEach-Object { Get-LocalUser -SID $_.SID -ErrorAction SilentlyContinue } | Where-Object Enabled)
+                    $last = ($admins.Count -eq 1 -and [string]$admins[0].SID -eq [string]$u.SID)
+                } catch { if (-not (& $second 'Could not list the local administrators to make sure this is not the last one. Disable it anyway?')) { return $null } }
+                $why = Test-WfxRefusedAccount -Name $u.Name -IsLastAdmin $last; if ($why) { return (& $refuse $why) }
+                $rec.Target = $u.Name
+                $rec.Evidence = [ordered]@{ Name = $u.Name; Sid = [string]$u.SID; Enabled = [bool]$u.Enabled; LastLogon = (ConvertTo-WfxUtcString $u.LastLogon); PasswordLastSet = (ConvertTo-WfxUtcString $u.PasswordLastSet); Description = [string]$u.Description }
+                if (-not $u.Enabled) { $rec.Status = 'NotFound'; $rec.Message = 'Already disabled.'; return $rec }
+                if (-not $Cmdlet.ShouldProcess($u.Name, 'Disable the local account (Undo-WfxAction enables it again; existing sessions stay signed in)')) { return $null }
+                $rec.Undo = [ordered]@{ Sid = [string]$u.SID }
+                Disable-LocalUser -SID $u.SID -Confirm:$false -ErrorAction Stop
+                $rec.Status = 'Done'; $rec.Message = 'Disabled. Sessions already signed in are not ended: sign them out (query user / logoff) if needed.'
+            }
+            default { return (& $refuse "Unknown action type '$type'.") }
+        }
+    } catch {
+        $rec.Status = 'Failed'; $rec.Message = $_.Exception.Message
+    }
+    $rec
+}
+
+# ───────────────────────────── public ─────────────────────────────
+function Invoke-WfxRespond {
+    <#
+    .SYNOPSIS
+        Contain a threat: stop processes, quarantine files, disable autostarts, block addresses or programs,
+        disable local accounts. Every action is confirmed, recorded first, and (except stopping a process)
+        can be undone with Undo-WfxAction. Needs administrator rights.
+    .DESCRIPTION
+        From a triage: Invoke-WfxRespond -PlanPath <case folder or respond-plan.json> goes through the actions the
+        triage suggested (critical and high ones are selected; -All for every one, -ActionId to pick).
+        Directly: -KillProcess, -QuarantineFile, -DisableRunKey, -DisableTask, -DisableService, -DisableWmiConsumer,
+        -BlockAddress, -BlockProgram, -DisableAccount.
+        -WhatIf shows what would happen. Each action asks for confirmation; riskier ones ask twice unless -Force.
+        Things Windows cannot run without are refused whatever the options.
+    .PARAMETER QuarantinePath  Where quarantined files and action records go (default Downloads\WinForensicX-Quarantine).
+    .EXAMPLE
+        Invoke-WfxRespond -PlanPath E:\cases\WFX_PC01_20261127-101500Z -WhatIf
+    .EXAMPLE
+        Invoke-WfxRespond -KillProcess 4242 -QuarantineFile C:\Users\ana\AppData\Roaming\upd\upd.exe
+    .EXAMPLE
+        Invoke-WfxRespond -BlockAddress 203.0.113.7 -DisableRunKey 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run\Updater'
+    #>
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
+    param(
+        [string]$PlanPath = '',
+        [string[]]$ActionId = @(),
+        [switch]$All,
+        [int[]]$KillProcess = @(),
+        [string[]]$QuarantineFile = @(),
+        [string[]]$DisableRunKey = @(),
+        [string[]]$DisableTask = @(),
+        [string[]]$DisableService = @(),
+        [string[]]$DisableWmiConsumer = @(),
+        [string[]]$BlockAddress = @(),
+        [string[]]$BlockProgram = @(),
+        [string[]]$DisableAccount = @(),
+        [string]$Reason = '',
+        [string]$QuarantinePath = '',
+        [switch]$Force
+    )
+    if (-not (Test-WfxWindows)) { throw 'Respond mode needs Windows.' }
+    if (-not (Test-WfxAdmin) -and -not $WhatIfPreference) { throw 'Respond mode needs administrator rights (run the tool elevated). -WhatIf works without them.' }
+    $actions = [System.Collections.Generic.List[object]]::new()
+    $mk = { param($Type, $Target, [hashtable]$Params) $actions.Add([pscustomobject]@{ Type = $Type; Target = [string]$Target; Params = $Params; Reason = $(if ($Reason) { $Reason } else { 'Chosen by the operator' }); Findings = @() }) }
+
+    if ($PlanPath) {
+        $pf = if (Test-Path -LiteralPath $PlanPath -PathType Container) { Join-Path $PlanPath 'respond-plan.json' } else { $PlanPath }
+        if (-not (Test-Path -LiteralPath $pf -PathType Leaf)) { throw "No response plan at $pf." }
+        $plan = Get-Content -LiteralPath $pf -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ([string]$plan.Schema -ne 'winforensicx.respond-plan/1') { throw "$pf is not a WinForensicX response plan." }
+        if ([string]$plan.Host -and [string]$plan.Host -ne [Environment]::MachineName) { throw "This plan is for $($plan.Host); this computer is $([Environment]::MachineName). Run it on that computer." }
+        # A plan inside a closed case is covered by the case manifest: refuse one that was edited afterwards.
+        $mf = Join-Path (Split-Path -Parent $pf) 'manifest.json'
+        if (Test-Path -LiteralPath $mf) {
+            $m = Get-Content -LiteralPath $mf -Raw -Encoding UTF8 | ConvertFrom-Json
+            $entry = @($m.files | Where-Object { $_.path -eq 'respond-plan.json' }) | Select-Object -First 1
+            $now = (Get-FileHash -LiteralPath $pf -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($entry -and $entry.sha256 -ne $now -and -not $Force) { throw 'respond-plan.json was changed after the triage wrote it (its hash no longer matches manifest.json). Check it, then use -Force to run it anyway.' }
+        }
+        foreach ($a in @($plan.Actions)) {
+            $pick = if ($ActionId.Count) { $ActionId -contains [string]$a.Id } elseif ($All) { $true } else { [bool]$a.Selected }
+            if (-not $pick) { continue }
+            $h = @{}; foreach ($pp in $a.Params.PSObject.Properties) { $h[$pp.Name] = $pp.Value }
+            $actions.Add([pscustomobject]@{ Type = [string]$a.Type; Target = [string]$a.Target; Params = $h; Reason = [string]$a.Reason; Findings = @($a.Findings) })
+        }
+    }
+    foreach ($x in $KillProcess) { & $mk 'Kill' "PID $x" @{ Pid = $x } }
+    foreach ($x in $QuarantineFile) { & $mk 'Quarantine' $x @{ Path = $x } }
+    foreach ($x in $DisableRunKey) {
+        if ($x -notmatch '^(.+\\(?:Run|RunOnce))\\([^\\]+)$') { throw "Give the Run-key value as <key>\<value name>, e.g. HKCU:\Software\Microsoft\Windows\CurrentVersion\Run\Updater (got '$x')." }
+        & $mk 'DisableRunKey' $x @{ Key = $Matches[1]; Name = $Matches[2] }
+    }
+    foreach ($x in $DisableTask) { & $mk 'DisableTask' $x @{ Task = $x } }
+    foreach ($x in $DisableService) { & $mk 'DisableService' $x @{ Name = $x } }
+    foreach ($x in $DisableWmiConsumer) { & $mk 'DisableWmi' $x @{ Consumer = $x } }
+    foreach ($x in $BlockAddress) { & $mk 'BlockAddress' $x @{ Address = $x } }
+    foreach ($x in $BlockProgram) { & $mk 'BlockProgram' $x @{ Path = $x } }
+    foreach ($x in $DisableAccount) { & $mk 'DisableAccount' $x @{ Name = $x } }
+    if (-not $actions.Count) { Write-Warning 'Nothing to do: no action selected.'; return }
+
+    # Stop processes first (they may hold files open and recreate autostarts), then files and autostarts, then the network.
+    $order = @{ Kill = 0; DisableService = 1; DisableTask = 2; DisableWmi = 3; DisableRunKey = 4; Quarantine = 5; BlockProgram = 6; BlockAddress = 7; DisableAccount = 8 }
+    $sorted = @($actions | Sort-Object { if ($order.ContainsKey([string]$_.Type)) { $order[[string]$_.Type] } else { 9 } })
+    $root = if ($WhatIfPreference) { Get-WfxQuarantineRoot -Path $QuarantinePath } else { Initialize-WfxQuarantineRoot -Path $QuarantinePath }
+    foreach ($a in $sorted) {
+        $r = Invoke-WfxResponseAction -Action $a -Cmdlet $PSCmdlet -Root $root -Force:$Force
+        if (-not $r) { continue }
+        if (-not $WhatIfPreference) { Save-WfxActionRecord -Record $r -Root $root }
+        [pscustomobject]$r
+    }
+}
+
+function Get-WfxAction {
+    <#
+    .SYNOPSIS What Respond mode has done on this computer: every action with its status, what was recorded
+    before the change, and whether it can be undone.
+    .EXAMPLE
+        Get-WfxAction | Format-Table Time, Type, Target, Status, Undone
+    #>
+    [CmdletBinding()]
+    param([string]$QuarantinePath = '', [int]$Days = 0)
+    Get-WfxActionRecord -Root (Get-WfxQuarantineRoot -Path $QuarantinePath) -Days $Days
+}
+
+function Undo-WfxAction {
+    <#
+    .SYNOPSIS Puts back what a Respond action changed: restores a quarantined file (with its times and its
+    downloaded-from-the-internet mark), a Run-key value, a task, a service start type, WMI bindings, a local
+    account; removes firewall blocks and ends an isolation. Stopped processes cannot be brought back.
+    .PARAMETER RestorePath  Restore a quarantined file somewhere else (for analysis) instead of its original place.
+    .EXAMPLE
+        Undo-WfxAction -Id 20261127101500-3fa2c1
+    #>
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
+    param([Parameter(Mandatory)][string[]]$Id, [string]$QuarantinePath = '', [string]$RestorePath = '')
+    if (-not (Test-WfxAdmin) -and -not $WhatIfPreference) { throw 'Undo needs administrator rights.' }
+    $root = Get-WfxQuarantineRoot -Path $QuarantinePath
+    foreach ($one in $Id) {
+        if ($one -notmatch '^[0-9]{14}-[0-9a-f]{6}$') { Write-Warning "Not an action id: $one"; continue }
+        $f = Join-Path (Join-Path $root 'actions') "$one.json"
+        if (-not (Test-Path -LiteralPath $f)) { Write-Warning "No action $one in $root."; continue }
+        $rec = Get-Content -LiteralPath $f -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($rec.Status -ne 'Done') { Write-Warning "$one was not carried out ($($rec.Status)); nothing to undo."; continue }
+        if ($rec.Undone) { Write-Warning "$one was already undone at $($rec.Undone)."; continue }
+        if (-not $rec.Reversible -or -not $rec.Undo) { Write-Warning "$one ($($rec.Type)) cannot be undone."; continue }
+        $u = $rec.Undo
+        if (-not $PSCmdlet.ShouldProcess("$($rec.Type) $($rec.Target)", 'Undo')) { continue }
+        try {
+            switch ([string]$rec.Type) {
+                'Quarantine' {
+                    $dest = if ($RestorePath) { $RestorePath } else { [string]$u.Path }
+                    if (Test-Path -LiteralPath $dest) { throw "$dest already exists; move it away or use -RestorePath." }
+                    $blob = Join-Path $root ([string]$u.Blob)
+                    $tmp = "$dest.wfx-restoring"
+                    $sha = Read-WfxQuarantineFile -Source $blob -Target $tmp
+                    if ($sha -ne [string]$u.Sha256) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue; throw 'The quarantined copy does not match the recorded SHA-256; not restored.' }
+                    Move-Item -LiteralPath $tmp -Destination $dest -Confirm:$false
+                    $fi = Get-Item -LiteralPath $dest -Force
+                    $fi.CreationTimeUtc = [datetime]::new([long]$u.Created, [DateTimeKind]::Utc); $fi.LastWriteTimeUtc = [datetime]::new([long]$u.Modified, [DateTimeKind]::Utc); $fi.LastAccessTimeUtc = [datetime]::new([long]$u.Accessed, [DateTimeKind]::Utc)
+                    if ([string]$u.Zone) { Set-Content -LiteralPath $dest -Stream Zone.Identifier -Value ([string]$u.Zone) -NoNewline -ErrorAction SilentlyContinue }
+                    $fi.Attributes = [IO.FileAttributes][int]$u.Attributes
+                    if (-not $RestorePath) { Remove-Item -LiteralPath $blob -Force -ErrorAction SilentlyContinue }
+                }
+                'DisableRunKey' {
+                    $val = $u.Value
+                    if ([string]$u.Kind -eq 'Binary') { $val = [Convert]::FromBase64String([string]$val) }
+                    elseif ([string]$u.Kind -eq 'MultiString') { $val = [string[]]@($val) }
+                    New-ItemProperty -LiteralPath ([string]$u.Key) -Name ([string]$u.Name) -Value $val -PropertyType ([string]$u.Kind) -Force -Confirm:$false -ErrorAction Stop | Out-Null
+                }
+                'DisableTask' { if ($u.WasEnabled) { Enable-ScheduledTask -TaskPath ([string]$u.TaskPath) -TaskName ([string]$u.TaskName) -Confirm:$false -ErrorAction Stop | Out-Null } }
+                'DisableService' {
+                    $map = @{ Auto = 'Automatic'; Manual = 'Manual'; Disabled = 'Disabled' }
+                    $st = $map[[string]$u.StartMode]; if (-not $st) { $st = 'Manual' }
+                    Set-Service -Name ([string]$u.Name) -StartupType $st -Confirm:$false -ErrorAction Stop
+                    if ($null -ne $u.Delayed) { Set-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$([string]$u.Name)" -Name DelayedAutostart -Value ([int]$u.Delayed) -ErrorAction SilentlyContinue }
+                    if ($u.WasRunning) { Write-Warning "Start type of $($u.Name) restored. It was running before; start it yourself if you want it running now (Start-Service $($u.Name))." }
+                }
+                'DisableWmi' {
+                    foreach ($b in @($u.Bindings)) {
+                        $flt = Get-CimInstance -Namespace 'root\subscription' -ClassName __EventFilter -Filter ("Name='{0}'" -f (([string]$b.Filter) -replace "'", "''")) -ErrorAction Stop
+                        $con = Get-CimInstance -Namespace 'root\subscription' -ClassName ([string]$b.ConsumerClass) -Filter ("Name='{0}'" -f (([string]$b.Consumer) -replace "'", "''")) -ErrorAction Stop
+                        if (-not $flt -or -not $con) { throw "The filter or consumer of binding $($b.Filter) -> $($b.Consumer) no longer exists." }
+                        New-CimInstance -Namespace 'root\subscription' -ClassName __FilterToConsumerBinding -Property @{ Filter = [ref]$flt; Consumer = [ref]$con } -ErrorAction Stop | Out-Null
+                    }
+                }
+                { $_ -in 'BlockAddress', 'BlockProgram' } { foreach ($n in @($u.Rules)) { Remove-NetFirewallRule -Name ([string]$n) -Confirm:$false -ErrorAction SilentlyContinue } }
+                'DisableAccount' { Enable-LocalUser -SID ([string]$u.Sid) -Confirm:$false -ErrorAction Stop }
+                'Isolate' { Stop-WfxIsolationCore -Undo $u }
+                default { throw "Unknown action type $($rec.Type)." }
+            }
+            $rec.Undone = Get-WfxUtcNow
+            Save-WfxJson -InputObject $rec -Path $f -Depth 8
+            try { Add-Content -LiteralPath (Join-Path $root 'actions.log') -Value (@{ time = $rec.Undone; undo = $one } | ConvertTo-Json -Compress) -Encoding UTF8 } catch {}
+            [pscustomobject]@{ Id = $one; Type = $rec.Type; Target = $rec.Target; Undone = $rec.Undone }
+        } catch { Write-Error "Undo of $one failed: $($_.Exception.Message)" }
+    }
+}
+
+
 # ===== Public/Invoke-WfxTriage.ps1 =====
 function Get-WfxPortableSource {
     <# Returns ONLY the collection code (Private + Collectors layers) as one string, so it can be sent to a
@@ -14208,6 +15089,8 @@ function Invoke-WfxTriage {
     .PARAMETER Hours         Event look-back window in hours (default 72, max 8760).
     .PARAMETER FileScan      Also scan web roots / user drop folders for web shells, droppers, ransom notes.
     .PARAMETER ExposureScan  Also scan common config files (and the domain SYSVOL) for clear-text secrets (redacted).
+    .PARAMETER DeepScan      Also look for injected code: executable memory no file on disk accounts for (reads only
+                             region headers; never LSASS or security products). Slower; some EDRs report it.
     .PARAMETER ComputerName  One or more remote hosts to triage over WinRM.
     .PARAMETER Credential    Credential for the remote session.
     .PARAMETER EvtxPath      Folder or .evtx file to analyze offline.
@@ -14246,6 +15129,7 @@ function Invoke-WfxTriage {
         [ValidateRange(1, 8760)][int]$Hours = 72,
         [Parameter(ParameterSetName = 'Local')][Parameter(ParameterSetName = 'Remote')][switch]$FileScan,
         [Parameter(ParameterSetName = 'Local')][Parameter(ParameterSetName = 'Remote')][switch]$ExposureScan,
+        [Parameter(ParameterSetName = 'Local')][Parameter(ParameterSetName = 'Remote')][switch]$DeepScan,
         [Parameter(ParameterSetName = 'Remote', Mandatory)][ValidateNotNullOrEmpty()][string[]]$ComputerName,
         [Parameter(ParameterSetName = 'Remote')][System.Management.Automation.PSCredential]$Credential,
         [Parameter(ParameterSetName = 'Offline', Mandatory)][ValidateNotNullOrEmpty()][string]$EvtxPath,
@@ -14266,7 +15150,7 @@ function Invoke-WfxTriage {
     if ($Plan) {
         $src = switch ($PSCmdlet.ParameterSetName) { 'Offline' { $EvtxPath } 'Reanalyze' { $InputPath } 'Artifacts' { $ArtifactPath } default { '' } }
         $isAdmin = if ($PSCmdlet.ParameterSetName -eq 'Remote') { $true } else { Test-WfxAdmin }
-        $rows = Get-WfxTriagePlan -Mode $PSCmdlet.ParameterSetName -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan -Admin $isAdmin -YaraRules $YaraRules -SigmaPath $SigmaPath -Source $src
+        $rows = Get-WfxTriagePlan -Mode $PSCmdlet.ParameterSetName -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan -DeepScan:$DeepScan -Admin $isAdmin -YaraRules $YaraRules -SigmaPath $SigmaPath -Source $src
         Write-WfxTriagePlan -Plan $rows -Mode $PSCmdlet.ParameterSetName -Admin $isAdmin
         if ($PassThru) { return $rows }
         return
@@ -14277,7 +15161,7 @@ function Invoke-WfxTriage {
         $extra = Set-WfxSigmaEventQuery -Rule $sr
         Write-WfxConsole ("Sigma: {0} rule(s) loaded{1}" -f @($sr).Count, $(if ($extra) { "; collecting $extra extra event query(ies) they need" })) -Kind Dim
     }
-    $params = @{ Hours = $Hours; FileScan = [bool]$FileScan; ExposureScan = [bool]$ExposureScan; Mode = $PSCmdlet.ParameterSetName; Allowlist = [string]$AllowlistPath; Sigma = (@($SigmaPath) -join '; '); Yara = (@($YaraRules) -join '; ') }
+    $params = @{ Hours = $Hours; FileScan = [bool]$FileScan; ExposureScan = [bool]$ExposureScan; DeepScan = [bool]$DeepScan; Mode = $PSCmdlet.ParameterSetName; Allowlist = [string]$AllowlistPath; Sigma = (@($SigmaPath) -join '; '); Yara = (@($YaraRules) -join '; ') }
 
     # ── Re-analyze: no collection, just re-run analyzers over saved evidence ──
     if ($PSCmdlet.ParameterSetName -eq 'Reanalyze') {
@@ -14306,10 +15190,10 @@ function Invoke-WfxTriage {
         $src = Get-WfxPortableSource
         $srcHash = -join ([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($src)) | ForEach-Object { $_.ToString('x2') })
         $sb = {
-            param($Source, $Hours, $FileScan, $ExposureScan)
+            param($Source, $Hours, $FileScan, $ExposureScan, $DeepScan)
             $ErrorActionPreference = 'Stop'
             . ([scriptblock]::Create($Source))
-            $b = Get-WfxCollectionBundle -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan
+            $b = Get-WfxCollectionBundle -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan -DeepScan:$DeepScan
             # Return JSON (not live objects) so deep nesting survives remoting serialization intact.
             $b | ConvertTo-Json -Depth 12 -Compress
         }
@@ -14319,7 +15203,7 @@ function Invoke-WfxTriage {
             $case = New-WfxCase -OutputPath $OutputPath -Name $rname -HostName $cn -Mode 'remote' -Parameters ($params + @{ ComputerName = $cn; CollectorSha256 = $srcHash })
             Write-WfxLog -Event 'remote-collector' -Data @{ sha256 = $srcHash; bytes = $src.Length }
             try {
-                $icmArgs = @{ ComputerName = $cn; ScriptBlock = $sb; ArgumentList = @($src, $Hours, [bool]$FileScan, [bool]$ExposureScan); ErrorAction = 'Stop' }
+                $icmArgs = @{ ComputerName = $cn; ScriptBlock = $sb; ArgumentList = @($src, $Hours, [bool]$FileScan, [bool]$ExposureScan, [bool]$DeepScan); ErrorAction = 'Stop' }
                 if ($Credential) { $icmArgs.Credential = $Credential }
                 $json = Invoke-Command @icmArgs
                 $rawPath = Join-Path (Join-Path $case.Path 'raw') 'bundle.json'
@@ -14327,6 +15211,7 @@ function Invoke-WfxTriage {
                 $bundle = [string]$json | ConvertFrom-Json
                 $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $cn -AllowlistPath $AllowlistPath -SigmaPath $SigmaPath
                 Save-WfxResult -Result $result -Case $case -NoReport:$NoReport
+                Save-WfxResponsePlan -Result $result -Bundle $bundle -Case $case
                 $null = Complete-WfxCase
                 Write-WfxResultSummary -Result $result -Case $case
                 $results.Add($result)
@@ -14395,7 +15280,7 @@ function Invoke-WfxTriage {
     if ($missing.Count) { Write-WfxConsole ("Rule pack(s) missing or invalid: {0} — dependent detections will be skipped and recorded as gaps." -f ($missing -join ', ')) -Kind Bad }
 
     Write-WfxSection 'Collecting'
-    $bundle = Get-WfxCollectionBundle -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan
+    $bundle = Get-WfxCollectionBundle -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan -DeepScan:$DeepScan
     if (@($YaraRules).Count) {
         $targets = @(@($bundle.Process | ForEach-Object { $_.Path }) + @($bundle.Persistence | ForEach-Object { $_.Path }) + @($bundle.Files | ForEach-Object { $_.Path }) +
             @($bundle.Artifacts | Where-Object { $_.Evidence -in 'Execution', 'Download' -and $_.Path -match '^[A-Za-z]:\\' } | ForEach-Object { $_.Path }) | Where-Object { $_ } | Sort-Object -Unique)
@@ -14409,9 +15294,22 @@ function Invoke-WfxTriage {
     $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $hn -AllowlistPath $AllowlistPath -SigmaPath $SigmaPath
 
     Save-WfxResult -Result $result -Case $case -NoReport:$NoReport
+    Save-WfxResponsePlan -Result $result -Bundle $bundle -Case $case
     $null = Complete-WfxCase
     Write-WfxResultSummary -Result $result -Case $case
     if ($PassThru) { return $result }
+}
+
+function Save-WfxResponsePlan {
+    <# Writes respond-plan.json (suggested containment; nothing is done) into a live or remote case, before the
+       manifest, so Invoke-WfxRespond can tell if it is edited later. #>
+    param($Result, $Bundle, $Case)
+    try {
+        $plan = ConvertTo-WfxResponsePlan -Result $Result -Bundle $Bundle
+        Save-WfxJson -InputObject $plan -Path (Join-Path $Case.Path 'respond-plan.json') -Depth 8
+        $sel = @($plan.Actions | Where-Object Selected).Count
+        if (@($plan.Actions).Count) { $Result | Add-Member -NotePropertyName ResponsePlan -NotePropertyValue ([pscustomobject]@{ Actions = @($plan.Actions).Count; Selected = $sel }) -Force }
+    } catch { Add-WfxGap -Source 'respond-plan' -Reason $_.Exception.Message }
 }
 
 function Write-WfxBanner {
@@ -14467,6 +15365,12 @@ function Write-WfxResultSummary {
             Write-WfxConsole ("  [{0,-8}] {1}" -f $f.Severity, $f.Title) -Kind $fk
         }
     }
+    $rp = Get-WfxValue $Result 'ResponsePlan' $null
+    if ($rp) {
+        Write-WfxConsole ''
+        Write-WfxConsole ("{0} containment action(s) suggested ({1} selected). Nothing was done. Review and run them, as administrator, with:" -f $rp.Actions, $rp.Selected) -Kind Info
+        Write-WfxConsole ("  Invoke-WfxRespond -PlanPath '{0}' -WhatIf" -f $Case.Path) -Kind Plain
+    }
     $gaps = @($Result.Gaps)
     if ($gaps.Count) { Write-WfxConsole ''; Write-WfxConsole ("{0} collection/analysis gap(s) recorded — see the report so 'nothing found' is read correctly." -f $gaps.Count) -Kind Warn }
     Write-WfxConsole ''
@@ -14479,6 +15383,198 @@ function Write-WfxResultSummary {
     if (Test-Path -LiteralPath $mp) { Write-WfxConsole ("Manifest SHA-256 (record this out-of-band): {0}" -f (Get-FileHash -LiteralPath $mp -Algorithm SHA256).Hash.ToLowerInvariant()) -Kind Dim }
     Write-WfxConsole ''
     Write-WfxConsole 'Reminder: findings are leads, not verdicts — read them next to the collection gaps.' -Kind Dim
+}
+
+
+# ===== Public/Isolation.ps1 =====
+# Network isolation with an automatic way back, and a Microsoft Defender second opinion.
+#
+# Isolation adds two Windows Firewall rules that block every address except the ones you allow. Block rules
+# win over allow rules in Windows Firewall, so other software's allow rules cannot punch through. Allowed
+# automatically: the address of the session you are connected from (RDP, WinRM, SSH), so you are not cut
+# off, and the DHCP server, so the computer keeps its address. Loopback is never blocked.
+# By default the isolation ends by itself after 30 minutes: a one-time scheduled task (running as SYSTEM)
+# removes the two rules. That is the safety net if the block cuts off more than intended. End it earlier with
+# Stop-WfxIsolation; make it last with -Minutes 0 (asks twice).
+
+$script:WfxIsolationRules = @('WFX-Isolation-In', 'WFX-Isolation-Out')
+$script:WfxIsolationTask = @{ Path = '\WinForensicX\'; Name = 'Isolation revert' }
+
+function Initialize-WfxNumerics { if (-not ('System.Numerics.BigInteger' -as [type])) { Add-Type -AssemblyName System.Numerics } }
+
+function ConvertTo-WfxIpNumber {
+    <# An IP address as an unsigned number (BigInteger). Pure. #>
+    param([Parameter(Mandatory)][System.Net.IPAddress]$Ip)
+    Initialize-WfxNumerics
+    $b = $Ip.GetAddressBytes(); [array]::Reverse($b)
+    New-Object System.Numerics.BigInteger (, [byte[]]($b + [byte]0))
+}
+
+function ConvertFrom-WfxIpNumber {
+    param([Parameter(Mandatory)]$Number, [ValidateSet(4, 6)][int]$Family)
+    $len = if ($Family -eq 4) { 4 } else { 16 }
+    $raw = $Number.ToByteArray()
+    $b = New-Object byte[] $len
+    [Array]::Copy($raw, $b, [Math]::Min($len, $raw.Length))
+    [array]::Reverse($b)
+    ([System.Net.IPAddress]::new($b)).ToString()
+}
+
+function Get-WfxComplementRange {
+    <#
+    .SYNOPSIS Address ranges covering everything EXCEPT the given addresses, for one address family, in the
+    "a-b" form firewall rules accept. Loopback is always left out. Pure.
+    #>
+    param([string[]]$Allow = @(), [ValidateSet(4, 6)][int]$Family = 4)
+    Initialize-WfxNumerics
+    $af = if ($Family -eq 4) { 'InterNetwork' } else { 'InterNetworkV6' }
+    $iv = [System.Collections.Generic.List[object]]::new()
+    foreach ($a in @($Allow | Where-Object { $_ })) {
+        $ip = $null
+        if ([System.Net.IPAddress]::TryParse(([string]$a -replace '%\d+$', ''), [ref]$ip) -and [string]$ip.AddressFamily -eq $af) { $n = ConvertTo-WfxIpNumber $ip; $iv.Add(@($n, $n)) }
+    }
+    if ($Family -eq 4) { $iv.Add(@((ConvertTo-WfxIpNumber ([System.Net.IPAddress]::Parse('127.0.0.0'))), (ConvertTo-WfxIpNumber ([System.Net.IPAddress]::Parse('127.255.255.255'))))) }
+    else { $one = ConvertTo-WfxIpNumber ([System.Net.IPAddress]::IPv6Loopback); $iv.Add(@($one, $one)) }
+    $max = [System.Numerics.BigInteger]::Pow(2, $(if ($Family -eq 4) { 32 } else { 128 })) - 1
+    $sorted = @($iv | Sort-Object { $_[0] })
+    $out = [System.Collections.Generic.List[string]]::new()
+    $start = [System.Numerics.BigInteger]::Zero
+    foreach ($r in $sorted) {
+        if ($r[0] -gt $start) {
+            $end = $r[0] - 1
+            $s = ConvertFrom-WfxIpNumber $start $Family; $e = ConvertFrom-WfxIpNumber $end $Family
+            $out.Add($(if ($s -eq $e) { $s } else { "$s-$e" }))
+        }
+        if ($r[1] + 1 -gt $start) { $start = $r[1] + 1 }
+    }
+    if ($start -le $max) { $out.Add(("{0}-{1}" -f (ConvertFrom-WfxIpNumber $start $Family), (ConvertFrom-WfxIpNumber $max $Family))) }
+    , $out.ToArray()
+}
+
+function Get-WfxSessionAddress {
+    <# Remote addresses of the sessions this computer is being managed through right now (RDP, WinRM, SSH). #>
+    @(try {
+            Get-NetTCPConnection -State Established -ErrorAction Stop | Where-Object { $_.LocalPort -in 3389, 5985, 5986, 22 -and $_.RemoteAddress -notmatch '^(?:127\.|::1$|0\.0\.0\.0)' } | ForEach-Object { [string]$_.RemoteAddress }
+        } catch { }) | Sort-Object -Unique
+}
+
+function Stop-WfxIsolationCore {
+    <# Removes the isolation rules and the revert task, and turns back off any firewall profile isolation turned on. #>
+    param($Undo = $null)
+    Remove-NetFirewallRule -Name $script:WfxIsolationRules -Confirm:$false -ErrorAction SilentlyContinue
+    $on = @(Get-WfxValue $Undo 'ProfilesEnabled' @() | Where-Object { $_ })
+    if ($on.Count) { Set-NetFirewallProfile -Profile $on -Enabled False -Confirm:$false -ErrorAction SilentlyContinue }
+    Unregister-ScheduledTask -TaskPath $script:WfxIsolationTask.Path -TaskName $script:WfxIsolationTask.Name -Confirm:$false -ErrorAction SilentlyContinue
+}
+
+function Start-WfxIsolation {
+    <#
+    .SYNOPSIS
+        Cuts this computer off the network except for the addresses you allow, and puts it back by itself after
+        -Minutes (default 30). Needs administrator rights.
+    .DESCRIPTION
+        Allowed automatically: the session you are connected from (RDP / WinRM / SSH) and the DHCP server(s).
+        -AllowDns also allows the configured DNS servers. Add a management server, EDR console or file server
+        with -Allow. Stop-WfxIsolation (or Undo-WfxAction) ends it early; -Minutes 0 keeps it until you do.
+    .EXAMPLE
+        Start-WfxIsolation -Minutes 30 -Allow 10.0.0.15
+    #>
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
+    param([ValidateRange(0, 10080)][int]$Minutes = 30, [string[]]$Allow = @(), [switch]$AllowDns, [string]$QuarantinePath = '', [switch]$Force)
+    if (-not (Test-WfxWindows)) { throw 'Isolation needs Windows.' }
+    if (-not (Test-WfxAdmin) -and -not $WhatIfPreference) { throw 'Isolation needs administrator rights.' }
+    if (Get-NetFirewallRule -Name $script:WfxIsolationRules[0] -ErrorAction SilentlyContinue) { throw 'This computer is already isolated by WinForensicX. Stop-WfxIsolation ends it.' }
+    foreach ($a in $Allow) { $ip = $null; if (-not [System.Net.IPAddress]::TryParse($a, [ref]$ip)) { throw "-Allow takes IP addresses; '$a' is not one." } }
+    $sessions = @(Get-WfxSessionAddress)
+    $cfg = @(try { Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' -ErrorAction Stop } catch { })
+    $dhcp = @($cfg | ForEach-Object { [string]$_.DHCPServer } | Where-Object { $_ -and $_ -ne '255.255.255.255' } | Sort-Object -Unique)
+    $dns = if ($AllowDns) { @($cfg | ForEach-Object { $_.DNSServerSearchOrder } | Where-Object { $_ } | Sort-Object -Unique) } else { @() }
+    $allowed = @(@($Allow) + $sessions + $dhcp + $dns | Where-Object { $_ } | Sort-Object -Unique)
+    $ranges = @(Get-WfxComplementRange -Allow $allowed -Family 4) + @(Get-WfxComplementRange -Allow $allowed -Family 6)
+    $profilesOff = @(try { Get-NetFirewallProfile -ErrorAction Stop | Where-Object { -not $_.Enabled } | ForEach-Object { [string]$_.Name } } catch { })
+
+    Write-WfxConsole ''
+    Write-WfxConsole ('  Allowed through: {0}' -f $(if ($allowed.Count) { $allowed -join ', ' } else { 'nothing (no remote session, no DHCP server found)' })) -Kind Info
+    if ($sessions.Count) { Write-WfxConsole ('  (your session from {0} stays connected)' -f ($sessions -join ', ')) -Kind Dim }
+    if ($profilesOff.Count) { Write-WfxConsole ("  The firewall is off for: {0}. It will be turned on for the isolation and off again after." -f ($profilesOff -join ', ')) -Kind Warn }
+    Write-WfxConsole $(if ($Minutes) { "  The isolation ends by itself in $Minutes minute(s)." } else { '  No automatic end: it lasts until Stop-WfxIsolation.' }) -Kind $(if ($Minutes) { 'Dim' } else { 'Warn' })
+    if (-not $Minutes -and -not $Force -and -not $WhatIfPreference) {
+        if (-not $PSCmdlet.ShouldContinue('Isolation with no automatic end: if it also blocks your way in, only someone at the console can end it. Continue?', 'WinForensicX: are you sure?')) { return }
+    }
+    if (-not $PSCmdlet.ShouldProcess([Environment]::MachineName, "Block all network traffic except $($allowed.Count) allowed address(es)")) { return }
+
+    $root = Initialize-WfxQuarantineRoot -Path $QuarantinePath
+    $rec = [ordered]@{
+        Id = ('{0}-{1}' -f (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'), [guid]::NewGuid().ToString('N').Substring(0, 6))
+        Type = 'Isolate'; Target = [Environment]::MachineName; Reason = 'Network isolation'; Findings = @(); Status = ''; Message = ''; Time = (Get-WfxUtcNow)
+        Operator = [Environment]::UserName; Host = [Environment]::MachineName; Reversible = $true
+        Evidence = [ordered]@{ Allowed = $allowed; Sessions = $sessions; Dhcp = $dhcp; Dns = $dns; Minutes = $Minutes; Until = $(if ($Minutes) { ConvertTo-WfxUtcString (Get-Date).AddMinutes($Minutes) } else { '' }) }
+        Undo = [ordered]@{ Rules = $script:WfxIsolationRules; ProfilesEnabled = $profilesOff; Task = ($script:WfxIsolationTask.Path + $script:WfxIsolationTask.Name) }; Undone = ''
+    }
+    try {
+        if ($profilesOff.Count) { Set-NetFirewallProfile -Profile $profilesOff -Enabled True -Confirm:$false -ErrorAction Stop }
+        foreach ($d in 'Inbound', 'Outbound') {
+            $n = if ($d -eq 'Inbound') { $script:WfxIsolationRules[0] } else { $script:WfxIsolationRules[1] }
+            New-NetFirewallRule -Name $n -DisplayName "WinForensicX isolation ($d)" -Group 'WinForensicX isolation' -Direction $d -RemoteAddress $ranges -Action Block -Profile Any -ErrorAction Stop | Out-Null
+        }
+        if ($Minutes) {
+            # Plain, readable command (no encoding); it only removes the two rules, restores profiles and deletes itself.
+            $cmd = "Remove-NetFirewallRule -Name '$($script:WfxIsolationRules[0])','$($script:WfxIsolationRules[1])' -ErrorAction SilentlyContinue"
+            if ($profilesOff.Count) { $cmd += "; Set-NetFirewallProfile -Profile $($profilesOff -join ',') -Enabled False" }
+            $cmd += "; Unregister-ScheduledTask -TaskPath '$($script:WfxIsolationTask.Path)' -TaskName '$($script:WfxIsolationTask.Name)' -Confirm:`$false"
+            $act = New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') -Argument "-NoProfile -NonInteractive -Command `"$cmd`""
+            $trg = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes($Minutes)
+            $pri = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
+            $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+            Register-ScheduledTask -TaskPath $script:WfxIsolationTask.Path -TaskName $script:WfxIsolationTask.Name -Action $act -Trigger $trg -Principal $pri -Settings $set -Description 'Ends the network isolation started by WinForensicX.' -ErrorAction Stop | Out-Null
+        }
+        $rec.Status = 'Done'; $rec.Message = $(if ($Minutes) { "Isolated until $($rec.Evidence.Until) UTC." } else { 'Isolated until Stop-WfxIsolation.' })
+    } catch {
+        # Never leave the computer isolated without the way back that was asked for.
+        Stop-WfxIsolationCore -Undo $rec.Undo
+        $rec.Status = 'Failed'; $rec.Message = "Not isolated: $($_.Exception.Message) (everything was put back)."
+    }
+    Save-WfxActionRecord -Record $rec -Root $root
+    [pscustomobject]$rec
+}
+
+function Stop-WfxIsolation {
+    <# Ends a WinForensicX network isolation now: removes its firewall rules and its revert task. #>
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
+    param([string]$QuarantinePath = '')
+    if (-not (Test-WfxAdmin) -and -not $WhatIfPreference) { throw 'Needs administrator rights.' }
+    $open = @(Get-WfxActionRecord -Root (Get-WfxQuarantineRoot -Path $QuarantinePath) | Where-Object { $_.Type -eq 'Isolate' -and $_.Status -eq 'Done' -and -not $_.Undone }) | Select-Object -First 1
+    if ($open) { Undo-WfxAction -Id $open.Id -QuarantinePath $QuarantinePath -Confirm:$false -WhatIf:$WhatIfPreference; return }
+    if (Get-NetFirewallRule -Name $script:WfxIsolationRules[0] -ErrorAction SilentlyContinue) {
+        if ($PSCmdlet.ShouldProcess([Environment]::MachineName, 'Remove the WinForensicX isolation rules')) { Stop-WfxIsolationCore }
+    } else { Write-WfxConsole '  This computer is not isolated by WinForensicX.' -Kind Dim }
+}
+
+function Invoke-WfxDefenderScan {
+    <#
+    .SYNOPSIS A second opinion from Microsoft Defender: scans the given files or folders (or a quick scan) and
+    returns what it detected during this scan.
+    .DESCRIPTION Defender acts on what it finds according to its own settings (it may quarantine or remove
+    files), so this asks for confirmation. Quarantine suspects with Invoke-WfxRespond first if you want to keep
+    them as evidence.
+    .EXAMPLE
+        Invoke-WfxDefenderScan -Path C:\Users\ana\AppData\Roaming\upd
+    #>
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
+    param([string[]]$Path = @(), [switch]$Quick)
+    if (-not (Get-Command Start-MpScan -ErrorAction SilentlyContinue)) { throw 'Microsoft Defender is not available on this computer.' }
+    if (-not $Path.Count -and -not $Quick) { throw 'Give -Path, or -Quick for a quick scan.' }
+    $what = if ($Quick) { 'a Defender quick scan' } else { "a Defender scan of $($Path -join ', ')" }
+    if (-not $PSCmdlet.ShouldProcess([Environment]::MachineName, "Run $what (Defender may quarantine or remove what it finds)")) { return }
+    $start = (Get-Date).AddSeconds(-5)
+    if ($Quick) { Start-MpScan -ScanType QuickScan -ErrorAction Stop }
+    foreach ($p in $Path) { Start-MpScan -ScanType CustomScan -ScanPath $p -ErrorAction Stop }
+    $names = @{}; foreach ($t in @(Get-MpThreat -ErrorAction SilentlyContinue)) { $names[[string]$t.ThreatID] = [string]$t.ThreatName }
+    $hits = @(Get-MpThreatDetection -ErrorAction SilentlyContinue | Where-Object { $_.InitialDetectionTime -ge $start })
+    if (-not $hits.Count) { Write-WfxConsole "  Defender found nothing in $what. (Absence of a detection is not proof that a file is safe.)" -Kind Dim; return }
+    foreach ($h in $hits) {
+        [pscustomobject]@{ Threat = $names[[string]$h.ThreatID]; ThreatId = $h.ThreatID; Detected = (ConvertTo-WfxUtcString $h.InitialDetectionTime); Resources = @($h.Resources); ActionSuccess = $h.ActionSuccess; Process = [string]$h.ProcessName }
+    }
 }
 
 
@@ -14917,7 +16013,8 @@ function Show-WfxHelp {
 # ===== Public/Show-WfxMenu.ps1 =====
 # Interactive menu: the main way to use WinForensicX without memorising parameters.
 # Structure: main menu → section submenus → actions. Every screen says what each option does, inputs are
-# validated, B goes back, Q quits from anywhere. Everything it runs is read-only.
+# validated, B goes back, Q quits from anywhere. Everything is read-only except the Respond section, where
+# every change is shown, confirmed, recorded and (except stopping a process) undoable.
 
 $script:WfxMenu = @{ OutputPath = ''; Hours = 72; Days = 0; Allowlist = ''; RulesPath = ''; LastCase = ''; Sigma = ''; Yara = '' }
 
@@ -14972,7 +16069,7 @@ function Write-WfxMenuHeader {
     $admin = Test-WfxAdmin
     Write-WfxConsole ''
     Write-WfxConsole '  WinForensicX' -Kind Head -NoNewline
-    Write-WfxConsole "  v$script:WfxVersion, read-only DFIR toolkit" -Kind Dim
+    Write-WfxConsole "  v$script:WfxVersion, DFIR toolkit (read-only unless you choose Respond)" -Kind Dim
     Write-WfxConsole ("  Host {0}, {1}, output {2}" -f [Environment]::MachineName, $(if ($admin) { 'elevated' } else { 'NOT elevated (some views limited)' }), (Get-WfxCaseRoot)) -Kind $(if ($admin) { 'Dim' } else { 'Warn' })
     if ($script:WfxMenu.LastCase) { Write-WfxConsole "  Last case: $($script:WfxMenu.LastCase)" -Kind Dim }
     Write-WfxConsole ''
@@ -15016,6 +16113,7 @@ function Show-WfxMenuTriage {
         Write-WfxMenuHeader 'Investigate this computer'
         Write-WfxMenuItem '1' 'Quick triage' 'processes, network, autostarts, events, posture (~1-5 min)'
         Write-WfxMenuItem '2' 'Full triage' '+ web shells, dropped files, ransomware, config secrets (slower)'
+        Write-WfxMenuItem '8' 'Full triage + injected-code scan' 'adds a memory scan for injected code (slower; some EDRs report it)'
         Write-WfxMenuItem '3' 'Collect evidence only' 'hashed snapshot to analyze later or elsewhere'
         Write-WfxConsole ''
         Write-WfxMenuItem '4' 'Remote computer(s) over WinRM' 'collect from other machines, analyze here'
@@ -15025,13 +16123,14 @@ function Show-WfxMenuTriage {
         Write-WfxConsole ''
         Write-WfxMenuItem 'P' 'What will a triage read?' 'the plan for quick and full triage; reads nothing'
         Write-WfxMenuFooter
-        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', 'P', 'B', 'Q'
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', '8', 'P', 'B', 'Q'
         switch ($c) {
             'B' { return }
             'Q' { return 'Q' }
             'P' { $a = Get-WfxTriageArgs; Invoke-WfxMenuAction { Invoke-WfxTriage @a -FileScan -ExposureScan -Plan; Write-WfxConsole '  Quick triage (1) skips the File scan stage and the config-file / SYSVOL part of the exposure audit.' -Kind Dim } }
             '1' { $a = Get-WfxTriageArgs; Invoke-WfxMenuAction { Invoke-WfxTriage @a | Out-Null; Write-WfxMenuOpenReport } }
             '2' { $a = Get-WfxTriageArgs; Invoke-WfxMenuAction { Invoke-WfxTriage @a -FileScan -ExposureScan | Out-Null; Write-WfxMenuOpenReport } }
+            '8' { $a = Get-WfxTriageArgs; Invoke-WfxMenuAction { Invoke-WfxTriage @a -FileScan -ExposureScan -DeepScan | Out-Null; Write-WfxMenuOpenReport } }
             '3' { Invoke-WfxMenuAction { Save-WfxEvidence -OutputPath $script:WfxMenu.OutputPath -Hours $script:WfxMenu.Hours -FileScan -ExposureScan | Out-Null } }
             '4' {
                 $cn = Read-WfxMenuText 'Computer name(s), comma-separated (Enter = cancel)'
@@ -15443,12 +16542,94 @@ function Show-WfxMenuSettings {
     }
 }
 
+function Show-WfxMenuRespond {
+    while ($true) {
+        Write-WfxMenuHeader 'Respond (changes this computer)'
+        Write-WfxConsole '  Every action shows what it will do and asks first. Everything except stopping a process can be undone (U).' -Kind Dim
+        Write-WfxConsole '  What is changed is recorded first in Downloads\WinForensicX-Quarantine (administrators only).' -Kind Dim
+        if (-not (Test-WfxAdmin)) { Write-WfxConsole '  Needs administrator rights: restart WinForensicX as administrator to use this section.' -Kind Warn }
+        Write-WfxConsole ''
+        Write-WfxMenuItem '1' 'Act on a triage case' 'the stops, quarantines and blocks the triage suggested'
+        Write-WfxMenuItem '2' 'Stop a process' 'by PID; capture memory first if you need it'
+        Write-WfxMenuItem '3' 'Quarantine a file' 'moved and encrypted into the quarantine'
+        Write-WfxMenuItem '4' 'Disable an autostart' 'Run-key value, scheduled task, service or WMI subscription'
+        Write-WfxMenuItem '5' 'Block an address or a program' 'Windows Firewall rules (group WinForensicX)'
+        Write-WfxMenuItem '6' 'Disable a local account'
+        Write-WfxConsole ''
+        Write-WfxMenuItem '7' 'Isolate this computer' 'everything blocked except your session; ends by itself'
+        Write-WfxMenuItem '8' 'End the isolation'
+        Write-WfxMenuItem '9' 'Defender scan of a file or folder' 'a second opinion'
+        Write-WfxConsole ''
+        Write-WfxMenuItem 'L' 'Actions taken here'
+        Write-WfxMenuItem 'U' 'Undo an action'
+        Write-WfxMenuFooter
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', '8', '9', 'L', 'U', 'B', 'Q'
+        switch ($c) {
+            'B' { return }
+            'Q' { return 'Q' }
+            '1' {
+                $p = Select-WfxMenuCase
+                if (-not $p) { break }
+                $pf = Join-Path $(if (Test-Path -LiteralPath $p -PathType Leaf) { Split-Path -Parent $p } else { $p }) 'respond-plan.json'
+                if (-not (Test-Path -LiteralPath $pf)) { Write-WfxConsole '  This case has no response plan (only live and remote triage write one).' -Kind Warn; Wait-WfxMenu; break }
+                $plan = Get-Content -LiteralPath $pf -Raw -Encoding UTF8 | ConvertFrom-Json
+                if (-not @($plan.Actions).Count) { Write-WfxConsole '  The triage suggested no action.' -Kind Dim; Wait-WfxMenu; break }
+                Write-WfxConsole ''
+                foreach ($a in @($plan.Actions)) { Write-WfxConsole ("   {0}  {1} {2,-14} {3}   ({4}: {5})" -f $a.Id, $(if ($a.Selected) { '[x]' } else { '[ ]' }), $a.Type, $a.Target, $a.Severity, (Get-WfxShortText ([string]$a.Reason) 70)) -Kind $(if ($a.Selected) { 'Plain' } else { 'Dim' }) }
+                Write-WfxConsole ''
+                $ids = Read-WfxMenuText 'Action ids to run, comma-separated (Enter = the ticked ones, A = all, N = none)'
+                if ($ids -match '^(?i)n$') { break }
+                $ra = @{ PlanPath = $pf }
+                if ($ids -match '^(?i)a$') { $ra.All = $true } elseif ($ids) { $ra.ActionId = @($ids -split '\s*,\s*' | Where-Object { $_ }) }
+                Invoke-WfxMenuAction { Invoke-WfxRespond @ra | Format-Table Type, Target, Status, Message -AutoSize -Wrap | Out-String -Width 200 | Write-Host }
+            }
+            '2' { $v = 0; if ([int]::TryParse((Read-WfxMenuText 'PID (Enter = cancel)'), [ref]$v) -and $v -gt 4) { Invoke-WfxMenuAction { Invoke-WfxRespond -KillProcess $v | Format-List Type, Target, Status, Message, Id | Out-String | Write-Host } } }
+            '3' { $p = Read-WfxMenuPath 'File to quarantine' -Kind File; if ($p) { Invoke-WfxMenuAction { Invoke-WfxRespond -QuarantineFile $p | Format-List Type, Target, Status, Message, Id | Out-String | Write-Host } } }
+            '4' {
+                Write-WfxConsole '   R  Run-key value, as <key>\<value name>   T  Scheduled task (\Folder\Name)   S  Service name   W  WMI consumer name' -Kind Dim
+                $k = Read-WfxMenuChoice -Valid 'R', 'T', 'S', 'W', 'B' -Prompt 'R, T, S, W or B'
+                if ($k -eq 'B') { break }
+                $v = Read-WfxMenuText 'Which one (Enter = cancel)'
+                if (-not $v) { break }
+                $ra = switch ($k) { 'R' { @{ DisableRunKey = @($v) } } 'T' { @{ DisableTask = @($v) } } 'S' { @{ DisableService = @($v) } } 'W' { @{ DisableWmiConsumer = @($v) } } }
+                Invoke-WfxMenuAction { Invoke-WfxRespond @ra | Format-List Type, Target, Status, Message, Id | Out-String | Write-Host }
+            }
+            '5' {
+                $v = Read-WfxMenuText 'IP address, or the full path of a program (Enter = cancel)'
+                if (-not $v) { break }
+                $ip = $null
+                $ra = if ([System.Net.IPAddress]::TryParse(($v -split '/')[0], [ref]$ip)) { @{ BlockAddress = @($v) } } else { @{ BlockProgram = @($v.Trim('"')) } }
+                Invoke-WfxMenuAction { Invoke-WfxRespond @ra | Format-List Type, Target, Status, Message, Id | Out-String | Write-Host }
+            }
+            '6' { $v = Read-WfxMenuText 'Local account name (Enter = cancel)'; if ($v) { Invoke-WfxMenuAction { Invoke-WfxRespond -DisableAccount $v | Format-List Type, Target, Status, Message, Id | Out-String | Write-Host } } }
+            '7' {
+                $m = 30; $t = Read-WfxMenuText 'End by itself after how many minutes (0 = never)' '30'
+                if (-not [int]::TryParse($t, [ref]$m) -or $m -lt 0) { Write-WfxConsole '  Enter a number of minutes.' -Kind Warn; Wait-WfxMenu; break }
+                $al = Read-WfxMenuText 'Extra addresses to keep reachable, comma-separated (management server, EDR, file server)'
+                $ia = @{ Minutes = $m }; if ($al) { $ia.Allow = @($al -split '\s*,\s*' | Where-Object { $_ }) }
+                Invoke-WfxMenuAction { Start-WfxIsolation @ia | Format-List Type, Status, Message, Id | Out-String | Write-Host }
+            }
+            '8' { Invoke-WfxMenuAction { Stop-WfxIsolation } }
+            '9' { $p = Read-WfxMenuPath 'File or folder to scan'; if ($p) { Invoke-WfxMenuAction { $r = @(Invoke-WfxDefenderScan -Path $p); if ($r.Count) { $r | Format-List | Out-String | Write-Host } } } }
+            'L' { Invoke-WfxMenuAction -NoPause { $rows = @(Get-WfxAction | Select-Object Time, Type, Target, Status, Undone, Id, Message); $null = Show-WfxMenuInsightTable -Rows $rows -Title 'Actions taken' -Key 'actions' } }
+            'U' {
+                $recent = @(Get-WfxAction | Where-Object { $_.Status -eq 'Done' -and $_.Reversible -and -not $_.Undone } | Select-Object -First 15)
+                if (-not $recent.Count) { Write-WfxConsole '  Nothing that can be undone.' -Kind Dim; Wait-WfxMenu; break }
+                foreach ($r in $recent) { Write-WfxConsole ("   {0}  {1,-14} {2}" -f $r.Id, $r.Type, $r.Target) }
+                $v = Read-WfxMenuText 'Action id to undo (Enter = cancel)'
+                if ($v) { Invoke-WfxMenuAction { Undo-WfxAction -Id $v.Trim() | Format-List | Out-String | Write-Host } }
+            }
+        }
+    }
+}
+
 function Show-WfxMenu {
     <#
     .SYNOPSIS
         Interactive menu for WinForensicX — the easiest way to use the toolkit. Sections:
         Investigate (triage), Explore (live views of the system), Hunt & analyze, Cases & evidence,
-        Live monitor, Settings and Help. Everything it runs is read-only.
+        Live monitor, Settings, Respond and Help. Everything is read-only except Respond, which changes only
+        what you confirm.
     .EXAMPLE
         Show-WfxMenu
     .EXAMPLE
@@ -15463,14 +16644,15 @@ function Show-WfxMenu {
         Write-WfxMenuHeader 'Main menu'
         if ($missing.Count) { Write-WfxConsole "  ! Rule pack(s) missing: $($missing -join ', ') — restore them from the release (antivirus may have quarantined them)." -Kind Bad; Write-WfxConsole '' }
         Write-WfxMenuItem '1' 'Investigate this computer' 'triage: find signs of compromise and get a report'
-        Write-WfxMenuItem '2' 'Explore this computer' '60 live views: what ran, what changed, users, software, network, USB...'
+        Write-WfxMenuItem '2' 'Explore this computer' '61 live views: what ran, what changed, users, software, network, USB...'
         Write-WfxMenuItem '3' 'Hunt & analyze' 'IOC hunting, artifact parsing, file triage, decode payloads'
         Write-WfxMenuItem '4' 'Cases & evidence' 'reports, verify, timeline, compare, export, fleet report'
         Write-WfxMenuItem '5' 'Live monitor' 'watch new processes / connections as they happen'
         Write-WfxMenuItem '6' 'Settings' 'output folder, look-back, allowlist, custom / Sigma / YARA rules'
+        Write-WfxMenuItem '7' 'Respond (contain a threat)' 'stop, quarantine, disable, block, isolate; every step confirmed and undoable'
         Write-WfxMenuItem 'H' 'Help & guide' 'what everything does, in a browser page'
         Write-WfxMenuFooter -NoBack
-        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', 'H', 'Q'
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', 'H', 'Q'
         $r = switch ($c) {
             '1' { Show-WfxMenuTriage }
             '2' { Show-WfxMenuExplore }
@@ -15483,6 +16665,7 @@ function Show-WfxMenu {
                 Invoke-WfxMenuAction { Start-WfxMonitor -Duration $d -OutputPath $script:WfxMenu.OutputPath }
             }
             '6' { Show-WfxMenuSettings }
+            '7' { Show-WfxMenuRespond }
             'H' { Invoke-WfxMenuAction -NoPause { Show-WfxHelp -Html } }
             'Q' { 'Q' }
         }

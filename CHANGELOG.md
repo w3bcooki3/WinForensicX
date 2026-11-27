@@ -51,6 +51,27 @@
   own indicator CSV), a STIX 2.x bundle (indicator patterns and observables) or a MISP event (attributes and
   objects; the port of an `ip|port` attribute is dropped).
 
+- **Respond mode** (menu 7; needs administrator rights): `Invoke-WfxRespond` stops processes, quarantines
+  files, disables Run-key values, scheduled tasks, services and WMI bindings, blocks addresses and programs in
+  Windows Firewall and disables local accounts. Every action is confirmed (`-WhatIf` previews; riskier ones ask
+  twice), recorded before it happens in `Downloads\WinForensicX-Quarantine\actions` (locked to Administrators
+  and SYSTEM) and, except stopping a process, undone with `Undo-WfxAction`. A process is stopped only if it is
+  still the same program (name, path, start time, hash). Quarantined files are AES-encrypted in place so they
+  cannot run, verified before the original is removed, and restored with their times and download mark. Hard
+  refusals that no option overrides: critical Windows processes and services, `svchost.exe`, security products,
+  Microsoft-signed Windows files, registry values outside the Run keys, loopback / "everything" / own-address
+  blocks, the account in use and the last local administrator. The quarantine refuses OneDrive, Dropbox and
+  Google Drive folders. Each live or remote triage writes `respond-plan.json` (suggestions only; covered by the
+  manifest, so an edited plan is refused), and the report lists containment already done on the computer.
+- **`Start-WfxIsolation`**: blocks every address except the session you are connected from, the DHCP server and
+  addresses you allow, with firewall block rules (which win over other software's allow rules). It ends by
+  itself after 30 minutes (a one-time SYSTEM task with a plain command line) unless `-Minutes` says otherwise;
+  `Stop-WfxIsolation` ends it early. If anything fails, everything is put back.
+- **`Invoke-WfxDefenderScan`**: a Microsoft Defender second opinion on files or folders.
+- **`-DeepScan`** (opt-in): looks for injected code, executable memory no file on disk accounts for, and reports
+  program headers there (reflective loading, hollowing) and writable+executable regions, leniently for browsers,
+  .NET and Java. Reads at most 1 KB per region; never opens LSASS or security products. Also an Explore view.
+
 ### Fixed
 - Explore → *Logged-on sessions* listed the logon time of active sessions in the wrong column, and missed
   disconnected sessions' logon time.

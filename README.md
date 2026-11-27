@@ -1,10 +1,10 @@
 ﻿# WinForensicX
 
-**Read-only incident triage and investigation for Windows, in plain PowerShell.**
+**Incident triage, investigation and containment for Windows, in plain PowerShell. Read-only unless you choose to respond.**
 
 One command collects the state of a Windows host, checks it against detection rules mapped to MITRE ATT&CK,
 and writes a case report you can hand to a colleague. Around that core is a toolkit for the rest of the job:
-60 live views of the machine, execution artifacts (Amcache, ShimCache, Jump Lists, ShellBags, SRUM, `$MFT` …)
+61 live views of the machine, execution artifacts (Amcache, ShimCache, Jump Lists, ShellBags, SRUM, `$MFT` …)
 from the live host or a KAPE folder, process trees, event-log tampering checks, Sigma and YARA, incident grouping, IOC hunting, file triage, payload decoding,
 timelines, case diffing, and exports to Timesketch, Elastic (ECS) and STIX 2.1.
 
@@ -24,6 +24,7 @@ No install, no external modules, no network traffic of its own. Windows PowerShe
 - [Evidence of execution](#evidence-of-execution)
 - [Commands](#commands)
 - [What it detects](#what-it-detects)
+- [Respond: contain what you found](#respond-contain-what-you-found)
 - [Sigma, YARA and exports](#sigma-yara-and-exports)
 - [Case folder and chain of custody](#case-folder-and-chain-of-custody)
 - [Safety boundaries](#safety-boundaries)
@@ -62,11 +63,12 @@ No install, no external modules, no network traffic of its own. Windows PowerShe
 
    ```
      1  Investigate this computer    triage: find signs of compromise and get a report
-     2  Explore this computer        60 live views: what changed recently, users, software, network, USB...
+     2  Explore this computer        61 live views: what changed recently, users, software, network, USB...
      3  Hunt & analyze               IOC hunting, file triage, decode payloads
      4  Cases & evidence             open reports, verify, timeline, compare
      5  Live monitor                 watch new processes / connections as they happen
      6  Settings                     output folder, look-back, allowlist, custom rules
+     7  Respond                      stop, quarantine, disable, block, isolate: confirmed and undoable
      H  Help & guide                 the field guide, in your browser
    ```
 
@@ -187,7 +189,7 @@ removable-drive access, encoded or LOLBin arguments in shortcuts and Run history
 | `Save-WfxEvidence` | Collect a hashed evidence bundle now; analyze later, anywhere. |
 | `Invoke-WfxAnalyze` | Run every analyzer over a bundle. Runs on Windows, Linux and macOS. |
 | `Get-WfxArtifact` | Execution and user-activity artifacts from this computer or a folder of collected files. |
-| `Get-WfxInsight` / `Save-WfxInsight` | The 60 live views / export them all as a hashed inventory report. |
+| `Get-WfxInsight` / `Save-WfxInsight` | The 61 live views / export them all as a hashed inventory report. |
 | `Get-WfxActivity` | What changed recently; `-Journal` adds the NTFS change journal. |
 | `Invoke-WfxHunt` | Sweep a host or saved case for IOCs (hashes, IPs, domains and subdomains, strings), including event logs. Accepts defanged values and IOC files. |
 | `Find-WfxFile` | Fast search across all drives by name (wildcards or regex), extension or none, size, date, hidden; as administrator, NTFS drives are read from the master file table in seconds. Optional SHA-256, real type, signature. |
@@ -199,6 +201,10 @@ removable-drive access, encoded or LOLBin arguments in shortcuts and Run history
 | `Compare-WfxCase` | Diff two cases: new processes, autostarts, services, listeners, DNS names, findings. |
 | `New-WfxFileBaseline` / `Compare-WfxFileBaseline` | File-integrity baseline for chosen folders. |
 | `Test-WfxCase` | Re-hash a case against its manifest: changed, missing or added files. |
+| `Invoke-WfxRespond` | Containment, each action confirmed and recorded: stop a process, quarantine a file, disable an autostart, block an address or program, disable a local account. `-PlanPath` runs what a triage suggested. |
+| `Get-WfxAction` / `Undo-WfxAction` | What Respond did, and putting it back. |
+| `Start-WfxIsolation` / `Stop-WfxIsolation` | Network isolation except your session and allowed addresses; ends by itself after 30 minutes. |
+| `Invoke-WfxDefenderScan` | A Microsoft Defender second opinion on files or folders. |
 | `Test-WfxIntegrity` | Check this copy of WinForensicX against `SHA256SUMS.txt`: changed, missing, or extra code files the module would load. |
 | `Start-WfxMonitor` | Live baseline, then alerts on new suspicious processes, connections and beaconing. |
 | `Show-WfxMenu` / `Show-WfxHelp` | The menu; help in the terminal or (`-Html`) in the browser. |
@@ -207,6 +213,7 @@ removable-drive access, encoded or LOLBin arguments in shortcuts and Run history
 Invoke-WfxTriage -FileScan -Plan                                   # what it would read, with these options; reads nothing
 Invoke-WfxTriage -OutputPath E:\cases                              # triage this host to external media
 Invoke-WfxTriage -FileScan -ExposureScan -OutputPath E:\cases      # plus web roots, drop folders, exposed secrets
+Invoke-WfxTriage -DeepScan -OutputPath E:\cases                    # plus injected code in memory (opt-in, slower)
 Invoke-WfxTriage -ComputerName srv01,srv02 -Credential (Get-Credential)
 Invoke-WfxTriage -EvtxPath D:\evidence\logs                        # exported .evtx only
 Invoke-WfxTriage -ArtifactPath D:\kape\C                           # collected hives, Amcache, Jump Lists, browsers, .evtx
@@ -271,6 +278,42 @@ so five or more such files in one folder within the same minute are treated as a
 
 ---
 
+## Respond: contain what you found
+
+Triage and Explore never change anything. **Respond** (menu 7, or the commands below) is the one part that
+does, and only what you confirm, one action at a time. It needs administrator rights.
+
+| Action | What it does | Undo |
+|---|---|---|
+| Stop a process | Checks the PID is still the same program (name, path, start time, hash) so a reused number is never hit, records its command line, parent, owner, hash and connections, then stops it | No: capture memory first if you need it |
+| Quarantine a file | Encrypts it into `Downloads\WinForensicX-Quarantine` (it cannot run there and scanners do not re-detect it), checks the copy, then removes the original. Hash, times, signature and download mark are recorded | Restored byte for byte, with its times and download mark |
+| Disable an autostart | Removes a Run / RunOnce value, disables a scheduled task, sets a service to Disabled and stops it, or removes a WMI event binding. The value, task XML or start type is recorded first | Yes |
+| Block | Windows Firewall rules (group *WinForensicX*) for an address, in and out, or for a program, outbound | Yes |
+| Disable a local account | Never the account in use or the last enabled local administrator | Yes |
+| Isolate the computer | Blocks every address except your session (RDP / WinRM / SSH), the DHCP server and addresses you allow. **Ends by itself after 30 minutes** unless you say otherwise | Yes (`Stop-WfxIsolation`) |
+| Defender scan | A second opinion from Microsoft Defender on a file or folder | Defender's own |
+
+```powershell
+Invoke-WfxTriage -OutputPath E:\cases                         # the case gets respond-plan.json: suggestions only
+Invoke-WfxRespond -PlanPath E:\cases\WFX_PC01_... -WhatIf        # what would happen
+Invoke-WfxRespond -PlanPath E:\cases\WFX_PC01_...               # each action asks first
+Invoke-WfxRespond -KillProcess 4242 -QuarantineFile C:\Users\ana\AppData\Roaming\upd\upd.exe
+Start-WfxIsolation -Minutes 30 -Allow 10.0.0.15
+Get-WfxAction | Format-Table Time, Type, Target, Status, Undone
+Undo-WfxAction -Id 20261127101500-3fa2c1
+```
+
+**Never touched, whatever you type:** processes Windows cannot run without (`lsass`, `csrss`, `wininit`,
+`smss`, `services`, `winlogon` …), `svchost.exe` as a whole (disable the one service instead), security
+products, WinForensicX itself; Microsoft-signed files in the Windows folder; services Windows needs to start,
+log on, network or protect itself; registry values outside the Run keys; firewall blocks for loopback,
+"everything" or this computer's own addresses. Riskier actions (a Microsoft program, a task in the Microsoft
+folder, a private address) ask a second time. The suggested plan is checked against the case manifest, so a
+plan edited after the triage is refused. The quarantine refuses to sit in a OneDrive, Dropbox or Google Drive
+folder, because syncing would copy malware off the computer (`-QuarantinePath` for another local folder).
+
+---
+
 ## Sigma, YARA and exports
 
 - **Sigma.** Point `-SigmaPath` (or `WFX_SIGMA`, or Settings in the menu) at a folder of Sigma rules, for
@@ -318,7 +361,9 @@ evidence log.
 
 ## Safety boundaries
 
-- **Read-only.** It changes no settings and executes nothing it finds. Its only writes are its own case folder.
+- **Read-only unless you respond.** Triage, Explore, hunting and analysis change no settings and execute nothing
+  they find; their only writes are the case folder. Respond mode changes only what you confirm, records it
+  first and can undo it (see [Respond](#respond-contain-what-you-found)).
   `Invoke-WfxTriage -Plan` shows what a triage will read before it reads anything.
 - **Never elevates without asking.** The restart as administrator goes through the Windows prompt, runs without
   your PowerShell profile and with the execution policy you already have.

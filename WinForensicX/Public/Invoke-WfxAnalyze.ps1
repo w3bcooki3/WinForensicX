@@ -141,6 +141,7 @@
             Readiness      = @($readiness)
             ReadinessSummary = $readySummary
             IncidentCard   = @($card)
+            Responses      = @(Get-WfxValue $Bundle 'Responses' @())
             Gaps           = @($gaps.ToArray())
             Meta           = (Get-WfxValue $Bundle 'Meta' $null)
         }

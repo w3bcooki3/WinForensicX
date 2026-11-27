@@ -142,6 +142,10 @@ $script:WfxInsightTopics = [ordered]@{
             Get-WfxModuleData | Expand-WfxRecord | Select-Object Pid, Process, Module, Signature, ProcessPath
         }
     }
+    'injected'    = @{ Group = 'Processes'; Title = 'Injected code (memory scan, slow)'; Desc = 'Executable memory no file on disk accounts for: program headers there (reflective loading, hollowing) and writable+executable regions. Reads only region headers; never LSASS or security products. Some EDRs report this kind of scan.'; Admin = $true; Script = {
+            Get-WfxInjectedCode | Select-Object Pid, Process, Address, Size, Protect, Type, PeHeader, Jit, Path
+        }
+    }
     'pipes'       = @{ Group = 'Processes'; Title = 'Open named pipes'; Desc = 'Names of the named pipes open right now. Default names of C2 frameworks (Cobalt Strike, Meterpreter) and of potato / PsExec-style tools are flagged. Names only: no pipe is opened.'; Admin = $false; Script = {
             Get-WfxPipeName | ForEach-Object { [pscustomobject]@{ Pipe = $_; Path = "\\.\pipe\$_" } }
         }
@@ -441,7 +445,7 @@ $script:WfxFlagTopic = [ordered]@{
     software = 'first'; users = 'first'; shares = 'first'; hosts = 'first'; firewall = 'first'; prefetch = 'first'
     downloads = 'first'; recentexe = 'first'; failedlogons = 'first'
     pshistory = 'keep'; powershell = 'keep'; newservices = 'keep'; logclears = 'keep'; accounts = 'keep'; rdp = 'keep'; defender = 'keep'
-    execution = 'first'; useractivity = 'first'; browserdl = 'first'; defenderlog = 'first'; modules = 'first'; pipes = 'first'
+    execution = 'first'; useractivity = 'first'; browserdl = 'first'; defenderlog = 'first'; modules = 'first'; pipes = 'first'; injected = 'first'
     changes = 'keep'; regchanges = 'keep'; filechanges = 'keep'; deleted = 'keep'; installs = 'keep'; executions = 'keep'; connhistory = 'keep'; configchanges = 'keep'
 }
 $script:WfxRiskyExt = '(?i)\.(?:iso|img|vhdx?|lnk|hta|js|jse|vbs|vbe|wsf|wsh|one|xll|cpl|scr|pif|bat|cmd|ps1|msc|jar|appref-ms|library-ms|search-ms|url)$'
@@ -480,6 +484,10 @@ function Test-WfxProductName {
 }
 
 $script:WfxInsightChecks = @{
+    injected = { param($r)
+        if ($r.PeHeader) { Add-WfxVerdict $r $(if ($r.Jit) { 'Medium' } else { 'High' }) 'Program header in executable memory no file accounts for' @('T1055.001', 'T1620') 'MEM-PE-IN-PRIVATE' }
+        elseif ($r.Protect -eq 'RWX' -and -not $r.Jit -and [long]$r.Size -ge 4096) { Add-WfxVerdict $r 'Medium' 'Writable and executable private memory' @('T1055') 'MEM-RWX-PRIVATE' }
+    }
     pipes = { param($r) $v = Test-WfxSuspiciousPipe -Name ([string]$r.Pipe); if ($v) { Add-WfxVerdict $r $v.Severity $v.Why $v.Technique $v.Rule } }
     modules = { param($r) $v = Test-WfxModuleLoad -Module $r; if ($v) { Add-WfxVerdict $r $v.Severity $v.Why $v.Technique $v.Rule } }
     tasks = { param($r) Add-WfxCommandVerdict -InputObject $r -Text $r._Text -Context 'scheduled task' -CheckImagePath }

@@ -1,6 +1,6 @@
 # Security model & boundaries
 
-WinForensicX is a **defensive, read-only** triage toolkit. This document states exactly what it does and —
+WinForensicX is a **defensive** triage toolkit, **read-only except Respond mode**. This document states exactly what it does and —
 just as importantly — what it will never do, so that defenders, reviewers, and security teams can trust it
 inside an investigation and on sensitive hosts.
 
@@ -18,6 +18,24 @@ Side effects you should know about, as for any live-response tool:
   where that is enabled.
 - Running PowerShell itself creates artifacts: process creation, Prefetch, and, if script-block logging is
   on, 4104 events containing this tool's code.
+
+## Respond mode: the only part that changes anything
+
+`Invoke-WfxRespond`, `Start-WfxIsolation`, `Undo-WfxAction`, `Invoke-WfxDefenderScan` and menu 7 change the
+computer, and only when you confirm each action (`-WhatIf` previews). Before each change the tool records what
+it is about to change in `Downloads\WinForensicX-Quarantine\actions`, a folder locked to Administrators and
+SYSTEM. Everything except stopping a process can be undone. Hard refusals (critical Windows processes and
+services, security products, Microsoft-signed Windows files, registry values outside the Run keys, loopback or
+"everything" firewall blocks, the account in use, the last local administrator) cannot be overridden by any
+option. Quarantined files are AES-encrypted with a per-file key stored in the file header: the point is that
+they cannot run and are not re-detected, not secrecy. Isolation uses firewall block rules and, unless told
+otherwise, a one-time scheduled task (SYSTEM) that removes them after 30 minutes; its command line is plain,
+readable text.
+
+The opt-in injected-code scan (`-DeepScan`) opens other processes with query and read access, walks their
+memory map and reads at most the first 1 KB of executable regions that no file accounts for, only to detect a
+program header. It never opens LSASS, other critical processes or security products, keeps no memory contents,
+and some EDR products report this kind of scan.
 
 ## Artifacts, Sigma and YARA (3.0)
 

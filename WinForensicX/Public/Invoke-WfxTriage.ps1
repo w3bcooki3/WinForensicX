@@ -38,6 +38,8 @@ function Invoke-WfxTriage {
     .PARAMETER Hours         Event look-back window in hours (default 72, max 8760).
     .PARAMETER FileScan      Also scan web roots / user drop folders for web shells, droppers, ransom notes.
     .PARAMETER ExposureScan  Also scan common config files (and the domain SYSVOL) for clear-text secrets (redacted).
+    .PARAMETER DeepScan      Also look for injected code: executable memory no file on disk accounts for (reads only
+                             region headers; never LSASS or security products). Slower; some EDRs report it.
     .PARAMETER ComputerName  One or more remote hosts to triage over WinRM.
     .PARAMETER Credential    Credential for the remote session.
     .PARAMETER EvtxPath      Folder or .evtx file to analyze offline.
@@ -76,6 +78,7 @@ function Invoke-WfxTriage {
         [ValidateRange(1, 8760)][int]$Hours = 72,
         [Parameter(ParameterSetName = 'Local')][Parameter(ParameterSetName = 'Remote')][switch]$FileScan,
         [Parameter(ParameterSetName = 'Local')][Parameter(ParameterSetName = 'Remote')][switch]$ExposureScan,
+        [Parameter(ParameterSetName = 'Local')][Parameter(ParameterSetName = 'Remote')][switch]$DeepScan,
         [Parameter(ParameterSetName = 'Remote', Mandatory)][ValidateNotNullOrEmpty()][string[]]$ComputerName,
         [Parameter(ParameterSetName = 'Remote')][System.Management.Automation.PSCredential]$Credential,
         [Parameter(ParameterSetName = 'Offline', Mandatory)][ValidateNotNullOrEmpty()][string]$EvtxPath,
@@ -96,7 +99,7 @@ function Invoke-WfxTriage {
     if ($Plan) {
         $src = switch ($PSCmdlet.ParameterSetName) { 'Offline' { $EvtxPath } 'Reanalyze' { $InputPath } 'Artifacts' { $ArtifactPath } default { '' } }
         $isAdmin = if ($PSCmdlet.ParameterSetName -eq 'Remote') { $true } else { Test-WfxAdmin }
-        $rows = Get-WfxTriagePlan -Mode $PSCmdlet.ParameterSetName -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan -Admin $isAdmin -YaraRules $YaraRules -SigmaPath $SigmaPath -Source $src
+        $rows = Get-WfxTriagePlan -Mode $PSCmdlet.ParameterSetName -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan -DeepScan:$DeepScan -Admin $isAdmin -YaraRules $YaraRules -SigmaPath $SigmaPath -Source $src
         Write-WfxTriagePlan -Plan $rows -Mode $PSCmdlet.ParameterSetName -Admin $isAdmin
         if ($PassThru) { return $rows }
         return
@@ -107,7 +110,7 @@ function Invoke-WfxTriage {
         $extra = Set-WfxSigmaEventQuery -Rule $sr
         Write-WfxConsole ("Sigma: {0} rule(s) loaded{1}" -f @($sr).Count, $(if ($extra) { "; collecting $extra extra event query(ies) they need" })) -Kind Dim
     }
-    $params = @{ Hours = $Hours; FileScan = [bool]$FileScan; ExposureScan = [bool]$ExposureScan; Mode = $PSCmdlet.ParameterSetName; Allowlist = [string]$AllowlistPath; Sigma = (@($SigmaPath) -join '; '); Yara = (@($YaraRules) -join '; ') }
+    $params = @{ Hours = $Hours; FileScan = [bool]$FileScan; ExposureScan = [bool]$ExposureScan; DeepScan = [bool]$DeepScan; Mode = $PSCmdlet.ParameterSetName; Allowlist = [string]$AllowlistPath; Sigma = (@($SigmaPath) -join '; '); Yara = (@($YaraRules) -join '; ') }
 
     # ── Re-analyze: no collection, just re-run analyzers over saved evidence ──
     if ($PSCmdlet.ParameterSetName -eq 'Reanalyze') {
@@ -136,10 +139,10 @@ function Invoke-WfxTriage {
         $src = Get-WfxPortableSource
         $srcHash = -join ([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($src)) | ForEach-Object { $_.ToString('x2') })
         $sb = {
-            param($Source, $Hours, $FileScan, $ExposureScan)
+            param($Source, $Hours, $FileScan, $ExposureScan, $DeepScan)
             $ErrorActionPreference = 'Stop'
             . ([scriptblock]::Create($Source))
-            $b = Get-WfxCollectionBundle -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan
+            $b = Get-WfxCollectionBundle -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan -DeepScan:$DeepScan
             # Return JSON (not live objects) so deep nesting survives remoting serialization intact.
             $b | ConvertTo-Json -Depth 12 -Compress
         }
@@ -149,7 +152,7 @@ function Invoke-WfxTriage {
             $case = New-WfxCase -OutputPath $OutputPath -Name $rname -HostName $cn -Mode 'remote' -Parameters ($params + @{ ComputerName = $cn; CollectorSha256 = $srcHash })
             Write-WfxLog -Event 'remote-collector' -Data @{ sha256 = $srcHash; bytes = $src.Length }
             try {
-                $icmArgs = @{ ComputerName = $cn; ScriptBlock = $sb; ArgumentList = @($src, $Hours, [bool]$FileScan, [bool]$ExposureScan); ErrorAction = 'Stop' }
+                $icmArgs = @{ ComputerName = $cn; ScriptBlock = $sb; ArgumentList = @($src, $Hours, [bool]$FileScan, [bool]$ExposureScan, [bool]$DeepScan); ErrorAction = 'Stop' }
                 if ($Credential) { $icmArgs.Credential = $Credential }
                 $json = Invoke-Command @icmArgs
                 $rawPath = Join-Path (Join-Path $case.Path 'raw') 'bundle.json'
@@ -157,6 +160,7 @@ function Invoke-WfxTriage {
                 $bundle = [string]$json | ConvertFrom-Json
                 $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $cn -AllowlistPath $AllowlistPath -SigmaPath $SigmaPath
                 Save-WfxResult -Result $result -Case $case -NoReport:$NoReport
+                Save-WfxResponsePlan -Result $result -Bundle $bundle -Case $case
                 $null = Complete-WfxCase
                 Write-WfxResultSummary -Result $result -Case $case
                 $results.Add($result)
@@ -225,7 +229,7 @@ function Invoke-WfxTriage {
     if ($missing.Count) { Write-WfxConsole ("Rule pack(s) missing or invalid: {0} — dependent detections will be skipped and recorded as gaps." -f ($missing -join ', ')) -Kind Bad }
 
     Write-WfxSection 'Collecting'
-    $bundle = Get-WfxCollectionBundle -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan
+    $bundle = Get-WfxCollectionBundle -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan -DeepScan:$DeepScan
     if (@($YaraRules).Count) {
         $targets = @(@($bundle.Process | ForEach-Object { $_.Path }) + @($bundle.Persistence | ForEach-Object { $_.Path }) + @($bundle.Files | ForEach-Object { $_.Path }) +
             @($bundle.Artifacts | Where-Object { $_.Evidence -in 'Execution', 'Download' -and $_.Path -match '^[A-Za-z]:\\' } | ForEach-Object { $_.Path }) | Where-Object { $_ } | Sort-Object -Unique)
@@ -239,9 +243,22 @@ function Invoke-WfxTriage {
     $result = Invoke-WfxAnalyze -Bundle $bundle -HostName $hn -AllowlistPath $AllowlistPath -SigmaPath $SigmaPath
 
     Save-WfxResult -Result $result -Case $case -NoReport:$NoReport
+    Save-WfxResponsePlan -Result $result -Bundle $bundle -Case $case
     $null = Complete-WfxCase
     Write-WfxResultSummary -Result $result -Case $case
     if ($PassThru) { return $result }
+}
+
+function Save-WfxResponsePlan {
+    <# Writes respond-plan.json (suggested containment; nothing is done) into a live or remote case, before the
+       manifest, so Invoke-WfxRespond can tell if it is edited later. #>
+    param($Result, $Bundle, $Case)
+    try {
+        $plan = ConvertTo-WfxResponsePlan -Result $Result -Bundle $Bundle
+        Save-WfxJson -InputObject $plan -Path (Join-Path $Case.Path 'respond-plan.json') -Depth 8
+        $sel = @($plan.Actions | Where-Object Selected).Count
+        if (@($plan.Actions).Count) { $Result | Add-Member -NotePropertyName ResponsePlan -NotePropertyValue ([pscustomobject]@{ Actions = @($plan.Actions).Count; Selected = $sel }) -Force }
+    } catch { Add-WfxGap -Source 'respond-plan' -Reason $_.Exception.Message }
 }
 
 function Write-WfxBanner {
@@ -296,6 +313,12 @@ function Write-WfxResultSummary {
             $fk = switch ($f.Severity) { 'Critical' { 'Bad' } 'High' { 'Bad' } 'Medium' { 'Warn' } default { 'Dim' } }
             Write-WfxConsole ("  [{0,-8}] {1}" -f $f.Severity, $f.Title) -Kind $fk
         }
+    }
+    $rp = Get-WfxValue $Result 'ResponsePlan' $null
+    if ($rp) {
+        Write-WfxConsole ''
+        Write-WfxConsole ("{0} containment action(s) suggested ({1} selected). Nothing was done. Review and run them, as administrator, with:" -f $rp.Actions, $rp.Selected) -Kind Info
+        Write-WfxConsole ("  Invoke-WfxRespond -PlanPath '{0}' -WhatIf" -f $Case.Path) -Kind Plain
     }
     $gaps = @($Result.Gaps)
     if ($gaps.Count) { Write-WfxConsole ''; Write-WfxConsole ("{0} collection/analysis gap(s) recorded — see the report so 'nothing found' is read correctly." -f $gaps.Count) -Kind Warn }

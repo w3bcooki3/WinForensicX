@@ -1,6 +1,7 @@
 ﻿# Interactive menu: the main way to use WinForensicX without memorising parameters.
 # Structure: main menu → section submenus → actions. Every screen says what each option does, inputs are
-# validated, B goes back, Q quits from anywhere. Everything it runs is read-only.
+# validated, B goes back, Q quits from anywhere. Everything is read-only except the Respond section, where
+# every change is shown, confirmed, recorded and (except stopping a process) undoable.
 
 $script:WfxMenu = @{ OutputPath = ''; Hours = 72; Days = 0; Allowlist = ''; RulesPath = ''; LastCase = ''; Sigma = ''; Yara = '' }
 
@@ -55,7 +56,7 @@ function Write-WfxMenuHeader {
     $admin = Test-WfxAdmin
     Write-WfxConsole ''
     Write-WfxConsole '  WinForensicX' -Kind Head -NoNewline
-    Write-WfxConsole "  v$script:WfxVersion, read-only DFIR toolkit" -Kind Dim
+    Write-WfxConsole "  v$script:WfxVersion, DFIR toolkit (read-only unless you choose Respond)" -Kind Dim
     Write-WfxConsole ("  Host {0}, {1}, output {2}" -f [Environment]::MachineName, $(if ($admin) { 'elevated' } else { 'NOT elevated (some views limited)' }), (Get-WfxCaseRoot)) -Kind $(if ($admin) { 'Dim' } else { 'Warn' })
     if ($script:WfxMenu.LastCase) { Write-WfxConsole "  Last case: $($script:WfxMenu.LastCase)" -Kind Dim }
     Write-WfxConsole ''
@@ -99,6 +100,7 @@ function Show-WfxMenuTriage {
         Write-WfxMenuHeader 'Investigate this computer'
         Write-WfxMenuItem '1' 'Quick triage' 'processes, network, autostarts, events, posture (~1-5 min)'
         Write-WfxMenuItem '2' 'Full triage' '+ web shells, dropped files, ransomware, config secrets (slower)'
+        Write-WfxMenuItem '8' 'Full triage + injected-code scan' 'adds a memory scan for injected code (slower; some EDRs report it)'
         Write-WfxMenuItem '3' 'Collect evidence only' 'hashed snapshot to analyze later or elsewhere'
         Write-WfxConsole ''
         Write-WfxMenuItem '4' 'Remote computer(s) over WinRM' 'collect from other machines, analyze here'
@@ -108,13 +110,14 @@ function Show-WfxMenuTriage {
         Write-WfxConsole ''
         Write-WfxMenuItem 'P' 'What will a triage read?' 'the plan for quick and full triage; reads nothing'
         Write-WfxMenuFooter
-        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', 'P', 'B', 'Q'
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', '8', 'P', 'B', 'Q'
         switch ($c) {
             'B' { return }
             'Q' { return 'Q' }
             'P' { $a = Get-WfxTriageArgs; Invoke-WfxMenuAction { Invoke-WfxTriage @a -FileScan -ExposureScan -Plan; Write-WfxConsole '  Quick triage (1) skips the File scan stage and the config-file / SYSVOL part of the exposure audit.' -Kind Dim } }
             '1' { $a = Get-WfxTriageArgs; Invoke-WfxMenuAction { Invoke-WfxTriage @a | Out-Null; Write-WfxMenuOpenReport } }
             '2' { $a = Get-WfxTriageArgs; Invoke-WfxMenuAction { Invoke-WfxTriage @a -FileScan -ExposureScan | Out-Null; Write-WfxMenuOpenReport } }
+            '8' { $a = Get-WfxTriageArgs; Invoke-WfxMenuAction { Invoke-WfxTriage @a -FileScan -ExposureScan -DeepScan | Out-Null; Write-WfxMenuOpenReport } }
             '3' { Invoke-WfxMenuAction { Save-WfxEvidence -OutputPath $script:WfxMenu.OutputPath -Hours $script:WfxMenu.Hours -FileScan -ExposureScan | Out-Null } }
             '4' {
                 $cn = Read-WfxMenuText 'Computer name(s), comma-separated (Enter = cancel)'
@@ -526,12 +529,94 @@ function Show-WfxMenuSettings {
     }
 }
 
+function Show-WfxMenuRespond {
+    while ($true) {
+        Write-WfxMenuHeader 'Respond (changes this computer)'
+        Write-WfxConsole '  Every action shows what it will do and asks first. Everything except stopping a process can be undone (U).' -Kind Dim
+        Write-WfxConsole '  What is changed is recorded first in Downloads\WinForensicX-Quarantine (administrators only).' -Kind Dim
+        if (-not (Test-WfxAdmin)) { Write-WfxConsole '  Needs administrator rights: restart WinForensicX as administrator to use this section.' -Kind Warn }
+        Write-WfxConsole ''
+        Write-WfxMenuItem '1' 'Act on a triage case' 'the stops, quarantines and blocks the triage suggested'
+        Write-WfxMenuItem '2' 'Stop a process' 'by PID; capture memory first if you need it'
+        Write-WfxMenuItem '3' 'Quarantine a file' 'moved and encrypted into the quarantine'
+        Write-WfxMenuItem '4' 'Disable an autostart' 'Run-key value, scheduled task, service or WMI subscription'
+        Write-WfxMenuItem '5' 'Block an address or a program' 'Windows Firewall rules (group WinForensicX)'
+        Write-WfxMenuItem '6' 'Disable a local account'
+        Write-WfxConsole ''
+        Write-WfxMenuItem '7' 'Isolate this computer' 'everything blocked except your session; ends by itself'
+        Write-WfxMenuItem '8' 'End the isolation'
+        Write-WfxMenuItem '9' 'Defender scan of a file or folder' 'a second opinion'
+        Write-WfxConsole ''
+        Write-WfxMenuItem 'L' 'Actions taken here'
+        Write-WfxMenuItem 'U' 'Undo an action'
+        Write-WfxMenuFooter
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', '8', '9', 'L', 'U', 'B', 'Q'
+        switch ($c) {
+            'B' { return }
+            'Q' { return 'Q' }
+            '1' {
+                $p = Select-WfxMenuCase
+                if (-not $p) { break }
+                $pf = Join-Path $(if (Test-Path -LiteralPath $p -PathType Leaf) { Split-Path -Parent $p } else { $p }) 'respond-plan.json'
+                if (-not (Test-Path -LiteralPath $pf)) { Write-WfxConsole '  This case has no response plan (only live and remote triage write one).' -Kind Warn; Wait-WfxMenu; break }
+                $plan = Get-Content -LiteralPath $pf -Raw -Encoding UTF8 | ConvertFrom-Json
+                if (-not @($plan.Actions).Count) { Write-WfxConsole '  The triage suggested no action.' -Kind Dim; Wait-WfxMenu; break }
+                Write-WfxConsole ''
+                foreach ($a in @($plan.Actions)) { Write-WfxConsole ("   {0}  {1} {2,-14} {3}   ({4}: {5})" -f $a.Id, $(if ($a.Selected) { '[x]' } else { '[ ]' }), $a.Type, $a.Target, $a.Severity, (Get-WfxShortText ([string]$a.Reason) 70)) -Kind $(if ($a.Selected) { 'Plain' } else { 'Dim' }) }
+                Write-WfxConsole ''
+                $ids = Read-WfxMenuText 'Action ids to run, comma-separated (Enter = the ticked ones, A = all, N = none)'
+                if ($ids -match '^(?i)n$') { break }
+                $ra = @{ PlanPath = $pf }
+                if ($ids -match '^(?i)a$') { $ra.All = $true } elseif ($ids) { $ra.ActionId = @($ids -split '\s*,\s*' | Where-Object { $_ }) }
+                Invoke-WfxMenuAction { Invoke-WfxRespond @ra | Format-Table Type, Target, Status, Message -AutoSize -Wrap | Out-String -Width 200 | Write-Host }
+            }
+            '2' { $v = 0; if ([int]::TryParse((Read-WfxMenuText 'PID (Enter = cancel)'), [ref]$v) -and $v -gt 4) { Invoke-WfxMenuAction { Invoke-WfxRespond -KillProcess $v | Format-List Type, Target, Status, Message, Id | Out-String | Write-Host } } }
+            '3' { $p = Read-WfxMenuPath 'File to quarantine' -Kind File; if ($p) { Invoke-WfxMenuAction { Invoke-WfxRespond -QuarantineFile $p | Format-List Type, Target, Status, Message, Id | Out-String | Write-Host } } }
+            '4' {
+                Write-WfxConsole '   R  Run-key value, as <key>\<value name>   T  Scheduled task (\Folder\Name)   S  Service name   W  WMI consumer name' -Kind Dim
+                $k = Read-WfxMenuChoice -Valid 'R', 'T', 'S', 'W', 'B' -Prompt 'R, T, S, W or B'
+                if ($k -eq 'B') { break }
+                $v = Read-WfxMenuText 'Which one (Enter = cancel)'
+                if (-not $v) { break }
+                $ra = switch ($k) { 'R' { @{ DisableRunKey = @($v) } } 'T' { @{ DisableTask = @($v) } } 'S' { @{ DisableService = @($v) } } 'W' { @{ DisableWmiConsumer = @($v) } } }
+                Invoke-WfxMenuAction { Invoke-WfxRespond @ra | Format-List Type, Target, Status, Message, Id | Out-String | Write-Host }
+            }
+            '5' {
+                $v = Read-WfxMenuText 'IP address, or the full path of a program (Enter = cancel)'
+                if (-not $v) { break }
+                $ip = $null
+                $ra = if ([System.Net.IPAddress]::TryParse(($v -split '/')[0], [ref]$ip)) { @{ BlockAddress = @($v) } } else { @{ BlockProgram = @($v.Trim('"')) } }
+                Invoke-WfxMenuAction { Invoke-WfxRespond @ra | Format-List Type, Target, Status, Message, Id | Out-String | Write-Host }
+            }
+            '6' { $v = Read-WfxMenuText 'Local account name (Enter = cancel)'; if ($v) { Invoke-WfxMenuAction { Invoke-WfxRespond -DisableAccount $v | Format-List Type, Target, Status, Message, Id | Out-String | Write-Host } } }
+            '7' {
+                $m = 30; $t = Read-WfxMenuText 'End by itself after how many minutes (0 = never)' '30'
+                if (-not [int]::TryParse($t, [ref]$m) -or $m -lt 0) { Write-WfxConsole '  Enter a number of minutes.' -Kind Warn; Wait-WfxMenu; break }
+                $al = Read-WfxMenuText 'Extra addresses to keep reachable, comma-separated (management server, EDR, file server)'
+                $ia = @{ Minutes = $m }; if ($al) { $ia.Allow = @($al -split '\s*,\s*' | Where-Object { $_ }) }
+                Invoke-WfxMenuAction { Start-WfxIsolation @ia | Format-List Type, Status, Message, Id | Out-String | Write-Host }
+            }
+            '8' { Invoke-WfxMenuAction { Stop-WfxIsolation } }
+            '9' { $p = Read-WfxMenuPath 'File or folder to scan'; if ($p) { Invoke-WfxMenuAction { $r = @(Invoke-WfxDefenderScan -Path $p); if ($r.Count) { $r | Format-List | Out-String | Write-Host } } } }
+            'L' { Invoke-WfxMenuAction -NoPause { $rows = @(Get-WfxAction | Select-Object Time, Type, Target, Status, Undone, Id, Message); $null = Show-WfxMenuInsightTable -Rows $rows -Title 'Actions taken' -Key 'actions' } }
+            'U' {
+                $recent = @(Get-WfxAction | Where-Object { $_.Status -eq 'Done' -and $_.Reversible -and -not $_.Undone } | Select-Object -First 15)
+                if (-not $recent.Count) { Write-WfxConsole '  Nothing that can be undone.' -Kind Dim; Wait-WfxMenu; break }
+                foreach ($r in $recent) { Write-WfxConsole ("   {0}  {1,-14} {2}" -f $r.Id, $r.Type, $r.Target) }
+                $v = Read-WfxMenuText 'Action id to undo (Enter = cancel)'
+                if ($v) { Invoke-WfxMenuAction { Undo-WfxAction -Id $v.Trim() | Format-List | Out-String | Write-Host } }
+            }
+        }
+    }
+}
+
 function Show-WfxMenu {
     <#
     .SYNOPSIS
         Interactive menu for WinForensicX — the easiest way to use the toolkit. Sections:
         Investigate (triage), Explore (live views of the system), Hunt & analyze, Cases & evidence,
-        Live monitor, Settings and Help. Everything it runs is read-only.
+        Live monitor, Settings, Respond and Help. Everything is read-only except Respond, which changes only
+        what you confirm.
     .EXAMPLE
         Show-WfxMenu
     .EXAMPLE
@@ -546,14 +631,15 @@ function Show-WfxMenu {
         Write-WfxMenuHeader 'Main menu'
         if ($missing.Count) { Write-WfxConsole "  ! Rule pack(s) missing: $($missing -join ', ') — restore them from the release (antivirus may have quarantined them)." -Kind Bad; Write-WfxConsole '' }
         Write-WfxMenuItem '1' 'Investigate this computer' 'triage: find signs of compromise and get a report'
-        Write-WfxMenuItem '2' 'Explore this computer' '60 live views: what ran, what changed, users, software, network, USB...'
+        Write-WfxMenuItem '2' 'Explore this computer' '61 live views: what ran, what changed, users, software, network, USB...'
         Write-WfxMenuItem '3' 'Hunt & analyze' 'IOC hunting, artifact parsing, file triage, decode payloads'
         Write-WfxMenuItem '4' 'Cases & evidence' 'reports, verify, timeline, compare, export, fleet report'
         Write-WfxMenuItem '5' 'Live monitor' 'watch new processes / connections as they happen'
         Write-WfxMenuItem '6' 'Settings' 'output folder, look-back, allowlist, custom / Sigma / YARA rules'
+        Write-WfxMenuItem '7' 'Respond (contain a threat)' 'stop, quarantine, disable, block, isolate; every step confirmed and undoable'
         Write-WfxMenuItem 'H' 'Help & guide' 'what everything does, in a browser page'
         Write-WfxMenuFooter -NoBack
-        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', 'H', 'Q'
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', 'H', 'Q'
         $r = switch ($c) {
             '1' { Show-WfxMenuTriage }
             '2' { Show-WfxMenuExplore }
@@ -566,6 +652,7 @@ function Show-WfxMenu {
                 Invoke-WfxMenuAction { Start-WfxMonitor -Duration $d -OutputPath $script:WfxMenu.OutputPath }
             }
             '6' { Show-WfxMenuSettings }
+            '7' { Show-WfxMenuRespond }
             'H' { Invoke-WfxMenuAction -NoPause { Show-WfxHelp -Html } }
             'Q' { 'Q' }
         }

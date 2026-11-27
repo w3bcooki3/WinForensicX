@@ -68,6 +68,7 @@ function Get-WfxModuleData {
 }
 
 function Get-WfxVolatileData {
+    param([switch]$DeepScan)
     if (-not (Test-WfxWindows)) { return $null }
     $pipes = Invoke-WfxStep 'volatile:pipes' { Get-WfxPipeName } @()
     $sessions = Invoke-WfxStep 'volatile:sessions' {
@@ -80,10 +81,13 @@ function Get-WfxVolatileData {
             ForEach-Object { [pscustomobject]@{ IPAddress = [string]$_.IPAddress; LinkLayerAddress = [string]$_.LinkLayerAddress; State = [string]$_.State; Interface = [string]$_.InterfaceAlias } })
     } @()
     $modules = Invoke-WfxStep 'volatile:modules' { Get-WfxModuleData } @()
+    $injected = if ($DeepScan) { Invoke-WfxStep 'memory:scan' { @(Get-WfxInjectedCode) } @() } else { @() }
     [pscustomobject]@{
         Pipes    = @($pipes)
         Sessions = @($sessions)
         Arp      = @($arp)
         Modules  = @($modules)
+        Injected = @($injected)
+        DeepScan = [bool]$DeepScan
     }
 }

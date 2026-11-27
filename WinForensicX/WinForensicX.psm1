@@ -13,5 +13,5 @@ foreach ($layer in 'Private', 'Analyzers', 'Collectors', 'Report', 'Public') {
     }
 }
 
-$script:WfxPublic = @('Invoke-WfxTriage', 'Invoke-WfxAnalyze', 'Start-WfxMonitor', 'Invoke-WfxHunt', 'Save-WfxEvidence', 'Show-WfxMenu', 'Show-WfxHelp', 'Get-WfxFileTriage', 'ConvertFrom-WfxEncodedCommand', 'Get-WfxTimeline', 'Export-WfxTimeline', 'Compare-WfxCase', 'Get-WfxInsight', 'Save-WfxInsight', 'Test-WfxCase', 'Test-WfxIntegrity', 'Find-WfxFile', 'Get-WfxActivity', 'New-WfxFileBaseline', 'Compare-WfxFileBaseline', 'Get-WfxArtifact', 'Export-WfxCase', 'New-WfxFleetReport')
+$script:WfxPublic = @('Invoke-WfxTriage', 'Invoke-WfxAnalyze', 'Start-WfxMonitor', 'Invoke-WfxHunt', 'Save-WfxEvidence', 'Show-WfxMenu', 'Show-WfxHelp', 'Get-WfxFileTriage', 'ConvertFrom-WfxEncodedCommand', 'Get-WfxTimeline', 'Export-WfxTimeline', 'Compare-WfxCase', 'Get-WfxInsight', 'Save-WfxInsight', 'Test-WfxCase', 'Test-WfxIntegrity', 'Find-WfxFile', 'Invoke-WfxRespond', 'Get-WfxAction', 'Undo-WfxAction', 'Start-WfxIsolation', 'Stop-WfxIsolation', 'Invoke-WfxDefenderScan', 'Get-WfxActivity', 'New-WfxFileBaseline', 'Compare-WfxFileBaseline', 'Get-WfxArtifact', 'Export-WfxCase', 'New-WfxFleetReport')
 Export-ModuleMember -Function $script:WfxPublic

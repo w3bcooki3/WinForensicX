@@ -21,6 +21,9 @@ $script:WfxPlanStage = @(
     [ordered]@{ Stage = 'Pipes, sessions, neighbours, loaded DLLs'; Steps = @('volatile:*')
         Reads = 'Names of open named pipes (none is opened), signed-in and disconnected sessions, the ARP neighbour cache, and DLLs loaded from user-writable folders with their signatures. LSASS, other critical system processes and security products are never opened.'
         Runs = 'quser (list sessions)'; Admin = 'Better: modules of other users'' and system processes'; Option = '' }
+    [ordered]@{ Stage = 'Injected-code scan'; Steps = @('memory:*')
+        Reads = 'Which memory regions of each process are executable without coming from a file on disk, and the first 1 KB of those regions (to see a program header). No other memory is read or kept. LSASS, critical system processes and security products are never opened.'
+        Runs = ''; Admin = 'Yes for other users'' and system processes'; Option = 'DeepScan' }
     [ordered]@{ Stage = 'Autostarts, services, drivers'; Steps = @('persist:*')
         Reads = 'Run and RunOnce keys (machine and signed-in users), Startup folders, scheduled tasks, WMI subscriptions, Winlogon, AppInit, IFEO debuggers, LSA packages, BootExecute, Run-box history, services and drivers.'
         Runs = ''; Admin = 'Better: some task and service details'; Option = '' }
@@ -39,6 +42,9 @@ $script:WfxPlanStage = @(
     [ordered]@{ Stage = 'Credential exposure audit'; Steps = @('expo:*')
         Reads = 'Whether secrets are exposed, never their values: Group Policy passwords, unattend files, access to SAM/SYSTEM/NTDS (permissions only), auto-logon, unencrypted SSH keys, keys in environment variables and PowerShell history. With -ExposureScan, also common config files and the domain SYSVOL share (network).'
         Runs = ''; Admin = 'Better'; Option = '' }
+    [ordered]@{ Stage = 'Earlier containment'; Steps = @('respond:*')
+        Reads = 'The record of actions WinForensicX Respond mode took on this computer in the last 90 days (Downloads\WinForensicX-Quarantine\actions), to show them in the report.'
+        Runs = ''; Admin = 'Yes (the folder is locked to administrators)'; Option = '' }
     [ordered]@{ Stage = 'Security posture and memory-capture readiness'; Steps = @('posture:*', 'ready:*')
         Reads = 'Defender status and exclusions, registered antivirus, firewall profiles, audit and PowerShell logging policy, Sysmon, LSA protection and Credential Guard, RDP settings, BitLocker status (never the recovery key), installed AI tools; crash-dump, page-file, hibernation and Fast Startup settings, virtual machine, uptime.'
         Runs = 'auditpol /get (read the audit policy)'; Admin = 'Yes for exclusions, audit policy and BitLocker'; Option = '' }
@@ -56,6 +62,7 @@ function Get-WfxTriagePlan {
         [int]$Hours = 72,
         [switch]$FileScan,
         [switch]$ExposureScan,
+        [switch]$DeepScan,
         [bool]$Admin = $true,
         [string[]]$YaraRules = @(),
         [string[]]$SigmaPath = @(),
@@ -74,7 +81,7 @@ function Get-WfxTriagePlan {
         $logs = @($script:WfxEventQuery | ForEach-Object { $_.Log -replace '^Microsoft-Windows-', '' -replace '/Operational$', '' } | Select-Object -Unique)
         foreach ($s in $script:WfxPlanStage) {
             $opt = [string]$s.Option
-            $inc = if ($opt -eq 'FileScan' -and -not $FileScan) { 'No (add -FileScan)' } else { 'Yes' }
+            $inc = if ($opt -eq 'FileScan' -and -not $FileScan) { 'No (add -FileScan)' } elseif ($opt -eq 'DeepScan' -and -not $DeepScan) { 'No (add -DeepScan)' } else { 'Yes' }
             $reads = ([string]$s.Reads).Replace('__EVENTLOGS__', ("Last {0} hours of selected event IDs from: {1}." -f $Hours, ($logs -join ', ')))
             if (@($SigmaPath).Count -and $s.Stage -eq 'Event logs') { $reads += ' Your Sigma rules may add Security and System event IDs.' }
             if ($ExposureScan -and $s.Stage -eq 'Credential exposure audit') { $reads += ' (-ExposureScan is on.)' }

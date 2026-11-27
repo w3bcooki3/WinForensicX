@@ -15,6 +15,7 @@ function Get-WfxCollectionBundle {
         [int]$Hours = 72,
         [switch]$FileScan,
         [switch]$ExposureScan,
+        [switch]$DeepScan,
         [ValidateSet('Host', 'Process', 'Network', 'Dns', 'Volatile', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security')]
         [string[]]$Sections = @('Host', 'Process', 'Network', 'Dns', 'Volatile', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security')
     )
@@ -42,7 +43,7 @@ function Get-WfxCollectionBundle {
     $dns = if ($want.Dns) { @(& $stage 'DNS cache' { Get-WfxDnsData }) } else { @() }
     $net = if ($want.Network) { @(& $stage 'Network connections' { Get-WfxNetworkData }) } else { @() }
     $procs = if ($want.Process) { @(& $stage 'Processes (+ signatures, hashes)' { Get-WfxProcessData }) } else { @() }
-    $volatile = if ($want.Volatile) { & $stage 'Pipes, sessions, ARP, loaded DLLs' { Get-WfxVolatileData } } else { $null }
+    $volatile = if ($want.Volatile) { & $stage $(if ($DeepScan) { 'Pipes, sessions, ARP, DLLs, injected code' } else { 'Pipes, sessions, ARP, loaded DLLs' }) { Get-WfxVolatileData -DeepScan:$DeepScan } } else { $null }
 
     $persist = @()
     if ($want.Persistence) { $persist = @(& $stage 'Autostarts, services, drivers' { @(Get-WfxPersistenceData) + @(Get-WfxServiceAndDriver) }) }
@@ -67,6 +68,8 @@ function Get-WfxCollectionBundle {
     if ($want.Exposure) { $exposure = @(& $stage 'Credential exposure audit (redacted)' { Get-WfxExposureData -IncludeFileScan:$ExposureScan }) }
 
     $security = if ($want.Security) { & $stage 'Security posture' { Get-WfxSecurityData } } else { $null }
+    # Containment already done here by WinForensicX (Respond mode), so the report shows it next to the findings.
+    $responses = @(Invoke-WfxStep 'respond:history' { @(Get-WfxActionRecord -Days 90 | Select-Object Id, Time, Type, Target, Status, Message, Undone, Operator) } @())
     if (-not $script:WfxQuiet) { Write-Progress -Activity 'WinForensicX collection' -Completed }
 
     [pscustomobject]@{
@@ -88,8 +91,9 @@ function Get-WfxCollectionBundle {
         Ransom      = $ransom
         Exposure    = $exposure
         Security    = $security
+        Responses   = $responses
         Gaps        = @(Get-WfxGap | Expand-WfxRecord)
-        Meta        = [pscustomobject]@{ Mode = 'live'; Hours = $Hours; FileScan = [bool]$FileScan; ExposureScan = [bool]$ExposureScan; Sections = @($Sections) }
+        Meta        = [pscustomobject]@{ Mode = 'live'; Hours = $Hours; FileScan = [bool]$FileScan; ExposureScan = [bool]$ExposureScan; DeepScan = [bool]$DeepScan; Sections = @($Sections) }
     }
 }
 
