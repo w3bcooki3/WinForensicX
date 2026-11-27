@@ -63,3 +63,95 @@ function New-WfxUuidV5 {
     $hex = -join ($u | ForEach-Object { '{0:x2}' -f $_ })
     '{0}-{1}-{2}-{3}-{4}' -f $hex.Substring(0, 8), $hex.Substring(8, 4), $hex.Substring(12, 4), $hex.Substring(16, 4), $hex.Substring(20, 12)
 }
+
+function Read-WfxIocFile {
+    <#
+    .SYNOPSIS Reads indicators from a file: plain text (one per line), a CSV with a value column (OSINTrix,
+    MISP and WinForensicX indicator exports), a STIX 2.x bundle, or a MISP event (JSON).
+    In plain text '#' starts a comment only at the start of a line or after a space or tab, so a URL
+    fragment (page#section) is kept. Returns the values as found; the caller re-fangs and de-duplicates.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "IOC file not found: $Path" }
+    $text = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Path).ProviderPath)
+    $text = $text.TrimStart([char]0xFEFF)
+    $out = [System.Collections.Generic.List[string]]::new()
+    $t = $text.Trim()
+
+    # ── JSON: STIX 2.x bundle / objects, a MISP event, or an array of strings ──
+    if ($t.StartsWith('{') -or $t.StartsWith('[')) {
+        $json = $null
+        try { $json = ConvertFrom-Json -InputObject $t -ErrorAction Stop } catch { $json = $null }
+        if ($null -ne $json) {
+            $addMisp = {
+                param($a)
+                $v = [string](Get-WfxValue $a 'value' ''); $ty = [string](Get-WfxValue $a 'type' '')
+                if (-not $v) { return }
+                if ($ty -match '\|' -and $v -match '\|') {
+                    # composite attributes: ip-dst|port, domain|ip, filename|sha256 ... (ports are not indicators)
+                    $tp = $ty -split '\|'; $vp = $v -split '\|'
+                    for ($i = 0; $i -lt $vp.Count; $i++) { if ($i -lt $tp.Count -and $tp[$i] -eq 'port') { continue }; if ($vp[$i]) { $out.Add($vp[$i]) } }
+                } else { $out.Add($v) }
+            }
+            $objects = [System.Collections.Generic.List[object]]::new()
+            foreach ($j in @($json)) {
+                if ($null -eq $j) { continue }
+                if ($j -is [string]) { $out.Add($j); continue }
+                $ev = Get-WfxValue $j 'Event' $null
+                if ($ev) {
+                    foreach ($a in @(Get-WfxValue $ev 'Attribute' @())) { & $addMisp $a }
+                    foreach ($o in @(Get-WfxValue $ev 'Object' @())) { foreach ($a in @(Get-WfxValue $o 'Attribute' @())) { & $addMisp $a } }
+                    continue
+                }
+                $objs = Get-WfxValue $j 'objects' $null
+                if ($null -ne $objs) { foreach ($o in @($objs)) { $objects.Add($o) } } else { $objects.Add($j) }
+            }
+            foreach ($o in $objects) {
+                if ($null -eq $o) { continue }
+                if ($o -is [string]) { $out.Add($o); continue }
+                $type = [string](Get-WfxValue $o 'type' '')
+                if ($type -eq 'indicator') {
+                    # [ipv4-addr:value = '1.2.3.4'], [file:hashes.'SHA-256' = '...'] OR [...]; MATCHES (regex) is not a value
+                    foreach ($m in [regex]::Matches([string](Get-WfxValue $o 'pattern' ''), "(?<![!<>])=\s*'((?:[^'\\]|\\.)*)'")) {
+                        $out.Add(($m.Groups[1].Value -replace "\\(['\\])", '$1'))
+                    }
+                } elseif ($type -in @('ipv4-addr', 'ipv6-addr', 'domain-name', 'url', 'email-addr')) {
+                    $v = [string](Get-WfxValue $o 'value' ''); if ($v) { $out.Add($v) }
+                } elseif ($type -eq 'file') {
+                    $h = Get-WfxValue $o 'hashes' $null
+                    if ($h) { foreach ($p in $h.PSObject.Properties) { if ($p.Value) { $out.Add([string]$p.Value) } } }
+                }
+            }
+            return $out.ToArray()
+        }
+    }
+
+    $lines = @($text -split "`r?`n")
+    # ── CSV with a header that names the value column ──
+    $hi = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) { $l = $lines[$i].Trim(); if ($l -and -not $l.StartsWith('#')) { $hi = $i; break } }
+    if ($hi -ge 0 -and $lines[$hi].Contains(',')) {
+        $cols = @($lines[$hi].Split(',') | ForEach-Object { $_.Trim().Trim('"').Trim() })
+        $col = $null
+        foreach ($want in 'value', 'indicator', 'ioc', 'ioc_value', 'observable', 'observable_value') {
+            $col = $cols | Where-Object { $_ -ieq $want } | Select-Object -First 1
+            if ($col) { break }
+        }
+        if ($col) {
+            $body = @($lines[$hi..($lines.Count - 1)] | Where-Object { $_.Trim() -and -not $_.TrimStart().StartsWith('#') })
+            foreach ($row in @($body | ConvertFrom-Csv)) {
+                $v = [string]$row.$col
+                if ($v -match "^'[\s=+\-@|]") { $v = $v.Substring(1) }      # spreadsheet formula guard added on export
+                $v = $v.Trim(); if ($v) { $out.Add($v) }
+            }
+            return $out.ToArray()
+        }
+    }
+
+    # ── plain text: one indicator per line ──
+    foreach ($l in $lines) {
+        $v = ($l -replace '(?:^|\s)#.*$', '').Trim()
+        if ($v) { $out.Add($v) }
+    }
+    return $out.ToArray()
+}

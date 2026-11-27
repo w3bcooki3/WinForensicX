@@ -186,6 +186,8 @@ tr.day td { background: var(--alt); font-weight: 600; color: var(--ink2); }
 .tb input[type=search] { font: inherit; padding: 5px 9px; border: 1px solid var(--line); border-radius: 3px; background: var(--page); color: var(--ink); min-width: 240px; flex: 1; max-width: 420px; }
 .tb select { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 3px; background: var(--page); color: var(--ink); }
 .tb label { display: inline-flex; align-items: center; gap: 5px; color: var(--ink2); white-space: nowrap; }
+#itbl .ipick { width: 28px; padding-right: 0; } #itbl .ipick input { margin: 0; vertical-align: middle; cursor: pointer; }
+.btn:disabled { opacity: .5; cursor: default; }
 .count { color: var(--ink3); font-size: 12.5px; margin-top: 8px; }
 .empty { padding: 16px; border: 1px solid var(--line2); background: var(--alt); color: var(--ink2); }
 
@@ -274,7 +276,7 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
   .mast { background: #fff; color: #000; border-bottom: 2px solid #000; break-after: page; min-height: 55vh; }
   .mast .brandrow, .mast .brandrow b, .facts-line, .facts-line span b, .verdictbox .s { color: #000; }
   .brandrow svg { color: #000; }
-  .bar, .tb, .btn, .mbtn, .toast, .chart .ctl, .flist, #case, .head .tools { display: none !important; }
+  .bar, .tb, .btn, .mbtn, .toast, .chart .ctl, .flist, #case, .head .tools, #itbl .ipick { display: none !important; }
   #printall { display: block; }
   #printall .case { padding: 14px 0 18px; border-bottom: 1px solid #999; }
   #printall dl.cf > dt, #printall dl.cf > dd { padding: 8px 0; }
@@ -364,7 +366,7 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
 
 <section id="iocs">
   <div class="head"><div><h2>Indicators</h2><p class="desc">Addresses, domains, URLs, hashes, files, registry keys and accounts taken from the evidence of attacker-related findings. Extraction is automatic: check each value before blocking it.</p></div>
-    <div class="tools"><button class="btn" id="i-copy" type="button">Copy values</button><button class="btn" id="i-csv" type="button">Download CSV</button></div></div>
+    <div class="tools"><button class="btn" id="i-copy" type="button">Copy values</button><button class="btn" id="i-csv" type="button">Download CSV</button><button class="btn" id="i-pick" type="button" title="Tick every public address, domain, URL and hash">Tick external and hashes</button><button class="btn" id="i-osint" type="button" disabled title="Save the ticked indicators as a STIX 2.1 file for OSINTrix (Threat Intel, Indicators, Import)">Export for OSINT</button></div></div>
   <div class="tb">
     <input type="search" id="iq" placeholder="Search indicators" aria-label="Search indicators">
     <select id="itype" aria-label="Type"></select>
@@ -801,18 +803,50 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
   var itypes = ['IP address', 'Domain', 'URL', 'SHA-256', 'SHA-1', 'MD5', 'File', 'Registry key', 'Account'];
   var present = itypes.filter(function (t) { return IOC.some(function (x) { return x.type === t; }); });
   $('itype').innerHTML = '<option value="">All types</option>' + present.map(function (t) { return '<option>' + t + '</option>'; }).join('');
+  var OSINT_KIND = { 'IP address': 'ipv4-addr:value', 'Domain': 'domain-name:value', 'URL': 'url:value', 'SHA-256': "file:hashes.'SHA-256'", 'SHA-1': "file:hashes.'SHA-1'", 'MD5': 'file:hashes.MD5' };
+  var canPick = function (x) { return !!OSINT_KIND[x.type] && !(x.type === 'IP address' && isPriv(x.value)); };
   var isSysFile = function (x) { return x.type === 'File' && /^[a-z]:\\windows\\(?:system32|syswow64|winsxs)\\[^\\]+\.(?:exe|dll)$/i.test(x.value); };
   var iRows = function () { var q = $('iq').value.toLowerCase(), t = $('itype').value, pv = $('ipriv').checked, sy = $('isys').checked;
     return IOC.filter(function (x) { return (!t || x.type === t) && (pv || x.type !== 'IP address' || !isPriv(x.value)) && (sy || !isSysFile(x)) && (!q || x.value.toLowerCase().indexOf(q) >= 0); })
       .sort(function (a, b) { return itypes.indexOf(a.type) - itypes.indexOf(b.type) || RANK[a.sev] - RANK[b.sev] || a.value.localeCompare(b.value); }); };
   var renderI = function () {
     var rows = iRows(); $('n-i').textContent = IOC.filter(function (x) { return (x.type !== 'IP address' || !isPriv(x.value)) && !isSysFile(x); }).length;
-    $('ibox').innerHTML = rows.length ? '<div class="tbl"><table id="itbl"><thead><tr><th>Type</th><th>Value</th><th>Most severe</th><th>Found in</th></tr></thead><tbody>' + rows.map(function (x) {
-      return '<tr><td class="nw">' + esc(x.type) + (x.type === 'IP address' && isPriv(x.value) ? ' <span class="muted">(private)</span>' : '') + '</td><td class="m">' + esc(defang(x.type, x.value)) + '</td><td class="nw">' + sevHtml(x.sev) + '</td><td>' +
+    var pickable = rows.filter(canPick);
+    $('ibox').innerHTML = rows.length ? '<div class="tbl"><table id="itbl"><thead><tr><th class="ipick">' + (pickable.length ? '<input type="checkbox" id="i-all" aria-label="Tick every indicator shown"' + (pickable.every(function (x) { return x.pick; }) ? ' checked' : '') + '>' : '') + '</th><th>Type</th><th>Value</th><th>Most severe</th><th>Found in</th></tr></thead><tbody>' + rows.map(function (x) {
+      return '<tr><td class="ipick">' + (canPick(x) ? '<input type="checkbox" data-pick="' + IOC.indexOf(x) + '" aria-label="Tick for OSINT"' + (x.pick ? ' checked' : '') + '>' : '') + '</td><td class="nw">' + esc(x.type) + (x.type === 'IP address' && isPriv(x.value) ? ' <span class="muted">(private)</span>' : '') + '</td><td class="m">' + esc(defang(x.type, x.value)) + '</td><td class="nw">' + sevHtml(x.sev) + '</td><td>' +
         x.from.slice(0, 3).map(function (i) { return '<div><a href="#f' + i + '" data-open="' + i + '">' + esc(F[i].Title) + '</a></div>'; }).join('') + (x.from.length > 3 ? '<div class="small">and ' + (x.from.length - 3) + ' more</div>' : '') + '</td></tr>'; }).join('') + '</tbody></table></div><div class="count">' + rows.length + ' indicators shown.</div>'
       : '<div class="empty">' + (IOC.length ? 'No indicators match these filters.' : 'No indicators were found in the evidence of attacker-related findings.') + '</div>';
   };
   ['iq', 'itype', 'idef', 'ipriv', 'isys'].forEach(function (id) { $(id).addEventListener(id === 'iq' ? 'input' : 'change', renderI); });
+  // Ticked indicators go to OSINTrix as STIX 2.1. Only what it can research: public addresses, domains, URLs, hashes.
+  var updPick = function () { var n = IOC.filter(function (x) { return x.pick; }).length; $('i-osint').disabled = !n; $('i-osint').textContent = n ? 'Export for OSINT (' + n + ')' : 'Export for OSINT'; };
+  $('ibox').addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.id === 'i-all') { iRows().filter(canPick).forEach(function (x) { x.pick = t.checked; }); renderI(); updPick(); }
+    else if (t.hasAttribute && t.hasAttribute('data-pick')) { IOC[+t.getAttribute('data-pick')].pick = t.checked; var a = $('i-all'); if (a) a.checked = iRows().filter(canPick).every(function (x) { return x.pick; }); updPick(); }
+  });
+  $('i-pick').onclick = function () { var n = 0; IOC.forEach(function (x) { if (canPick(x)) { x.pick = true; n++; } }); renderI(); updPick(); toast(n ? n + ' ticked' : 'No external indicators or hashes in this case'); };
+  var rid = function () { var b = new Uint8Array(16); crypto.getRandomValues(b); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128; var h = Array.prototype.map.call(b, function (v) { return (v + 256).toString(16).slice(1); }).join(''); return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20); };
+  var stxq = function (v) { return String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+  $('i-osint').onclick = function () {
+    var pick = IOC.filter(function (x) { return x.pick && canPick(x); });
+    if (!pick.length) { toast('Tick the indicators to send first'); return; }
+    var now = new Date().toISOString(), hostN = String(D.hostName || 'host'), caseId = String(cs.Id || ''), AMBER = 'marking-definition--f88d31f6-486f-44da-b317-01333bde0b82';
+    var idn = { type: 'identity', spec_version: '2.1', id: 'identity--' + rid(), created: now, modified: now, name: 'WinForensicX', identity_class: 'system' };
+    var objs = [idn], refs = [];
+    pick.forEach(function (x) {
+      var v = x.type === 'URL' ? x.value.replace(/^hxxp/i, 'http') : x.value;
+      var titles = x.from.map(function (i) { return F[i].Title; });
+      var first = x.from.map(function (i) { return F[i]._d; }).filter(Boolean).sort(function (a, b) { return a - b; })[0];
+      var o = { type: 'indicator', spec_version: '2.1', id: 'indicator--' + rid(), created: now, modified: now, created_by_ref: idn.id,
+        name: hostN + ': ' + titles[0], description: 'Found on ' + hostN + (caseId ? ' (WinForensicX case ' + caseId + ')' : '') + ' in: ' + titles.join('; '),
+        pattern: '[' + OSINT_KIND[x.type] + " = '" + stxq(v) + "']", pattern_type: 'stix', valid_from: (first || new Date()).toISOString(),
+        indicator_types: ['anomalous-activity'], labels: ['winforensicx', 'host:' + hostN, 'severity:' + String(x.sev).toLowerCase()], object_marking_refs: [AMBER] };
+      objs.push(o); refs.push(o.id);
+    });
+    objs.push({ type: 'report', spec_version: '2.1', id: 'report--' + rid(), created: now, modified: now, created_by_ref: idn.id, name: 'WinForensicX: ' + hostN + (caseId ? ' (case ' + caseId.slice(0, 8) + ')' : ''), published: now, report_types: ['indicator'], object_refs: refs, object_marking_refs: [AMBER] });
+    download('osint_' + hostN.replace(/[^\w.-]+/g, '_') + '.stix.json', JSON.stringify({ type: 'bundle', id: 'bundle--' + rid(), objects: objs }, null, 2), 'application/json');
+  };
   $('i-copy').onclick = function () { var r = iRows(); if (!r.length) { toast('Nothing to copy'); return; } copy(r.map(function (x) { return defang(x.type, x.value); }).join('\n')); };
   $('i-csv').onclick = function () { download('indicators_' + (D.hostName || 'host') + '.csv', csv([['type', 'value', 'severity', 'private', 'findings']].concat(iRows().map(function (x) { return [x.type, defang(x.type, x.value), x.sev, x.type === 'IP address' ? isPriv(x.value) : '', x.from.map(function (i) { return F[i].Title; }).join(' | ')]; }))), 'text/csv'); };
   renderI();

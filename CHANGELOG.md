@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased — redaction fixes
+## Unreleased — redaction fixes, OSINTrix hand-off
+
+### Added
+- **Report → Indicators: tick and "Export for OSINT".** Tick the indicators worth researching outside
+  (or "Tick external and hashes": public addresses, domains, URLs and hashes) and save them as a STIX 2.1
+  bundle. Each indicator carries the host, the finding it came from, its severity and the case id, marked
+  TLP:AMBER. OSINTrix imports it as it is (Threat Intel → Indicators → Import). Private addresses, file
+  paths, registry keys and accounts stay in the report. Nothing leaves the page: the file is saved locally.
+- **`Invoke-WfxHunt -IocFile` reads CSV, STIX and MISP** as well as plain lists, so an export from OSINTrix,
+  MISP or a sharing partner works without editing: a CSV with a value column (OSINTrix, MISP and this tool's
+  own indicator CSV), a STIX 2.x bundle (indicator patterns and observables) or a MISP event (attributes and
+  objects; the port of an `ip|port` attribute is dropped).
 
 ### Fixed
 - **Command-line redaction no longer destroys evidence.** The rule for passwords glued to `-p`
@@ -14,6 +25,17 @@
   `net use \\host\share <password> /user:x` in either position (`*` and switches are kept).
 - Report summary: "Accounts involved" lists `CORP\analyst` once instead of also listing `analyst`, and
   counts case variants once.
+- A `#` inside a URL in an IOC file cut the URL short (`page#token` became `page`). A `#` now starts a
+  comment only at the start of a line or after a space.
+- The `key=value` secret rule re-scanned long text from every character, so text made of long identifiers
+  could hit the redaction time limit and be withheld. A match now starts only where a name starts, and
+  such text is redacted in time. JSON keys are covered too: `"apiKey": "k123"` is stored as `"apiKey":***`.
+- Windows event text was being redacted as if it held passwords: "Token Elevation Type: %%1936" became
+  "Token *** Type:", and "Password Last Set:" and "Elevated Token: Yes" lost their values. A value after a plain space
+  must now look like a secret (a digit or symbol, or 16+ characters), and Yes/No/true/-/%%1842 are never treated as one;
+  `password Hunter2` and `aws_secret_access_key wJalr…` are still hidden.
+- Defanged values in the OSINTrix form (`hxxps[://]evil[.]example`, `[:]`, `[@]`) are re-fanged, and
+  `ip:port` is hunted as the address.
 
 ## 3.3.0 — parser accuracy and event detections
 

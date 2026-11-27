@@ -209,6 +209,56 @@ Describe 'Hunt precision (E-11)' {
         @(Invoke-WfxHunt -Ioc '198.51.100[.]99' -InputPath $script:hb -NoCase -PassThru).Count | Should -Be 1
         @(Invoke-WfxHunt -Ioc '44d88612fea8a8f36de82e1278abb02f' -InputPath $script:hb -NoCase -PassThru).Count | Should -Be 1
     }
+    It 'reads OSINTrix exports as -IocFile: STIX, MISP and CSV, keeping a # inside a URL' {
+        # Exactly as OSINTrix 1.76 writes them (Threat Intel -> Indicators -> Export).
+        $stix = @'
+{"type":"bundle","id":"bundle--ab05c398-d391-491b-91c8-6fe4f2d12ed5","objects":[{"type":"identity","spec_version":"2.1","id":"identity--7ce92375-8e90-45aa-9ce1-7479b22b8a3f","created":"2026-11-24T18:28:59.079Z","modified":"2026-11-24T18:28:59.079Z","name":"OSINTrix analyst","identity_class":"individual"},{"type":"indicator","spec_version":"2.1","id":"indicator--6fd78228-098f-4d2a-8eeb-12d5cd8b830e","created":"2026-11-24T18:28:59.079Z","modified":"2026-11-24T18:28:59.079Z","created_by_ref":"identity--7ce92375-8e90-45aa-9ce1-7479b22b8a3f","name":"1.2.3.4","pattern":"[ipv4-addr:value = '1.2.3.4']","pattern_type":"stix","valid_from":"2026-11-24T18:28:59.079Z","indicator_types":["malicious-activity"],"object_marking_refs":["marking-definition--f88d31f6-486f-44da-b317-01333bde0b82"]},{"type":"indicator","spec_version":"2.1","id":"indicator--46ce5886-c4dc-40cf-9d24-737abb5da193","created":"2026-11-24T18:28:59.079Z","modified":"2026-11-24T18:28:59.079Z","created_by_ref":"identity--7ce92375-8e90-45aa-9ce1-7479b22b8a3f","name":"evil.example","pattern":"[domain-name:value = 'evil.example']","pattern_type":"stix","valid_from":"2026-11-24T18:28:59.079Z","indicator_types":["malicious-activity"],"object_marking_refs":["marking-definition--f88d31f6-486f-44da-b317-01333bde0b82"]},{"type":"indicator","spec_version":"2.1","id":"indicator--41c58ed1-e58c-42ef-a657-673089887c14","created":"2026-11-24T18:28:59.079Z","modified":"2026-11-24T18:28:59.079Z","created_by_ref":"identity--7ce92375-8e90-45aa-9ce1-7479b22b8a3f","name":"https://evil.example/dl/page#token=abc","pattern":"[url:value = 'https://evil.example/dl/page#token=abc']","pattern_type":"stix","valid_from":"2026-11-24T18:28:59.079Z","indicator_types":["malicious-activity"],"object_marking_refs":["marking-definition--f88d31f6-486f-44da-b317-01333bde0b82"]},{"type":"indicator","spec_version":"2.1","id":"indicator--b4f310a0-d772-4b83-b690-e8c787ad1e0b","created":"2026-11-24T18:28:59.079Z","modified":"2026-11-24T18:28:59.079Z","created_by_ref":"identity--7ce92375-8e90-45aa-9ce1-7479b22b8a3f","name":"44d88612fea8a8f36de82e1278abb02f","pattern":"[file:hashes.MD5 = '44d88612fea8a8f36de82e1278abb02f']","pattern_type":"stix","valid_from":"2026-11-24T18:28:59.079Z","indicator_types":["malicious-activity"],"object_marking_refs":["marking-definition--f88d31f6-486f-44da-b317-01333bde0b82"]},{"type":"indicator","spec_version":"2.1","id":"indicator--4971a678-9cca-4799-9cc2-8081cc8da97b","created":"2026-11-24T18:28:59.079Z","modified":"2026-11-24T18:28:59.079Z","created_by_ref":"identity--7ce92375-8e90-45aa-9ce1-7479b22b8a3f","name":"o'brien@evil.example","pattern":"[email-addr:value = 'o\\'brien@evil.example']","pattern_type":"stix","valid_from":"2026-11-24T18:28:59.079Z","indicator_types":["malicious-activity"],"object_marking_refs":["marking-definition--f88d31f6-486f-44da-b317-01333bde0b82"]},{"type":"report","spec_version":"2.1","id":"report--4ec1a9ba-0e8d-47a0-809f-d36f2fa4ec9c","created":"2026-11-24T18:28:59.079Z","modified":"2026-11-24T18:28:59.079Z","created_by_ref":"identity--7ce92375-8e90-45aa-9ce1-7479b22b8a3f","name":"Hunt","published":"2026-11-24T18:28:59.079Z","report_types":["threat-report"],"object_refs":["indicator--6fd78228-098f-4d2a-8eeb-12d5cd8b830e","indicator--46ce5886-c4dc-40cf-9d24-737abb5da193","indicator--41c58ed1-e58c-42ef-a657-673089887c14","indicator--b4f310a0-d772-4b83-b690-e8c787ad1e0b","indicator--4971a678-9cca-4799-9cc2-8081cc8da97b"],"object_marking_refs":["marking-definition--f88d31f6-486f-44da-b317-01333bde0b82"]}]}
+'@
+        $misp = @'
+{"Event":{"info":"Hunt","date":"2026-11-24","threat_level_id":"2","analysis":"1","distribution":"0","uuid":"f260cc14-9beb-40ca-a156-d35c96845478","timestamp":"1795544939","Tag":[{"name":"tlp:amber"}],"Attribute":[{"type":"ip-dst","category":"Network activity","value":"1.2.3.4","to_ids":true,"uuid":"e388138e-60e0-47a3-add9-0b3da085aa58","comment":"","timestamp":"1795544939","Tag":[]},{"type":"domain","category":"Network activity","value":"evil.example","to_ids":true,"uuid":"50bd64e3-215e-4e52-b59d-978843f6dcc1","comment":"","timestamp":"1795544939","Tag":[]},{"type":"url","category":"Network activity","value":"https://evil.example/dl/page#token=abc","to_ids":true,"uuid":"f1e3add2-2f11-4bbc-b79a-7215b250569f","comment":"","timestamp":"1795544939","Tag":[]},{"type":"md5","category":"Payload delivery","value":"44d88612fea8a8f36de82e1278abb02f","to_ids":true,"uuid":"3f5cb7e3-6711-4006-b20c-f364738c29e4","comment":"","timestamp":"1795544939","Tag":[]},{"type":"ip-dst|port","category":"Network activity","value":"198.51.100.99|8443","to_ids":true,"uuid":"7c92fe3b-35f0-475b-9490-12554f8c422a","comment":"","timestamp":"1795544939","Tag":[]},{"type":"email-src","category":"Network activity","value":"o'brien@evil.example","to_ids":true,"uuid":"e5e83d0c-c4cd-4a2a-b6ae-9c5dac72cd95","comment":"","timestamp":"1795544939","Tag":[]}]}}
+'@
+        $csv = @'
+type,value,tlp,confidence,first_seen,last_seen,expires,threat,tags,sources,description
+ipv4,1.2.3.4,,,,,,,,,
+domain,evil.example,,,,,,,,,
+url,https://evil.example/dl/page#token=abc,,,,,,,,,
+md5,44d88612fea8a8f36de82e1278abb02f,,,,,,,,,
+hostport,198.51.100.99:8443,,,,,,,,,
+email,o'brien@evil.example,,,,,,,,,
+'@
+        $ps = Join-Path $script:hd 'osintrix.stix.json'; $pm = Join-Path $script:hd 'osintrix.misp.json'; $pc = Join-Path $script:hd 'osintrix.csv'
+        [IO.File]::WriteAllText($ps, $stix); [IO.File]::WriteAllText($pm, $misp); [IO.File]::WriteAllText($pc, $csv)
+        $url = 'https://evil.example/dl/page#token=abc'
+        $s = @(Read-WfxIocFile -Path $ps)
+        ($s | Sort-Object) -join '|' | Should -Be (@('1.2.3.4', '44d88612fea8a8f36de82e1278abb02f', 'evil.example', $url, "o'brien@evil.example") | Sort-Object) -join '|'
+        $m = @(Read-WfxIocFile -Path $pm)
+        $m | Should -Contain '198.51.100.99'
+        $m | Should -Not -Contain '8443'
+        $m | Should -Contain $url
+        @($m).Count | Should -Be 6
+        $c = @(Read-WfxIocFile -Path $pc)
+        $c | Should -Contain '198.51.100.99:8443'
+        $c | Should -Contain $url
+        $c | Should -Not -Contain 'value'
+        @($c).Count | Should -Be 6
+    }
+    It 'reads plain lists: comments, defanged values and a # inside a URL' {
+        $p = Join-Path $script:hd 'plain.txt'
+        [IO.File]::WriteAllText($p, "# OSINTrix hunt list`n# case: test`nevil.example`nhxxps[://]bad[.]example/a#frag   # comment`n  # indented comment`n`n1.2.3.4`n")
+        $r = @(Read-WfxIocFile -Path $p)
+        $r | Should -Contain 'hxxps[://]bad[.]example/a#frag'
+        $r | Should -Contain 'evil.example'
+        @($r | Where-Object { $_ -match '^#|comment' }).Count | Should -Be 0
+        @($r).Count | Should -Be 3
+    }
+    It 'hunts with an OSINTrix CSV export: ip:port, MD5 and defanged values match' {
+        $p = Join-Path $script:hd 'osintrix.csv'
+        $h = @(Invoke-WfxHunt -IocFile $p -InputPath $script:hb -NoCase -PassThru)
+        @($h | Where-Object { $_.Evidence.Ioc -eq '198.51.100.99' }).Count | Should -Be 1
+        @($h | Where-Object { $_.Evidence.Ioc -eq '44d88612fea8a8f36de82e1278abb02f' }).Count | Should -Be 1
+        @($h | Where-Object { $_.Evidence.Ioc -eq '1.2.3.4' -and $_.Evidence.Where -eq 'network' }).Count | Should -Be 1
+        @(Invoke-WfxHunt -Ioc 'cdn[.]evil[.]example' -InputPath $script:hb -NoCase -PassThru | Where-Object { $_.Evidence.Where -eq 'dns' }).Count | Should -BeGreaterThan 0
+    }
 }
 
 Describe 'Investigator / CTF features' {

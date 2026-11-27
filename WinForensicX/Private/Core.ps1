@@ -361,7 +361,11 @@ function Find-WfxSecret {
 $script:WfxRedactRules = @(
     # key=value / "key value" credentials. The key name may be embedded in a larger identifier
     # (aws_secret_access_key, db-password, MYSQL_PWD), so allow an identifier prefix/suffix.
-    , @('(?i)([A-Za-z0-9_.\-]{0,40}(?:password|passwd|pwd|secret|api[_-]?key|apikey|client[_-]?secret|access[_-]?key|token)[A-Za-z0-9_.\-]{0,20})(\s*[:=]\s*|\s+)("[^"]*"|''[^'']*''|[^\s;,&]+)', '$1$2***')
+    # The match starts only where an identifier starts (the lookbehind), so long text is not re-scanned from every
+    # character; a quote may close the key first, as in JSON ("apiKey": "...").
+    # A value after a plain space must look like a secret (a digit or symbol, or 16+ characters), and Yes/No/true/-/%%1842
+    # are never values: Windows event text ("Token Elevation Type:", "Password Last Set:", "Elevated Token: Yes") stays as it is.
+    , @('(?i)(?<![A-Za-z0-9_.\-])([A-Za-z0-9_.\-]{0,60}?(?:password|passwd|pwd|secret|api[_-]?key|apikey|client[_-]?secret|access[_-]?key|token)[A-Za-z0-9_.\-]{0,20})(["'']?\s*[:=]\s*(?!(?:yes|no|true|false|none|null|n/a|-|%%\d+)(?![^\s;,&]))|\s+(?=[^\s;,&]*[^A-Za-z\s;,&]|[^\s;,&]{16}))("[^"]*"|''[^'']*''|[^\s;,&]+)', '$1$2***')
     # A password glued to -p (mysql -pSecret, 7z a -pSecret, rar -hpSecret, sshpass -pSecret). Only for the
     # programs that take it that way: a bare "-p" elsewhere is -Path, -ProcessName, -PassThru, ssh -p 2222 ...
     # and must stay readable. The switch itself is case-sensitive (mysql -P is the port).

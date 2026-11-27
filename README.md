@@ -362,14 +362,14 @@ Nothing in it runs. If you only want to use the tool, take the main package.
 ## Testing
 
 ```powershell
-Invoke-Pester ./tests                                                # 165 tests, including the scenario suite
-pwsh -File tools/Invoke-WfxScenarioSuite.ps1 -OutputPath .\results   # add -SingleFile to test dist\WinForensicX.ps1
+Invoke-Pester ./tests                                                # unit and regression tests (in this repository)
+pwsh -File tools/Invoke-WfxScenarioSuite.ps1 -OutputPath .\results   # source package only; add -SingleFile for dist\WinForensicX.ps1
 Invoke-ScriptAnalyzer -Path ./WinForensicX -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
 pwsh -File tools/build.ps1                                           # builds dist\WinForensicX.ps1
 pwsh -File tools/build-guide.ps1                                     # builds docs\guide.html
 ```
 
-The **scenario suite** feeds synthetic evidence for ten scenarios through every workflow: a clean and a busy
+The **scenario suite** ships in the source package, not in this repository, because its test data trips antivirus engines. It feeds synthetic evidence for ten scenarios through every workflow: a clean and a busy
 admin workstation (false-positive controls), phishing malware, a LOLBin chain, a hands-on-keyboard intrusion,
 credential theft, a multi-day APT ending in ransomware, malware-free lateral movement, ClickFix and AI-tool
 abuse, and malformed or hostile evidence, now with execution artifacts in each. It also runs 42 evasion

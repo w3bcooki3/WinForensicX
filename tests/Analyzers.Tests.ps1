@@ -56,6 +56,25 @@ Describe 'Core helpers' {
         $sw.Elapsed.TotalSeconds | Should -BeLessThan 10
         $r | Should -Not -Match 'content withheld'
     }
+    It 'scrubs secrets in JSON and leaves the word "token" in prose alone' {
+        (Protect-WfxText '{"apiKey":"k123","user":"bob"}') | Should -Be '{"apiKey":***,"user":"bob"}'
+        (Protect-WfxText "cfg = {'password': 'hunter2'}") | Should -Not -Match 'hunter2'
+        (Protect-WfxText 'the "token" is fine') | Should -Be 'the "token" is fine'
+        # Windows event text is not a credential: field names that contain token/password keep their values
+        (Protect-WfxText "Token Elevation Type:`t`t%%1936") | Should -Be "Token Elevation Type:`t`t%%1936"
+        (Protect-WfxText "Password Last Set:`t`t1/2/2026 10:11:12 AM") | Should -Be "Password Last Set:`t`t1/2/2026 10:11:12 AM"
+        (Protect-WfxText "Elevated Token:`t`tYes") | Should -Be "Elevated Token:`t`tYes"
+        (Protect-WfxText 'Password reset requested by the help desk') | Should -Be 'Password reset requested by the help desk'
+        (Protect-WfxText 'the tokenizer runs') | Should -Be 'the tokenizer runs'
+        (Protect-WfxText 'password Hunter2') | Should -Not -Match 'Hunter2'
+        (Protect-WfxText 'client_secret "abc def"') | Should -Not -Match 'abc def'
+    }
+    It 'text made of long identifiers is redacted in time, not withheld' {
+        $big = ('a_very_long_identifier_name_here_x ' * 15000) + 'db_password=leak123'
+        $r = Protect-WfxText $big
+        $r | Should -Not -Match 'content withheld'
+        $r | Should -Not -Match 'leak123'
+    }
     It 'identifies user-writable and system paths' {
         (Test-WfxUserWritablePath 'C:\Users\bob\AppData\Local\Temp\x.exe') | Should -BeTrue
         (Test-WfxUserWritablePath 'C:\Windows\System32\svchost.exe') | Should -BeFalse

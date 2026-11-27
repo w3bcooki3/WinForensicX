@@ -15,7 +15,9 @@
         Jump Lists, shortcuts, ShellBags, browser downloads with their URLs, Defender logs).
         Results are written to a hunt case folder (hunt.json / hunt.csv / manifest) unless -NoCase.
     .PARAMETER Ioc          One or more indicators.
-    .PARAMETER IocFile      Text file with one indicator per line ('#' comments and blank lines ignored).
+    .PARAMETER IocFile      Indicators from a file: text with one per line ('#' comments and blank lines
+                            ignored; a '#' inside a URL is kept), a CSV with a value column, a STIX 2.x
+                            bundle or a MISP event. OSINTrix exports in any of its formats work as they are.
     .PARAMETER InputPath    Hunt inside a previously saved case/bundle instead of collecting live.
     .PARAMETER ArtifactPath Hunt inside a folder of collected evidence (hives, Jump Lists, .evtx, ...).
                             Amcache SHA-1 values let hash IOCs match programs that have since been deleted.
@@ -41,12 +43,9 @@
         [switch]$PassThru
     )
     $list = @($Ioc)
-    if ($IocFile) {
-        if (-not (Test-Path -LiteralPath $IocFile -PathType Leaf)) { throw "IOC file not found: $IocFile" }
-        $list += @(Get-Content -LiteralPath $IocFile | ForEach-Object { ($_ -replace '#.*$', '').Trim() })
-    }
-    # Accept defanged indicators from advisories: hxxp, [.] and (.)
-    $iocs = @($list | Where-Object { $_ } | ForEach-Object { ($_.Trim() -replace '\[\.\]|\(\.\)', '.' -replace '^hxxp', 'http') } | Where-Object { $_ } | Sort-Object -Unique)
+    if ($IocFile) { $list += @(Read-WfxIocFile -Path $IocFile) }
+    # Accept defanged indicators from advisories and OSINTrix: hxxp(s), [://], [.], (.), [:], [@]
+    $iocs = @($list | Where-Object { $_ } | ForEach-Object { ([string]$_).Trim() -replace '\[://\]', '://' -replace '\[\.\]|\(\.\)', '.' -replace '\[:\]', ':' -replace '\[@\]', '@' -replace '^(?i)hxxp', 'http' -replace '^(\d{1,3}(?:\.\d{1,3}){3}):\d{1,5}$', '$1' } | Where-Object { $_ } | Sort-Object -Unique)
     if (-not $iocs.Count) { Write-WfxConsole 'No IOCs supplied.' -Kind Warn; return }
 
     if ($InputPath) {

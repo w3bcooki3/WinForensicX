@@ -555,7 +555,11 @@ function Find-WfxSecret {
 $script:WfxRedactRules = @(
     # key=value / "key value" credentials. The key name may be embedded in a larger identifier
     # (aws_secret_access_key, db-password, MYSQL_PWD), so allow an identifier prefix/suffix.
-    , @('(?i)([A-Za-z0-9_.\-]{0,40}(?:password|passwd|pwd|secret|api[_-]?key|apikey|client[_-]?secret|access[_-]?key|token)[A-Za-z0-9_.\-]{0,20})(\s*[:=]\s*|\s+)("[^"]*"|''[^'']*''|[^\s;,&]+)', '$1$2***')
+    # The match starts only where an identifier starts (the lookbehind), so long text is not re-scanned from every
+    # character; a quote may close the key first, as in JSON ("apiKey": "...").
+    # A value after a plain space must look like a secret (a digit or symbol, or 16+ characters), and Yes/No/true/-/%%1842
+    # are never values: Windows event text ("Token Elevation Type:", "Password Last Set:", "Elevated Token: Yes") stays as it is.
+    , @('(?i)(?<![A-Za-z0-9_.\-])([A-Za-z0-9_.\-]{0,60}?(?:password|passwd|pwd|secret|api[_-]?key|apikey|client[_-]?secret|access[_-]?key|token)[A-Za-z0-9_.\-]{0,20})(["'']?\s*[:=]\s*(?!(?:yes|no|true|false|none|null|n/a|-|%%\d+)(?![^\s;,&]))|\s+(?=[^\s;,&]*[^A-Za-z\s;,&]|[^\s;,&]{16}))("[^"]*"|''[^'']*''|[^\s;,&]+)', '$1$2***')
     # A password glued to -p (mysql -pSecret, 7z a -pSecret, rar -hpSecret, sshpass -pSecret). Only for the
     # programs that take it that way: a bare "-p" elsewhere is -Path, -ProcessName, -PassThru, ssh -p 2222 ...
     # and must stay readable. The switch itself is case-sensitive (mysql -P is the port).
@@ -2322,7 +2326,7 @@ function Get-WfxHelpModel {
             [pscustomobject]@{ Name = 'Start-WfxMonitor'; Summary = 'Live baseline, then alert on new suspicious processes / connections / beacons.'
                 Params = @('[-Interval <sec>] [-Duration <sec>] [-MinSeverity <sev>]'); Examples = @('Start-WfxMonitor -Interval 5 -Duration 300') }
             [pscustomobject]@{ Name = 'Invoke-WfxHunt'; Summary = 'Sweep a host, saved case or evidence folder for IOCs (MD5/SHA-1/SHA-256, exact IPs, domains+subdomains, strings): event logs, artifacts (Amcache SHA-1 finds deleted programs), downloads.'
-                Params = @('-Ioc <list> | -IocFile <txt> [-InputPath <case> | -ArtifactPath <folder>] [-FileScan] [-HashProcesses]'); Examples = @("Invoke-WfxHunt -Ioc 'evil.example','203.0.113.7' -FileScan", 'Invoke-WfxHunt -IocFile .\iocs.txt -InputPath .\WFX_host_case', 'Invoke-WfxHunt -IocFile .\iocs.txt -ArtifactPath D:\kape\C') }
+                Params = @('-Ioc <list> | -IocFile <txt|csv|stix|misp> [-InputPath <case> | -ArtifactPath <folder>] [-FileScan] [-HashProcesses]'); Examples = @("Invoke-WfxHunt -Ioc 'evil.example','203.0.113.7' -FileScan", 'Invoke-WfxHunt -IocFile .\iocs.txt -InputPath .\WFX_host_case', 'Invoke-WfxHunt -IocFile .\iocs.txt -ArtifactPath D:\kape\C') }
             [pscustomobject]@{ Name = 'Get-WfxArtifact'; Summary = 'Parse execution and user-activity artifacts, live or from collected files: Amcache, ShimCache, Prefetch, BAM, UserAssist, PCA, ShellBags, Jump Lists, .lnk, RunMRU, typed paths, searches, browser downloads, Defender logs, SRUM, $MFT (collected). -Flag adds the triage verdict.'
                 Params = @('[-Path <folder|file>] [-Artifact <types>] [-Flag]'); Examples = @('Get-WfxArtifact -Path D:\kape\C -Flag | Where-Object Flag', 'Get-WfxArtifact -Path .\Amcache.hve | Where-Object Sha1 -eq <sha1>', "Get-WfxArtifact -Artifact JumpList,Shortcut | Where-Object { `$_.Extra.DriveType -eq 'Removable' }") }
             [pscustomobject]@{ Name = 'Get-WfxActivity'; Summary = 'What changed recently: registry writes in persistence/security keys, software & driver installs, services, tasks, accounts, firewall/Defender/audit changes, executions (Prefetch/BAM/UserAssist), connection history, deletions; -Journal adds the NTFS change journal.'
@@ -2703,6 +2707,98 @@ function New-WfxUuidV5 {
     $u[6] = ($u[6] -band 0x0F) -bor 0x50; $u[8] = ($u[8] -band 0x3F) -bor 0x80
     $hex = -join ($u | ForEach-Object { '{0:x2}' -f $_ })
     '{0}-{1}-{2}-{3}-{4}' -f $hex.Substring(0, 8), $hex.Substring(8, 4), $hex.Substring(12, 4), $hex.Substring(16, 4), $hex.Substring(20, 12)
+}
+
+function Read-WfxIocFile {
+    <#
+    .SYNOPSIS Reads indicators from a file: plain text (one per line), a CSV with a value column (OSINTrix,
+    MISP and WinForensicX indicator exports), a STIX 2.x bundle, or a MISP event (JSON).
+    In plain text '#' starts a comment only at the start of a line or after a space or tab, so a URL
+    fragment (page#section) is kept. Returns the values as found; the caller re-fangs and de-duplicates.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "IOC file not found: $Path" }
+    $text = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Path).ProviderPath)
+    $text = $text.TrimStart([char]0xFEFF)
+    $out = [System.Collections.Generic.List[string]]::new()
+    $t = $text.Trim()
+
+    # ── JSON: STIX 2.x bundle / objects, a MISP event, or an array of strings ──
+    if ($t.StartsWith('{') -or $t.StartsWith('[')) {
+        $json = $null
+        try { $json = ConvertFrom-Json -InputObject $t -ErrorAction Stop } catch { $json = $null }
+        if ($null -ne $json) {
+            $addMisp = {
+                param($a)
+                $v = [string](Get-WfxValue $a 'value' ''); $ty = [string](Get-WfxValue $a 'type' '')
+                if (-not $v) { return }
+                if ($ty -match '\|' -and $v -match '\|') {
+                    # composite attributes: ip-dst|port, domain|ip, filename|sha256 ... (ports are not indicators)
+                    $tp = $ty -split '\|'; $vp = $v -split '\|'
+                    for ($i = 0; $i -lt $vp.Count; $i++) { if ($i -lt $tp.Count -and $tp[$i] -eq 'port') { continue }; if ($vp[$i]) { $out.Add($vp[$i]) } }
+                } else { $out.Add($v) }
+            }
+            $objects = [System.Collections.Generic.List[object]]::new()
+            foreach ($j in @($json)) {
+                if ($null -eq $j) { continue }
+                if ($j -is [string]) { $out.Add($j); continue }
+                $ev = Get-WfxValue $j 'Event' $null
+                if ($ev) {
+                    foreach ($a in @(Get-WfxValue $ev 'Attribute' @())) { & $addMisp $a }
+                    foreach ($o in @(Get-WfxValue $ev 'Object' @())) { foreach ($a in @(Get-WfxValue $o 'Attribute' @())) { & $addMisp $a } }
+                    continue
+                }
+                $objs = Get-WfxValue $j 'objects' $null
+                if ($null -ne $objs) { foreach ($o in @($objs)) { $objects.Add($o) } } else { $objects.Add($j) }
+            }
+            foreach ($o in $objects) {
+                if ($null -eq $o) { continue }
+                if ($o -is [string]) { $out.Add($o); continue }
+                $type = [string](Get-WfxValue $o 'type' '')
+                if ($type -eq 'indicator') {
+                    # [ipv4-addr:value = '1.2.3.4'], [file:hashes.'SHA-256' = '...'] OR [...]; MATCHES (regex) is not a value
+                    foreach ($m in [regex]::Matches([string](Get-WfxValue $o 'pattern' ''), "(?<![!<>])=\s*'((?:[^'\\]|\\.)*)'")) {
+                        $out.Add(($m.Groups[1].Value -replace "\\(['\\])", '$1'))
+                    }
+                } elseif ($type -in @('ipv4-addr', 'ipv6-addr', 'domain-name', 'url', 'email-addr')) {
+                    $v = [string](Get-WfxValue $o 'value' ''); if ($v) { $out.Add($v) }
+                } elseif ($type -eq 'file') {
+                    $h = Get-WfxValue $o 'hashes' $null
+                    if ($h) { foreach ($p in $h.PSObject.Properties) { if ($p.Value) { $out.Add([string]$p.Value) } } }
+                }
+            }
+            return $out.ToArray()
+        }
+    }
+
+    $lines = @($text -split "`r?`n")
+    # ── CSV with a header that names the value column ──
+    $hi = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) { $l = $lines[$i].Trim(); if ($l -and -not $l.StartsWith('#')) { $hi = $i; break } }
+    if ($hi -ge 0 -and $lines[$hi].Contains(',')) {
+        $cols = @($lines[$hi].Split(',') | ForEach-Object { $_.Trim().Trim('"').Trim() })
+        $col = $null
+        foreach ($want in 'value', 'indicator', 'ioc', 'ioc_value', 'observable', 'observable_value') {
+            $col = $cols | Where-Object { $_ -ieq $want } | Select-Object -First 1
+            if ($col) { break }
+        }
+        if ($col) {
+            $body = @($lines[$hi..($lines.Count - 1)] | Where-Object { $_.Trim() -and -not $_.TrimStart().StartsWith('#') })
+            foreach ($row in @($body | ConvertFrom-Csv)) {
+                $v = [string]$row.$col
+                if ($v -match "^'[\s=+\-@|]") { $v = $v.Substring(1) }      # spreadsheet formula guard added on export
+                $v = $v.Trim(); if ($v) { $out.Add($v) }
+            }
+            return $out.ToArray()
+        }
+    }
+
+    # ── plain text: one indicator per line ──
+    foreach ($l in $lines) {
+        $v = ($l -replace '(?:^|\s)#.*$', '').Trim()
+        if ($v) { $out.Add($v) }
+    }
+    return $out.ToArray()
 }
 
 
@@ -9646,6 +9742,8 @@ tr.day td { background: var(--alt); font-weight: 600; color: var(--ink2); }
 .tb input[type=search] { font: inherit; padding: 5px 9px; border: 1px solid var(--line); border-radius: 3px; background: var(--page); color: var(--ink); min-width: 240px; flex: 1; max-width: 420px; }
 .tb select { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 3px; background: var(--page); color: var(--ink); }
 .tb label { display: inline-flex; align-items: center; gap: 5px; color: var(--ink2); white-space: nowrap; }
+#itbl .ipick { width: 28px; padding-right: 0; } #itbl .ipick input { margin: 0; vertical-align: middle; cursor: pointer; }
+.btn:disabled { opacity: .5; cursor: default; }
 .count { color: var(--ink3); font-size: 12.5px; margin-top: 8px; }
 .empty { padding: 16px; border: 1px solid var(--line2); background: var(--alt); color: var(--ink2); }
 
@@ -9734,7 +9832,7 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
   .mast { background: #fff; color: #000; border-bottom: 2px solid #000; break-after: page; min-height: 55vh; }
   .mast .brandrow, .mast .brandrow b, .facts-line, .facts-line span b, .verdictbox .s { color: #000; }
   .brandrow svg { color: #000; }
-  .bar, .tb, .btn, .mbtn, .toast, .chart .ctl, .flist, #case, .head .tools { display: none !important; }
+  .bar, .tb, .btn, .mbtn, .toast, .chart .ctl, .flist, #case, .head .tools, #itbl .ipick { display: none !important; }
   #printall { display: block; }
   #printall .case { padding: 14px 0 18px; border-bottom: 1px solid #999; }
   #printall dl.cf > dt, #printall dl.cf > dd { padding: 8px 0; }
@@ -9824,7 +9922,7 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
 
 <section id="iocs">
   <div class="head"><div><h2>Indicators</h2><p class="desc">Addresses, domains, URLs, hashes, files, registry keys and accounts taken from the evidence of attacker-related findings. Extraction is automatic: check each value before blocking it.</p></div>
-    <div class="tools"><button class="btn" id="i-copy" type="button">Copy values</button><button class="btn" id="i-csv" type="button">Download CSV</button></div></div>
+    <div class="tools"><button class="btn" id="i-copy" type="button">Copy values</button><button class="btn" id="i-csv" type="button">Download CSV</button><button class="btn" id="i-pick" type="button" title="Tick every public address, domain, URL and hash">Tick external and hashes</button><button class="btn" id="i-osint" type="button" disabled title="Save the ticked indicators as a STIX 2.1 file for OSINTrix (Threat Intel, Indicators, Import)">Export for OSINT</button></div></div>
   <div class="tb">
     <input type="search" id="iq" placeholder="Search indicators" aria-label="Search indicators">
     <select id="itype" aria-label="Type"></select>
@@ -10261,18 +10359,50 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
   var itypes = ['IP address', 'Domain', 'URL', 'SHA-256', 'SHA-1', 'MD5', 'File', 'Registry key', 'Account'];
   var present = itypes.filter(function (t) { return IOC.some(function (x) { return x.type === t; }); });
   $('itype').innerHTML = '<option value="">All types</option>' + present.map(function (t) { return '<option>' + t + '</option>'; }).join('');
+  var OSINT_KIND = { 'IP address': 'ipv4-addr:value', 'Domain': 'domain-name:value', 'URL': 'url:value', 'SHA-256': "file:hashes.'SHA-256'", 'SHA-1': "file:hashes.'SHA-1'", 'MD5': 'file:hashes.MD5' };
+  var canPick = function (x) { return !!OSINT_KIND[x.type] && !(x.type === 'IP address' && isPriv(x.value)); };
   var isSysFile = function (x) { return x.type === 'File' && /^[a-z]:\\windows\\(?:system32|syswow64|winsxs)\\[^\\]+\.(?:exe|dll)$/i.test(x.value); };
   var iRows = function () { var q = $('iq').value.toLowerCase(), t = $('itype').value, pv = $('ipriv').checked, sy = $('isys').checked;
     return IOC.filter(function (x) { return (!t || x.type === t) && (pv || x.type !== 'IP address' || !isPriv(x.value)) && (sy || !isSysFile(x)) && (!q || x.value.toLowerCase().indexOf(q) >= 0); })
       .sort(function (a, b) { return itypes.indexOf(a.type) - itypes.indexOf(b.type) || RANK[a.sev] - RANK[b.sev] || a.value.localeCompare(b.value); }); };
   var renderI = function () {
     var rows = iRows(); $('n-i').textContent = IOC.filter(function (x) { return (x.type !== 'IP address' || !isPriv(x.value)) && !isSysFile(x); }).length;
-    $('ibox').innerHTML = rows.length ? '<div class="tbl"><table id="itbl"><thead><tr><th>Type</th><th>Value</th><th>Most severe</th><th>Found in</th></tr></thead><tbody>' + rows.map(function (x) {
-      return '<tr><td class="nw">' + esc(x.type) + (x.type === 'IP address' && isPriv(x.value) ? ' <span class="muted">(private)</span>' : '') + '</td><td class="m">' + esc(defang(x.type, x.value)) + '</td><td class="nw">' + sevHtml(x.sev) + '</td><td>' +
+    var pickable = rows.filter(canPick);
+    $('ibox').innerHTML = rows.length ? '<div class="tbl"><table id="itbl"><thead><tr><th class="ipick">' + (pickable.length ? '<input type="checkbox" id="i-all" aria-label="Tick every indicator shown"' + (pickable.every(function (x) { return x.pick; }) ? ' checked' : '') + '>' : '') + '</th><th>Type</th><th>Value</th><th>Most severe</th><th>Found in</th></tr></thead><tbody>' + rows.map(function (x) {
+      return '<tr><td class="ipick">' + (canPick(x) ? '<input type="checkbox" data-pick="' + IOC.indexOf(x) + '" aria-label="Tick for OSINT"' + (x.pick ? ' checked' : '') + '>' : '') + '</td><td class="nw">' + esc(x.type) + (x.type === 'IP address' && isPriv(x.value) ? ' <span class="muted">(private)</span>' : '') + '</td><td class="m">' + esc(defang(x.type, x.value)) + '</td><td class="nw">' + sevHtml(x.sev) + '</td><td>' +
         x.from.slice(0, 3).map(function (i) { return '<div><a href="#f' + i + '" data-open="' + i + '">' + esc(F[i].Title) + '</a></div>'; }).join('') + (x.from.length > 3 ? '<div class="small">and ' + (x.from.length - 3) + ' more</div>' : '') + '</td></tr>'; }).join('') + '</tbody></table></div><div class="count">' + rows.length + ' indicators shown.</div>'
       : '<div class="empty">' + (IOC.length ? 'No indicators match these filters.' : 'No indicators were found in the evidence of attacker-related findings.') + '</div>';
   };
   ['iq', 'itype', 'idef', 'ipriv', 'isys'].forEach(function (id) { $(id).addEventListener(id === 'iq' ? 'input' : 'change', renderI); });
+  // Ticked indicators go to OSINTrix as STIX 2.1. Only what it can research: public addresses, domains, URLs, hashes.
+  var updPick = function () { var n = IOC.filter(function (x) { return x.pick; }).length; $('i-osint').disabled = !n; $('i-osint').textContent = n ? 'Export for OSINT (' + n + ')' : 'Export for OSINT'; };
+  $('ibox').addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.id === 'i-all') { iRows().filter(canPick).forEach(function (x) { x.pick = t.checked; }); renderI(); updPick(); }
+    else if (t.hasAttribute && t.hasAttribute('data-pick')) { IOC[+t.getAttribute('data-pick')].pick = t.checked; var a = $('i-all'); if (a) a.checked = iRows().filter(canPick).every(function (x) { return x.pick; }); updPick(); }
+  });
+  $('i-pick').onclick = function () { var n = 0; IOC.forEach(function (x) { if (canPick(x)) { x.pick = true; n++; } }); renderI(); updPick(); toast(n ? n + ' ticked' : 'No external indicators or hashes in this case'); };
+  var rid = function () { var b = new Uint8Array(16); crypto.getRandomValues(b); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128; var h = Array.prototype.map.call(b, function (v) { return (v + 256).toString(16).slice(1); }).join(''); return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20); };
+  var stxq = function (v) { return String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+  $('i-osint').onclick = function () {
+    var pick = IOC.filter(function (x) { return x.pick && canPick(x); });
+    if (!pick.length) { toast('Tick the indicators to send first'); return; }
+    var now = new Date().toISOString(), hostN = String(D.hostName || 'host'), caseId = String(cs.Id || ''), AMBER = 'marking-definition--f88d31f6-486f-44da-b317-01333bde0b82';
+    var idn = { type: 'identity', spec_version: '2.1', id: 'identity--' + rid(), created: now, modified: now, name: 'WinForensicX', identity_class: 'system' };
+    var objs = [idn], refs = [];
+    pick.forEach(function (x) {
+      var v = x.type === 'URL' ? x.value.replace(/^hxxp/i, 'http') : x.value;
+      var titles = x.from.map(function (i) { return F[i].Title; });
+      var first = x.from.map(function (i) { return F[i]._d; }).filter(Boolean).sort(function (a, b) { return a - b; })[0];
+      var o = { type: 'indicator', spec_version: '2.1', id: 'indicator--' + rid(), created: now, modified: now, created_by_ref: idn.id,
+        name: hostN + ': ' + titles[0], description: 'Found on ' + hostN + (caseId ? ' (WinForensicX case ' + caseId + ')' : '') + ' in: ' + titles.join('; '),
+        pattern: '[' + OSINT_KIND[x.type] + " = '" + stxq(v) + "']", pattern_type: 'stix', valid_from: (first || new Date()).toISOString(),
+        indicator_types: ['anomalous-activity'], labels: ['winforensicx', 'host:' + hostN, 'severity:' + String(x.sev).toLowerCase()], object_marking_refs: [AMBER] };
+      objs.push(o); refs.push(o.id);
+    });
+    objs.push({ type: 'report', spec_version: '2.1', id: 'report--' + rid(), created: now, modified: now, created_by_ref: idn.id, name: 'WinForensicX: ' + hostN + (caseId ? ' (case ' + caseId.slice(0, 8) + ')' : ''), published: now, report_types: ['indicator'], object_refs: refs, object_marking_refs: [AMBER] });
+    download('osint_' + hostN.replace(/[^\w.-]+/g, '_') + '.stix.json', JSON.stringify({ type: 'bundle', id: 'bundle--' + rid(), objects: objs }, null, 2), 'application/json');
+  };
   $('i-copy').onclick = function () { var r = iRows(); if (!r.length) { toast('Nothing to copy'); return; } copy(r.map(function (x) { return defang(x.type, x.value); }).join('\n')); };
   $('i-csv').onclick = function () { download('indicators_' + (D.hostName || 'host') + '.csv', csv([['type', 'value', 'severity', 'private', 'findings']].concat(iRows().map(function (x) { return [x.type, defang(x.type, x.value), x.sev, x.type === 'IP address' ? isPriv(x.value) : '', x.from.map(function (i) { return F[i].Title; }).join(' | ')]; }))), 'text/csv'); };
   renderI();
@@ -12482,7 +12612,9 @@ function Invoke-WfxHunt {
         Jump Lists, shortcuts, ShellBags, browser downloads with their URLs, Defender logs).
         Results are written to a hunt case folder (hunt.json / hunt.csv / manifest) unless -NoCase.
     .PARAMETER Ioc          One or more indicators.
-    .PARAMETER IocFile      Text file with one indicator per line ('#' comments and blank lines ignored).
+    .PARAMETER IocFile      Indicators from a file: text with one per line ('#' comments and blank lines
+                            ignored; a '#' inside a URL is kept), a CSV with a value column, a STIX 2.x
+                            bundle or a MISP event. OSINTrix exports in any of its formats work as they are.
     .PARAMETER InputPath    Hunt inside a previously saved case/bundle instead of collecting live.
     .PARAMETER ArtifactPath Hunt inside a folder of collected evidence (hives, Jump Lists, .evtx, ...).
                             Amcache SHA-1 values let hash IOCs match programs that have since been deleted.
@@ -12508,12 +12640,9 @@ function Invoke-WfxHunt {
         [switch]$PassThru
     )
     $list = @($Ioc)
-    if ($IocFile) {
-        if (-not (Test-Path -LiteralPath $IocFile -PathType Leaf)) { throw "IOC file not found: $IocFile" }
-        $list += @(Get-Content -LiteralPath $IocFile | ForEach-Object { ($_ -replace '#.*$', '').Trim() })
-    }
-    # Accept defanged indicators from advisories: hxxp, [.] and (.)
-    $iocs = @($list | Where-Object { $_ } | ForEach-Object { ($_.Trim() -replace '\[\.\]|\(\.\)', '.' -replace '^hxxp', 'http') } | Where-Object { $_ } | Sort-Object -Unique)
+    if ($IocFile) { $list += @(Read-WfxIocFile -Path $IocFile) }
+    # Accept defanged indicators from advisories and OSINTrix: hxxp(s), [://], [.], (.), [:], [@]
+    $iocs = @($list | Where-Object { $_ } | ForEach-Object { ([string]$_).Trim() -replace '\[://\]', '://' -replace '\[\.\]|\(\.\)', '.' -replace '\[:\]', ':' -replace '\[@\]', '@' -replace '^(?i)hxxp', 'http' -replace '^(\d{1,3}(?:\.\d{1,3}){3}):\d{1,5}$', '$1' } | Where-Object { $_ } | Sort-Object -Unique)
     if (-not $iocs.Count) { Write-WfxConsole 'No IOCs supplied.' -Kind Warn; return }
 
     if ($InputPath) {
