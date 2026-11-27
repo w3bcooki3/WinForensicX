@@ -65,12 +65,12 @@ Describe 'Volatile analyzer' {
     It 'reports pipes and side-loaded DLLs as findings' {
         $v = [pscustomobject]@{ Pipes = @('MSSE-99-server', 'InitShutdown', 'PSEXESVC'); Sessions = @(); Arp = @()
             Modules = @((New-Mod 'C:\Windows\System32\rundll32.exe' 'C:\Users\ana\AppData\Local\Temp\upd.dll'), (New-Mod 'C:\Program Files\Vendor\app.exe' 'C:\Program Files\Vendor\ok.dll')) }
-        $f = @(Invoke-WfxVolatileAnalyzer -Volatile $v -HostName 'H')
+        $f = @(Invoke-WfxVolatileAnalyzer -Volatile $v -HostName 'H' | Expand-WfxRecord)
         @($f | Where-Object Id -eq 'VOL-PIPE-C2').Count | Should -Be 1
         @($f | Where-Object Id -eq 'VOL-PIPE-ESCALATION').Count | Should -Be 1
         @($f | Where-Object Id -eq 'VOL-MODULE-SIDELOAD-WINDOWS').Count | Should -Be 1
         $f.Count | Should -Be 3
-        @(Invoke-WfxVolatileAnalyzer -Volatile $null).Count | Should -Be 0
+        @(Invoke-WfxVolatileAnalyzer -Volatile $null | Expand-WfxRecord).Count | Should -Be 0
     }
     It 'runs as part of the analysis of a bundle' {
         $b = [pscustomobject]@{ HostName = 'H'; Volatile = [pscustomobject]@{ Pipes = @('postex_1234'); Modules = @(); Sessions = @(); Arp = @() } }

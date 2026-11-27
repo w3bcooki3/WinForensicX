@@ -4,7 +4,8 @@ $root = Split-Path -Parent $here
 foreach ($f in @(Get-ChildItem (Join-Path $root 'WinForensicX/Private') -Filter *.ps1) + @(Get-ChildItem (Join-Path $root 'WinForensicX/Analyzers') -Filter *.ps1)) { . $f.FullName }
 $script:WfxRuleRoot = Join-Path $root 'WinForensicX/Rules'
 
-function Find-Id { param($Findings, $Id) @($Findings | Where-Object { $_.Id -eq $Id }) }
+# Always an array, so .Count works on Windows PowerShell 5.1 (a single [pscustomobject] has no .Count there).
+function Find-Id { param($Findings, $Id) , @($Findings | Where-Object { $_.Id -eq $Id }) }
 
 Describe 'Core helpers' {
     It 'computes Shannon entropy' {

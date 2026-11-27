@@ -90,7 +90,7 @@ function Get-WfxTriagePlan {
             $rows.Add([pscustomobject]@{ Stage = 'Remote collection'; Reads = 'The stages above run on each remote computer over the WinRM session you start; only the collection code is sent, and the results come back here for analysis.'; Runs = ''; Included = 'Yes'; Admin = 'Rights of the account you use'; WithoutAdmin = '' })
         }
     }
-    , $rows.ToArray()
+    $rows.ToArray()
 }
 
 function Write-WfxTriagePlan {

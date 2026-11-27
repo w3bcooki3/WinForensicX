@@ -32,7 +32,7 @@ function Get-WfxReadinessCheck {
     #>
     param($Data, $Now = $null)
     $rows = [System.Collections.Generic.List[object]]::new()
-    if (-not $Data) { return , $rows.ToArray() }
+    if (-not $Data) { return }
     $dump = Get-WfxValue $Data 'Dump' $null
     $mem = Get-WfxValue $Data 'Memory' $null
     $pow = Get-WfxValue $Data 'Power' $null
@@ -151,7 +151,7 @@ function Get-WfxReadinessCheck {
     if ($mem -and (Get-WfxValue $mem 'HasBattery' $false) -eq $true) {
         $rows.Add((New-WfxReadinessRow -Key 'battery' -Check 'Battery' -Status 'Note' -Value 'Laptop or tablet' -Why 'Keep it on mains power and do not close the lid: an empty battery or sleep can end what is running.'))
     }
-    , $rows.ToArray()
+    $rows.ToArray()
 }
 
 function Get-WfxReadinessSummary {
@@ -190,5 +190,5 @@ function Get-WfxIncidentCard {
     & $avoid $(if ($state['faststartup']) { 'Shutting it down or restarting it: memory is lost, and with Fast Startup on, hiberfil.sys is overwritten.' } else { 'Shutting it down or restarting it: memory is lost.' })
     & $avoid 'Running antivirus clean-up, deleting files or installing software on it before evidence is collected.'
     & $avoid 'Signing in to it with a domain administrator account: an attacker on it could take those credentials.'
-    , $card.ToArray()
+    $card.ToArray()
 }

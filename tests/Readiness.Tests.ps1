@@ -129,7 +129,7 @@ Describe 'Self-check against SHA256SUMS.txt' {
         $d = New-TestDir
         try {
             $p = Join-Path $d 'SHA256SUMS.txt'
-            Set-Content -LiteralPath $p -Value @(('A' * 64) + '  dist\WinForensicX.ps1', ('b' * 64) + ' *Start-WinForensicX.ps1', 'not a hash line')
+            Set-Content -LiteralPath $p -Value @((('A' * 64) + '  dist\WinForensicX.ps1'), (('b' * 64) + ' *Start-WinForensicX.ps1'), 'not a hash line')
             $s = Read-WfxSums -Path $p
             $s.Count | Should -Be 2
             $s['dist/winforensicx.ps1'] | Should -Be ('A' * 64)
@@ -255,7 +255,8 @@ Describe 'Memory-capture readiness' {
         $src | Should -Not -Match '=\s*\$v\.KeyProtector\s*(?:[;}]|$)'
     }
     It 'adds checks and the card to the result without changing the scores' {
-        $base = [pscustomobject]@{ HostName = 'H'; Process = @([pscustomobject]@{ Pid = 1; Name = 'cmd.exe'; Path = 'C:\Windows\System32\cmd.exe'; CommandLine = 'cmd /c whoami' }) }
+        # Same evidence; only the readiness facts differ.
+        $base = [pscustomobject]@{ HostName = 'H'; Process = @([pscustomobject]@{ Pid = 1; Name = 'cmd.exe'; Path = 'C:\Windows\System32\cmd.exe'; CommandLine = 'cmd /c whoami' }); Security = [pscustomobject]@{ Readiness = $null } }
         $with = [pscustomobject]@{ HostName = 'H'; Process = $base.Process; Security = [pscustomobject]@{ Readiness = (New-Ready) } }
         $r0 = Invoke-WfxAnalyze -Bundle $base -AllowlistPath ''
         $r1 = Invoke-WfxAnalyze -Bundle $with -AllowlistPath ''

@@ -9,7 +9,8 @@ $script:WfxRuleRoot = Join-Path $mod 'Rules'
 $script:WfxModuleRoot = $mod
 $script:WfxQuiet = $true
 
-function Find-Id { param($Findings, $Id) @($Findings | Where-Object { $_.Id -eq $Id }) }
+# Always an array, so .Count works on Windows PowerShell 5.1 (a single [pscustomobject] has no .Count there).
+function Find-Id { param($Findings, $Id) , @($Findings | Where-Object { $_.Id -eq $Id }) }
 function New-TestDir { $d = Join-Path ([IO.Path]::GetTempPath()) ('wfxt_' + [guid]::NewGuid().ToString('N').Substring(0, 8)); New-Item -ItemType Directory -Path $d | Out-Null; $d }
 function New-Ev { param($Id, $Log, $Time, $Fields, $Msg = '') [pscustomobject]@{ Log = $Log; Id = $Id; TimeCreated = (ConvertTo-WfxUtcString $Time); Message = $Msg; Fields = $Fields } }
 
@@ -230,7 +231,7 @@ email,o'brien@evil.example,,,,,,,,,
         [IO.File]::WriteAllText($ps, $stix); [IO.File]::WriteAllText($pm, $misp); [IO.File]::WriteAllText($pc, $csv)
         $url = 'https://evil.example/dl/page#token=abc'
         $s = @(Read-WfxIocFile -Path $ps)
-        ($s | Sort-Object) -join '|' | Should -Be (@('1.2.3.4', '44d88612fea8a8f36de82e1278abb02f', 'evil.example', $url, "o'brien@evil.example") | Sort-Object) -join '|'
+        ($s | Sort-Object) -join '|' | Should -Be ((@('1.2.3.4', '44d88612fea8a8f36de82e1278abb02f', 'evil.example', $url, "o'brien@evil.example") | Sort-Object) -join '|')
         $m = @(Read-WfxIocFile -Path $pm)
         $m | Should -Contain '198.51.100.99'
         $m | Should -Not -Contain '8443'
