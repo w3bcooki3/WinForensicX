@@ -105,11 +105,14 @@ function Show-WfxMenuTriage {
         Write-WfxMenuItem '5' 'Offline event logs (.evtx)' 'analyze exported logs from another machine'
         Write-WfxMenuItem '6' 'Re-analyze a saved case' 're-run detections over old evidence'
         Write-WfxMenuItem '7' 'Collected evidence folder (KAPE, image, CTF)' 'hives, Amcache, Jump Lists, .lnk, browsers, .evtx'
+        Write-WfxConsole ''
+        Write-WfxMenuItem 'P' 'What will a triage read?' 'the plan for quick and full triage; reads nothing'
         Write-WfxMenuFooter
-        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', 'B', 'Q'
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', 'P', 'B', 'Q'
         switch ($c) {
             'B' { return }
             'Q' { return 'Q' }
+            'P' { $a = Get-WfxTriageArgs; Invoke-WfxMenuAction { Invoke-WfxTriage @a -FileScan -ExposureScan -Plan; Write-WfxConsole '  Quick triage (1) skips the File scan stage and the config-file / SYSVOL part of the exposure audit.' -Kind Dim } }
             '1' { $a = Get-WfxTriageArgs; Invoke-WfxMenuAction { Invoke-WfxTriage @a | Out-Null; Write-WfxMenuOpenReport } }
             '2' { $a = Get-WfxTriageArgs; Invoke-WfxMenuAction { Invoke-WfxTriage @a -FileScan -ExposureScan | Out-Null; Write-WfxMenuOpenReport } }
             '3' { Invoke-WfxMenuAction { Save-WfxEvidence -OutputPath $script:WfxMenu.OutputPath -Hours $script:WfxMenu.Hours -FileScan -ExposureScan | Out-Null } }
@@ -267,10 +270,10 @@ function Show-WfxMenuInsightTable {
 
 function Show-WfxMenuExplore {
     $groups = @($script:WfxInsightTopics.Values | ForEach-Object { $_.Group } | Select-Object -Unique)
-    $gdesc = @{ 'Recent changes' = 'what attackers change: registry, files, installs, executions, connections, config'; System = 'OS, updates, software, users, groups, sessions, shares, USB, drives'; Processes = 'running programs, process tree, unsigned programs'
+    $gdesc = @{ 'Recent changes' = 'what attackers change: registry, files, installs, executions, connections, config'; System = 'OS, updates, software, users, groups, sessions, shares, USB, drives'; Processes = 'running programs, process tree, unsigned programs, loaded DLLs, named pipes'
         Network = 'listening ports, connections, DNS, adapters, routes, ARP, hosts, proxy, Wi-Fi, firewall, SMB'; Persistence = 'autostarts, services, drivers, scheduled tasks, WMI'
         Events = 'logons, failed logons, RDP, account changes, new services, log clears, reboots, PowerShell, Defender'; Files = 'downloads, new programs, Prefetch, recent files, PS history, Run box'
-        Security = 'security posture checklist with fixes'; 'Evidence of execution' = 'Amcache, ShimCache, Prefetch, BAM, ShellBags, Jump Lists, browser downloads, Defender logs' }
+        Security = 'posture checklist with fixes; memory-capture readiness and incident card'; 'Evidence of execution' = 'Amcache, ShimCache, Prefetch, BAM, ShellBags, Jump Lists, browser downloads, Defender logs' }
     while ($true) {
         Write-WfxMenuHeader 'Explore this computer (live, read-only views)'
         $i = 0; $keys = @()
@@ -336,8 +339,10 @@ function Show-WfxMenuHunt {
         Write-WfxConsole ''
         Write-WfxMenuItem '8' 'Parse artifacts from a folder or file' 'Amcache, ShimCache, ShellBags, Jump Lists, .lnk, browser history... as a flagged table'
         Write-WfxMenuItem '9' 'Hunt IOCs in a collected evidence folder' 'Amcache SHA-1 matches programs that were deleted'
+        Write-WfxConsole ''
+        Write-WfxMenuItem 'F' 'Find files and folders (fast, all drives)' 'by name, extension or none, size, date; optional hash and real type'
         Write-WfxMenuFooter
-        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', '8', '9', 'B', 'Q'
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', '8', '9', 'F', 'B', 'Q'
         switch ($c) {
             'B' { return }
             'Q' { return 'Q' }
@@ -395,6 +400,27 @@ function Show-WfxMenuHunt {
                     $hp = @{ OutputPath = $script:WfxMenu.OutputPath; ArtifactPath = $p }
                     $iv = $i.Trim('"'); if (Test-Path -LiteralPath $iv -PathType Leaf) { $hp.IocFile = $iv } else { $hp.Ioc = @($i -split '\s*,\s*' | Where-Object { $_ }) }
                     Invoke-WfxMenuAction { Invoke-WfxHunt @hp | Out-Null }
+                }
+            }
+            'F' {
+                Write-WfxConsole '  Leave a question empty to skip it. Names take wildcards: *invoice*, setup?.exe' -Kind Dim
+                $fa = @{}
+                $n = Read-WfxMenuText 'File or folder name(s), comma-separated'
+                if ($n) { $fa.Name = @($n -split '\s*,\s*' | Where-Object { $_ }) }
+                $e = Read-WfxMenuText 'Extension(s), e.g. exe,ps1,hta (or "none" for files without one)'
+                if ($e -match '^(?i)none$') { $fa.NoExtension = $true } elseif ($e) { $fa.Extension = @($e) }
+                $p = Read-WfxMenuPath 'Only in this folder (Enter = every drive)' -Kind Folder
+                if ($p) { $fa.Path = @($p) }
+                $d = 0; if ([int]::TryParse((Read-WfxMenuText 'Changed in the last N days'), [ref]$d) -and $d -gt 0) { $fa.ModifiedAfter = (Get-Date).AddDays(-$d) }
+                if ((Read-WfxMenuText 'Also hash each file and check its real type? (y/N)') -match '^(?i)y') { $fa.Hash = $true; $fa.CheckType = $true }
+                if (-not ($fa.Name -or $fa.Extension -or $fa.NoExtension -or $fa.ModifiedAfter)) { Write-WfxConsole '  Nothing to look for.' -Kind Warn; Wait-WfxMenu; break }
+                if (-not $fa.Name) { $fa.ItemType = 'File' } else { $fa.ItemType = 'Any' }
+                Invoke-WfxMenuAction -NoPause {
+                    Write-WfxConsole '  Searching...' -Kind Dim
+                    $warn = $null
+                    $rows = @(Find-WfxFile @fa -WarningVariable warn -WarningAction SilentlyContinue)
+                    $note = @($warn | ForEach-Object { [pscustomobject]@{ Source = 'search'; Reason = [string]$_; Fix = '' } })
+                    $null = Show-WfxMenuInsightTable -Rows $rows -Title 'Files found' -Key 'find' -Note $note
                 }
             }
             '7' {
@@ -475,8 +501,10 @@ function Show-WfxMenuSettings {
         Write-WfxMenuItem '5' 'Custom rules folder' $(if ($script:WfxMenu.RulesPath) { $script:WfxMenu.RulesPath } else { '(built-in only)' })
         Write-WfxMenuItem '6' 'Sigma rules folder' $(if ($script:WfxMenu.Sigma) { $script:WfxMenu.Sigma } elseif ($env:WFX_SIGMA) { "$env:WFX_SIGMA (WFX_SIGMA)" } else { '(none)' })
         Write-WfxMenuItem '7' 'YARA rules folder' $(if ($script:WfxMenu.Yara) { $script:WfxMenu.Yara } elseif ($env:WFX_YARA) { "$env:WFX_YARA (WFX_YARA)" } else { '(none)' })
+        Write-WfxConsole ''
+        Write-WfxMenuItem 'V' 'Verify this copy of WinForensicX' 'compare its files with SHA256SUMS.txt'
         Write-WfxMenuFooter
-        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', 'B', 'Q'
+        $c = Read-WfxMenuChoice -Valid '1', '2', '3', '4', '5', '6', '7', 'V', 'B', 'Q'
         switch ($c) {
             'B' { return }
             'Q' { return 'Q' }
@@ -486,6 +514,7 @@ function Show-WfxMenuSettings {
             }
             '2' { $v = 0; if ([int]::TryParse((Read-WfxMenuText 'Hours (1-8760)' ([string]$script:WfxMenu.Hours)), [ref]$v) -and $v -ge 1 -and $v -le 8760) { $script:WfxMenu.Hours = $v } else { Write-WfxConsole '  Enter a number from 1 to 8760.' -Kind Warn; Wait-WfxMenu } }
             '3' { $v = 0; $t = Read-WfxMenuText 'Days (1-3650, 0 = per view default)' ([string]$script:WfxMenu.Days); if ([int]::TryParse($t, [ref]$v) -and $v -ge 0 -and $v -le 3650) { $script:WfxMenu.Days = $v } else { Write-WfxConsole '  Enter a number from 0 to 3650.' -Kind Warn; Wait-WfxMenu } }
+            'V' { Invoke-WfxMenuAction { Write-WfxConsole ''; Write-WfxIntegrityLine (Test-WfxIntegrity) -Detail } }
             '4' { $p = Read-WfxMenuPath 'Allowlist JSON (see examples\allowlist.example.json)' -Kind File; $script:WfxMenu.Allowlist = [string]$p }
             '5' { $p = Read-WfxMenuPath 'Folder with <pack>.<name>.json rule files' -Kind Folder; $script:WfxMenu.RulesPath = [string]$p; Set-WfxRulePath ([string]$p) }
             '6' { $p = Read-WfxMenuPath 'Folder of Sigma .yml rules (e.g. sigma\rules\windows)' -Kind Folder; $script:WfxMenu.Sigma = [string]$p }
@@ -517,7 +546,7 @@ function Show-WfxMenu {
         Write-WfxMenuHeader 'Main menu'
         if ($missing.Count) { Write-WfxConsole "  ! Rule pack(s) missing: $($missing -join ', ') — restore them from the release (antivirus may have quarantined them)." -Kind Bad; Write-WfxConsole '' }
         Write-WfxMenuItem '1' 'Investigate this computer' 'triage: find signs of compromise and get a report'
-        Write-WfxMenuItem '2' 'Explore this computer' '57 live views: what ran, what changed, users, software, network, USB...'
+        Write-WfxMenuItem '2' 'Explore this computer' '60 live views: what ran, what changed, users, software, network, USB...'
         Write-WfxMenuItem '3' 'Hunt & analyze' 'IOC hunting, artifact parsing, file triage, decode payloads'
         Write-WfxMenuItem '4' 'Cases & evidence' 'reports, verify, timeline, compare, export, fleet report'
         Write-WfxMenuItem '5' 'Live monitor' 'watch new processes / connections as they happen'

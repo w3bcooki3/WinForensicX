@@ -3,6 +3,7 @@
 # network requests, and degrades gracefully without administrator rights. Timestamps are stored as UTC.
 
 $script:WfxSigCache = @{}
+$script:WfxHashCache = @{}
 
 function Get-WfxUserProfilePath {
     <# Real user-profile folders from the registry ProfileList (works when profiles are not on C:\Users). #>
@@ -68,6 +69,22 @@ function Get-WfxSignature {
     return $s
 }
 
+function Get-WfxBinaryHash {
+    <# SHA-256 of a program file, cached per path for the duration of a collection. Files over 256 MB are
+       skipped (''), so one huge binary cannot stall a triage. #>
+    param([string]$Path)
+    if (-not $Path -or -not (Test-WfxWindows)) { return '' }
+    $k = $Path.ToLowerInvariant()
+    if ($script:WfxHashCache.ContainsKey($k)) { return $script:WfxHashCache[$k] }
+    $h = ''
+    try {
+        $fi = Get-Item -LiteralPath $Path -ErrorAction Stop
+        if (-not $fi.PSIsContainer -and $fi.Length -le 256MB) { $h = (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant() }
+    } catch {}
+    $script:WfxHashCache[$k] = $h
+    return $h
+}
+
 function Get-WfxProcessData {
     <# Normalized process list with parent linkage, signature status and owner.
        -Skip: hashtable of "pid:name" keys to leave out (used by the live monitor to enrich only new processes). #>
@@ -110,6 +127,8 @@ function Get-WfxProcessData {
             ParentCreateTime  = if ($parent) { ConvertTo-WfxUtcString $parent.CreationDate } else { '' }
             SignatureStatus   = $sig
             Company           = $company
+            # Lets a saved case be checked against hash IOCs and reputation services later, offline.
+            Sha256            = (Get-WfxBinaryHash $path)
             CreateTime        = ConvertTo-WfxUtcString $p.CreationDate
             User              = $owner
             SessionId         = [int]$p.SessionId

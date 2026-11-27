@@ -32,6 +32,9 @@
         incidents     = @(Get-WfxValue $Result 'Incidents' @())
         artifacts     = @(@(Get-WfxValue $Result 'Artifacts' @()) | Select-Object -First 3000 | ForEach-Object { [ordered]@{ Artifact = $_.Artifact; Time = $_.Time; TimeKind = $_.TimeKind; Evidence = $_.Evidence; Path = $_.Path; User = $_.User; Sha1 = $_.Sha1; Detail = $_.Detail } })
         artifactTotal = (ConvertTo-WfxInt (Get-WfxValue $Result 'ArtifactTotal' 0))
+        readiness     = @(Get-WfxValue $Result 'Readiness' @())
+        readySummary  = [string](Get-WfxValue $Result 'ReadinessSummary' '')
+        card          = @(Get-WfxValue $Result 'IncidentCard' @())
         gaps          = @(Get-WfxValue $Result 'Gaps' @())
         limits        = @($help.Limits)
     }
@@ -246,6 +249,8 @@ td.stage { font-weight: 600; white-space: nowrap; }
 ul.list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line2); }
 ul.list li { padding: 9px 0; border-bottom: 1px solid var(--line2); overflow-wrap: anywhere; }
 ul.list .fix { color: var(--ink2); margin-top: 2px; }
+td .fix { color: var(--ink2); margin-top: 4px; }
+.st { font-weight: 600; white-space: nowrap; } .st.r { color: var(--low); } .st.n { color: var(--high); } .st.o { color: var(--ink2); } .st.u { color: var(--info); }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
 footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--page); padding: 6px 14px; border-radius: 3px; font-size: 13px; opacity: 0; transition: opacity .15s; pointer-events: none; z-index: 60; }
@@ -313,7 +318,7 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
 </div></header>
 
 <div class="bar"><div class="wrap"><nav class="nav" id="nav" aria-label="Sections">
-  <a href="#summary">Summary</a><a href="#incidents">Incidents<span class="n" id="n-n"></span></a><a href="#path">Path<span class="n" id="n-p"></span></a><a href="#findings">Findings<span class="n" id="n-f"></span></a><a href="#iocs">Indicators<span class="n" id="n-i"></span></a><a href="#timeline">Timeline<span class="n" id="n-t"></span></a><a href="#activity">Changes<span class="n" id="n-a"></span></a><a href="#execution">Execution<span class="n" id="n-e"></span></a><a href="#attack">ATT&amp;CK<span class="n" id="n-x"></span></a><a href="#visibility">Gaps<span class="n" id="n-g"></span></a><a href="#custody">Custody</a>
+  <a href="#summary">Summary</a><a href="#act" id="nav-act">Act now</a><a href="#incidents">Incidents<span class="n" id="n-n"></span></a><a href="#path">Path<span class="n" id="n-p"></span></a><a href="#findings">Findings<span class="n" id="n-f"></span></a><a href="#iocs">Indicators<span class="n" id="n-i"></span></a><a href="#timeline">Timeline<span class="n" id="n-t"></span></a><a href="#activity">Changes<span class="n" id="n-a"></span></a><a href="#execution">Execution<span class="n" id="n-e"></span></a><a href="#attack">ATT&amp;CK<span class="n" id="n-x"></span></a><a href="#visibility">Gaps<span class="n" id="n-g"></span></a><a href="#custody">Custody</a>
 </nav></div></div>
 
 <main class="wrap">
@@ -330,6 +335,15 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
   <h3 style="margin-top:30px">When it happened</h3>
   <p class="desc">Each time-stamped finding on its ATT&amp;CK stage. Grey bands are incidents. Select a point to open the finding.</p>
   <div class="chart" id="chart"><div class="ctl"><label for="zoom">Show</label><select id="zoom"></select><span id="notime"></span></div><div id="chartsvg"></div><div class="legend" id="legend"></div></div>
+</section>
+
+<section id="act">
+  <h2>If you must act now</h2>
+  <p class="desc" id="actsub"></p>
+  <div class="two"><div><h3>First steps on this computer</h3><ol class="todo" id="card"></ol></div><div><h3>Avoid</h3><ul class="list" id="avoid"></ul></div></div>
+  <h3 style="margin-top:30px">Can its memory be kept?</h3>
+  <p class="desc">Settings that decide whether memory survives if this computer has to go off, and protections a responder must know about before capturing it. Read only: nothing was changed. Most fixes need a restart, so make them before an incident, never on a suspect machine.</p>
+  <div class="tbl" id="rbox"></div>
 </section>
 
 <section id="incidents">
@@ -947,6 +961,18 @@ footer { padding: 26px 0 40px; color: var(--ink3); font-size: 12.5px; }
 
   /* visibility, custody, limits */
   var G = D.gaps || []; $('n-g').textContent = G.length || '';
+  /* act now: incident card and memory-capture readiness (live and remote triage only) */
+  (function () {
+    var R = D.readiness || [], C = D.card || [];
+    if (!R.length && !C.length) { ['act', 'nav-act'].forEach(function (id) { var e = $(id); if (e) e.parentNode.removeChild(e); }); return; }
+    $('actsub').textContent = D.readySummary || '';
+    $('card').innerHTML = C.filter(function (x) { return x.Kind === 'Do'; }).map(function (x) { return '<li><div>' + esc(x.Text) + '</div></li>'; }).join('');
+    $('avoid').innerHTML = C.filter(function (x) { return x.Kind === 'Avoid'; }).map(function (x) { return '<li>' + esc(x.Text) + '</li>'; }).join('');
+    var cls = { 'Ready': 'r', 'Not ready': 'n', 'Note': 'o', 'Unknown': 'u' };
+    $('rbox').innerHTML = '<table><thead><tr><th>Check</th><th>Status</th><th>Value</th><th>Why it matters</th></tr></thead><tbody>' + R.map(function (r) {
+      return '<tr><td>' + esc(r.Check) + '</td><td><span class="st ' + (cls[r.Status] || 'u') + '">' + esc(r.Status) + '</span></td><td>' + esc(r.Value) + '</td><td>' + esc(r.Why) + (r.Fix ? '<div class="fix">Fix: ' + esc(r.Fix) + '</div>' : '') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  })();
   $('gbox').innerHTML = G.length ? '<ul class="list">' + G.map(function (x) { return '<li><b>' + esc(x.Source) + '</b>: ' + esc(x.Reason) + (x.Fix ? '<div class="fix">To fix: ' + esc(x.Fix) + '</div>' : '') + '</li>'; }).join('') + '</ul>' : '<div class="empty">Nothing was limited: collection ran with the visibility it attempted.</div>';
   var SP = D.suppressed || [];
   $('sbox').innerHTML = SP.length ? '<ul class="list">' + SP.map(function (x) { return '<li>' + sevHtml(x.Severity) + ' <b>' + esc(x.Title) + '</b><div class="fix">Reason: ' + esc(x.Reason || 'none given') + '. Allowlist rule ' + esc(x.Rule) + '.</div></li>'; }).join('') + '</ul>' : '<div class="empty">Nothing was suppressed.</div>';

@@ -54,6 +54,7 @@
         $dnsMap = Get-WfxDnsAddressMap -DnsEntry $dns
 
         & $run 'process'     { Invoke-WfxProcessAnalyzer     -Process    @(Get-WfxValue $Bundle 'Process' @())     -HostName $HostName }
+        & $run 'volatile'    { Invoke-WfxVolatileAnalyzer    -Volatile   (Get-WfxValue $Bundle 'Volatile' $null)   -HostName $HostName }
         & $run 'network'     { Invoke-WfxNetworkAnalyzer     -Connection @(Get-WfxValue $Bundle 'Network' @())     -HostName $HostName -DnsMap $dnsMap }
         & $run 'dns'         { Invoke-WfxDnsAnalyzer         -DnsEntry   $dns                                      -HostName $HostName }
         & $run 'persistence' { Invoke-WfxPersistenceAnalyzer -Autostart  @(Get-WfxValue $Bundle 'Persistence' @()) -HostName $HostName }
@@ -104,6 +105,17 @@
         $techIds = @($findings | ForEach-Object { $_.Technique } | Where-Object { $_ } | Sort-Object -Unique)
         $coverage = foreach ($t in $techIds) { Get-WfxAttackTechnique $t }
 
+        # Memory-capture readiness (live and remote bundles only): checks and the incident card, never scored.
+        $readiness = @(); $readySummary = ''; $card = @()
+        $readyData = Get-WfxValue (Get-WfxValue $Bundle 'Security' $null) 'Readiness' $null
+        if ($readyData) {
+            try {
+                $readiness = @(Get-WfxReadinessCheck -Data $readyData | Expand-WfxRecord)
+                $readySummary = Get-WfxReadinessSummary -Check $readiness
+                $card = @(Get-WfxIncidentCard -Check $readiness | Expand-WfxRecord)
+            } catch { $gaps.Add([pscustomobject]@{ Source = 'analyzer:readiness'; Reason = $_.Exception.Message; Fix = '' }) }
+        }
+
         [pscustomobject]@{
             Schema         = 'winforensicx.result/2'
             HostName       = $HostName
@@ -126,6 +138,9 @@
             Programs       = @(try { Get-WfxProgramSummary -Bundle $Bundle -Event $events -Artifact $artifacts | Expand-WfxRecord } catch { $gaps.Add([pscustomobject]@{ Source = 'analyzer:programs'; Reason = $_.Exception.Message; Fix = 'Fleet rarity will skip this host.' }) })
             Logons         = @(try { Get-WfxLogonSummary -Event $events | Expand-WfxRecord } catch { $gaps.Add([pscustomobject]@{ Source = 'analyzer:logons'; Reason = $_.Exception.Message; Fix = 'Fleet movement will skip this host.' }) })
             Addresses      = @(try { Get-WfxHostAddress -Bundle $Bundle | Expand-WfxRecord } catch { })
+            Readiness      = @($readiness)
+            ReadinessSummary = $readySummary
+            IncidentCard   = @($card)
             Gaps           = @($gaps.ToArray())
             Meta           = (Get-WfxValue $Bundle 'Meta' $null)
         }

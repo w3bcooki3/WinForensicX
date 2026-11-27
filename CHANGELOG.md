@@ -1,8 +1,46 @@
 # Changelog
 
-## Unreleased — redaction fixes, OSINTrix hand-off
+## Unreleased — start-up prompt, triage plan, self-check, memory-capture readiness; redaction fixes, OSINTrix hand-off
 
 ### Added
+- **Administrator prompt at start.** Without administrator rights, `Start-WinForensicX.ps1` (and the single
+  file run directly) asks once: **A** restart as administrator through the normal Windows prompt, **C** continue
+  without (the report lists what could not be read), **Q** quit. The new window runs the same script with the
+  same options, with `-NoProfile` and with the execution policy already in effect; if UAC is cancelled it carries
+  on unelevated. It never asks in non-interactive sessions. `-Elevate` restarts without asking first;
+  `-NoElevate` never asks.
+- **`Invoke-WfxTriage -Plan`** lists what a triage with the given options would read, stage by stage, which
+  built-in Windows programs it runs (`auditpol`, `fsutil`, read-only), what needs administrator rights and what
+  is left out, then stops: nothing is read and no case folder is created. Menu: Investigate → P. A test fails
+  if a collector step is added without being described in the plan.
+- **Self-check (`Test-WfxIntegrity`).** At start, the code files are compared with `SHA256SUMS.txt`: changed,
+  missing, and code files that are not in the list (the module loads every `.ps1` in its folders, so a planted
+  file would run). It prints the list's own SHA-256 to compare with the release page. Never stops the tool.
+  Menu: Settings → V. `tools/build.ps1` now rewrites `SHA256SUMS.txt` (`-NoSums` skips it).
+- **Memory-capture readiness and an incident card.** Report → *Act now* (live and remote triage) and Explore →
+  Security → *Memory-capture readiness*: could this computer's memory be kept if it had to go off? Virtual
+  machine (snapshot from the hypervisor), crash-dump type, page-file size and free space for a full dump,
+  Ctrl+Scroll Lock forced dump, hibernation and Fast Startup, page file wiped at shutdown, BitLocker and
+  whether a recovery password protector exists (the key itself is never read), Memory Integrity, LSA protection
+  and Credential Guard, uptime, battery. Each with *Ready / Not ready / Note / Unknown*, why it matters and the
+  fix to make **before** an incident. The card gives the first steps for that computer (leave it running, cut
+  the network, snapshot or capture memory, hibernate rather than shut down, get the BitLocker key) and what to
+  avoid. Nothing is changed and none of it affects the scores.
+- **Volatile state kept in every triage:** open named pipes (names only; no pipe is opened), signed-in and
+  disconnected sessions, the ARP neighbour cache, and DLLs loaded from user-writable folders with their
+  signatures. LSASS, the other critical system processes and security products are never opened. Every
+  running program's file now also gets a SHA-256 (files over 256 MB skipped), so saved cases can be hunted by
+  hash. New detections: C2 framework pipe names (threats.json `suspiciousPipes`, previously unused), potato /
+  PsExec-style pipes (the same pattern as the Sysmon 17/18 rule), and unsigned DLLs side-loaded from
+  user-writable folders into Windows programs (High) or from outside a program's own folder (Medium). New
+  Explore views: *Open named pipes* and *DLLs loaded from user-writable folders*. `Invoke-WfxHunt` also
+  searches pipes, loaded DLLs, the ARP cache and process hashes.
+- **`Find-WfxFile`: fast file and folder search** across all fixed and removable drives (network with
+  `-IncludeNetwork`): name wildcards or `-Regex`, `-Extension` with or without the dot, `-NoExtension`, size,
+  date and hidden filters, files, folders or both. As administrator, NTFS drives are listed straight from the
+  master file table (read-only `FSCTL_ENUM_USN_DATA`, seconds for a whole drive); otherwise folders are walked
+  without following junctions or links. `-Hash`, `-CheckType` (real type from the first bytes, mismatch with
+  the extension) and `-Signature` add file facts. Stops at 10,000 results and says so. Menu: Hunt & analyze → F.
 - **Report → Indicators: tick and "Export for OSINT".** Tick the indicators worth researching outside
   (or "Tick external and hashes": public addresses, domains, URLs and hashes) and save them as a STIX 2.1
   bundle. Each indicator carries the host, the finding it came from, its severity and the case id, marked
@@ -14,6 +52,8 @@
   objects; the port of an `ip|port` attribute is dropped).
 
 ### Fixed
+- Explore → *Logged-on sessions* listed the logon time of active sessions in the wrong column, and missed
+  disconnected sessions' logon time.
 - **Command-line redaction no longer destroys evidence.** The rule for passwords glued to `-p`
   (`mysql -pSecret`) applied to every argument starting with `-p`, so `-Path C:\x.ps1`,
   `-ProcessName lsass`, `-PassThru` and `ssh -p2222` were stored as `-P***`. It now applies only to the

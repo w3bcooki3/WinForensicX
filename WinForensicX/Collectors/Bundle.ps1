@@ -15,14 +15,15 @@ function Get-WfxCollectionBundle {
         [int]$Hours = 72,
         [switch]$FileScan,
         [switch]$ExposureScan,
-        [ValidateSet('Host', 'Process', 'Network', 'Dns', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security')]
-        [string[]]$Sections = @('Host', 'Process', 'Network', 'Dns', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security')
+        [ValidateSet('Host', 'Process', 'Network', 'Dns', 'Volatile', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security')]
+        [string[]]$Sections = @('Host', 'Process', 'Network', 'Dns', 'Volatile', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security')
     )
     $want = @{}; foreach ($s in $Sections) { $want[$s] = $true }
     Clear-WfxGap
     $script:WfxSigCache = @{}
+    $script:WfxHashCache = @{}
     $started = Get-WfxUtcNow
-    $steps = @('Host', 'Dns', 'Network', 'Process', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security') | Where-Object { $want[$_] -and ($_ -ne 'Files' -or $FileScan) }
+    $steps = @('Host', 'Dns', 'Network', 'Process', 'Volatile', 'Persistence', 'Events', 'Activity', 'Artifacts', 'Files', 'Exposure', 'Security') | Where-Object { $want[$_] -and ($_ -ne 'Files' -or $FileScan) }
     $script:WfxProgress = @{ N = 0; Total = @($steps).Count }
     $stage = {
         param([string]$Label, [scriptblock]$Body)
@@ -40,7 +41,8 @@ function Get-WfxCollectionBundle {
     $hostInfo = if ($want.Host) { & $stage 'System information' { Get-WfxHostInfo } } else { $null }
     $dns = if ($want.Dns) { @(& $stage 'DNS cache' { Get-WfxDnsData }) } else { @() }
     $net = if ($want.Network) { @(& $stage 'Network connections' { Get-WfxNetworkData }) } else { @() }
-    $procs = if ($want.Process) { @(& $stage 'Processes (+ signatures)' { Get-WfxProcessData }) } else { @() }
+    $procs = if ($want.Process) { @(& $stage 'Processes (+ signatures, hashes)' { Get-WfxProcessData }) } else { @() }
+    $volatile = if ($want.Volatile) { & $stage 'Pipes, sessions, ARP, loaded DLLs' { Get-WfxVolatileData } } else { $null }
 
     $persist = @()
     if ($want.Persistence) { $persist = @(& $stage 'Autostarts, services, drivers' { @(Get-WfxPersistenceData) + @(Get-WfxServiceAndDriver) }) }
@@ -77,6 +79,7 @@ function Get-WfxCollectionBundle {
         Process     = $procs
         Network     = $net
         Dns         = $dns
+        Volatile    = $volatile
         Persistence = $persist
         Events      = $events
         Activity    = $activity

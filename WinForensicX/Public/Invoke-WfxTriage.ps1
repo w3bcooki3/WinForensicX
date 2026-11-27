@@ -51,11 +51,15 @@ function Invoke-WfxTriage {
                              running, autostart, recently executed and (-FileScan) the scanned files. -ArtifactPath:
                              scans the evidence folder. Needs a yara executable you provide (-YaraExe / PATH).
     .PARAMETER YaraExe       Path to yara64.exe / yara (default $env:WFX_YARA_EXE, then PATH).
+    .PARAMETER Plan          List what this triage would read, with these options, and stop. Reads nothing and
+                             creates no case folder. With -PassThru the rows are returned.
     .PARAMETER Quiet         Suppress console output (results still written).
     .PARAMETER NoReport      Skip the HTML report (JSON/CSV still written).
     .PARAMETER PassThru      Return the result object(s).
     .EXAMPLE
         Invoke-WfxTriage -FileScan -OutputPath E:\cases
+    .EXAMPLE
+        Invoke-WfxTriage -FileScan -Plan
     .EXAMPLE
         Invoke-WfxTriage -ComputerName srv01,srv02 -Credential (Get-Credential)
     .EXAMPLE
@@ -81,6 +85,7 @@ function Invoke-WfxTriage {
         [string[]]$SigmaPath = @($env:WFX_SIGMA | Where-Object { $_ }),
         [string[]]$YaraRules = @($env:WFX_YARA | Where-Object { $_ }),
         [string]$YaraExe = '',
+        [switch]$Plan,
         [switch]$Quiet,
         [switch]$NoReport,
         [switch]$PassThru
@@ -88,6 +93,14 @@ function Invoke-WfxTriage {
 
     $script:WfxQuiet = [bool]$Quiet
     Write-WfxBanner
+    if ($Plan) {
+        $src = switch ($PSCmdlet.ParameterSetName) { 'Offline' { $EvtxPath } 'Reanalyze' { $InputPath } 'Artifacts' { $ArtifactPath } default { '' } }
+        $isAdmin = if ($PSCmdlet.ParameterSetName -eq 'Remote') { $true } else { Test-WfxAdmin }
+        $rows = Get-WfxTriagePlan -Mode $PSCmdlet.ParameterSetName -Hours $Hours -FileScan:$FileScan -ExposureScan:$ExposureScan -Admin $isAdmin -YaraRules $YaraRules -SigmaPath $SigmaPath -Source $src
+        Write-WfxTriagePlan -Plan $rows -Mode $PSCmdlet.ParameterSetName -Admin $isAdmin
+        if ($PassThru) { return $rows }
+        return
+    }
     $script:WfxSigmaEventQuery = @()
     if (@($SigmaPath).Count) {
         $sr = Get-WfxSigmaRuleSet -Path $SigmaPath

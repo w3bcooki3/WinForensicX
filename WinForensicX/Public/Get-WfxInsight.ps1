@@ -68,14 +68,10 @@ $script:WfxInsightTopics = [ordered]@{
             }
         }
     }
-    'sessions'    = @{ Group = 'System'; Title = 'Logged-on sessions'; Desc = 'Interactive and RDP sessions right now (quser).'; Admin = $false; Script = {
+    'sessions'    = @{ Group = 'System'; Title = 'Logged-on sessions'; Desc = 'Interactive and RDP sessions right now, including disconnected ones (quser).'; Admin = $false; Script = {
             $q = @(quser 2>$null)
-            if ($q.Count -lt 2) { return [pscustomobject]@{ User = (Get-CimInstance Win32_ComputerSystem).UserName; Session = 'console'; State = 'Active'; Idle = ''; LogonTime = '' } }
-            foreach ($l in ($q | Select-Object -Skip 1)) {
-                $t = ($l.Substring(1) -split '\s{2,}')
-                if ($t.Count -ge 5) { [pscustomobject]@{ User = $t[0]; Session = $t[1]; Id = $t[2]; State = $t[3]; Idle = $t[4]; LogonTime = ($t[5..($t.Count - 1)] -join ' ') } }
-                elseif ($t.Count -eq 4) { [pscustomobject]@{ User = $t[0]; Session = ''; Id = $t[1]; State = $t[2]; Idle = $t[3]; LogonTime = '' } }
-            }
+            if ($q.Count -lt 2) { return [pscustomobject]@{ User = (Get-CimInstance Win32_ComputerSystem).UserName; Session = 'console'; Id = ''; State = 'Active'; Idle = ''; LogonTime = '' } }
+            ConvertFrom-WfxQuser -Line $q | Select-Object User, Session, Id, State, Idle, LogonTime
         }
     }
     'profiles'    = @{ Group = 'System'; Title = 'User profiles on disk'; Desc = 'Every profile folder, its SID, and when it was last used.'; Admin = $false; Script = {
@@ -111,7 +107,7 @@ $script:WfxInsightTopics = [ordered]@{
 
     # ───────────── Processes ─────────────
     'processes'   = @{ Group = 'Processes'; Title = 'Running processes (signed / owner / parent)'; Desc = 'Every process with user, signature status, company, parent and command line.'; Admin = $false; Script = {
-            Get-WfxProcessData | Expand-WfxRecord | Add-WfxFlag Process | Sort-Object Name | Select-Object Flag, Why, Technique, Rule, Pid, Name, User, @{ n = 'Signature'; e = { $_.SignatureStatus } }, Company, @{ n = 'Parent'; e = { "$($_.ParentName) ($($_.Ppid))" } }, @{ n = 'Started'; e = { $_.CreateTime } }, @{ n = 'CommandLine'; e = { Get-WfxShort $_.CommandLine 160 } }, Path
+            Get-WfxProcessData | Expand-WfxRecord | Add-WfxFlag Process | Sort-Object Name | Select-Object Flag, Why, Technique, Rule, Pid, Name, User, @{ n = 'Signature'; e = { $_.SignatureStatus } }, Company, @{ n = 'Parent'; e = { "$($_.ParentName) ($($_.Ppid))" } }, @{ n = 'Started'; e = { $_.CreateTime } }, @{ n = 'CommandLine'; e = { Get-WfxShort $_.CommandLine 160 } }, Path, Sha256
         }
     }
     'tree'        = @{ Group = 'Processes'; Title = 'Process tree'; Desc = 'Parent → child hierarchy, so unusual chains stand out (e.g. winword → powershell).'; Admin = $false; Script = {
@@ -139,7 +135,15 @@ $script:WfxInsightTopics = [ordered]@{
     }
     'unsigned'    = @{ Group = 'Processes'; Title = 'Processes that are unsigned or run from user folders'; Desc = 'The short list worth a second look.'; Admin = $false; Script = {
             Get-WfxProcessData | Expand-WfxRecord | Add-WfxFlag Process | Where-Object { $_.Path -and (-not (Test-WfxTrustedSignature $_.SignatureStatus) -or (Test-WfxUserWritablePath $_.Path)) } |
-                Select-Object Flag, Why, Technique, Rule, Pid, Name, User, @{ n = 'Signature'; e = { $_.SignatureStatus } }, Company, Path, @{ n = 'CommandLine'; e = { Get-WfxShort $_.CommandLine 140 } }
+                Select-Object Flag, Why, Technique, Rule, Pid, Name, User, @{ n = 'Signature'; e = { $_.SignatureStatus } }, Company, Path, @{ n = 'CommandLine'; e = { Get-WfxShort $_.CommandLine 140 } }, Sha256
+        }
+    }
+    'modules'     = @{ Group = 'Processes'; Title = 'DLLs loaded from user-writable folders'; Desc = 'DLLs that running programs loaded from AppData, Temp, Downloads, ProgramData and similar folders, with signature. Unsigned ones loaded by Windows programs, or from outside the program''s own folder, are flagged (DLL side-loading). LSASS and security products are never opened.'; Admin = $false; Script = {
+            Get-WfxModuleData | Expand-WfxRecord | Select-Object Pid, Process, Module, Signature, ProcessPath
+        }
+    }
+    'pipes'       = @{ Group = 'Processes'; Title = 'Open named pipes'; Desc = 'Names of the named pipes open right now. Default names of C2 frameworks (Cobalt Strike, Meterpreter) and of potato / PsExec-style tools are flagged. Names only: no pipe is opened.'; Admin = $false; Script = {
+            Get-WfxPipeName | ForEach-Object { [pscustomobject]@{ Pipe = $_; Path = "\\.\pipe\$_" } }
         }
     }
 
@@ -417,6 +421,14 @@ $script:WfxInsightTopics = [ordered]@{
             & $row 'Updates installed in last 45 days' $(if ($last) { $last -ge (Get-Date).AddDays(-45) } else { $null }) $last 'Install the latest cumulative update.'
         }
     }
+    'readiness'   = @{ Group = 'Security'; Title = 'Memory-capture readiness and incident card'; Desc = 'If this computer had to go off now, could its memory be kept? VM snapshot, hibernation, crash-dump and page-file settings, Ctrl+Scroll Lock, BitLocker recovery key, protections that affect capture; then what to do first. Reads only, changes nothing.'; Admin = $false; Script = {
+            $c = @(Get-WfxReadinessCheck -Data (Get-WfxReadinessData) | Expand-WfxRecord)
+            [pscustomobject]@{ Check = 'In short'; Status = 'Note'; Value = ''; Why = (Get-WfxReadinessSummary -Check $c); Fix = '' }
+            $c | Select-Object Check, Status, Value, Why, Fix
+            $n = 0
+            foreach ($x in @(Get-WfxIncidentCard -Check $c | Expand-WfxRecord)) { $n++; [pscustomobject]@{ Check = $(if ($x.Kind -eq 'Do') { "First step $n" } else { 'Avoid' }); Status = 'Card'; Value = ''; Why = $x.Text; Fix = '' } }
+        }
+    }
 }
 
 # ── Suspicious-activity checks for views that have no triage analyzer ───────────────────────────────
@@ -429,7 +441,7 @@ $script:WfxFlagTopic = [ordered]@{
     software = 'first'; users = 'first'; shares = 'first'; hosts = 'first'; firewall = 'first'; prefetch = 'first'
     downloads = 'first'; recentexe = 'first'; failedlogons = 'first'
     pshistory = 'keep'; powershell = 'keep'; newservices = 'keep'; logclears = 'keep'; accounts = 'keep'; rdp = 'keep'; defender = 'keep'
-    execution = 'first'; useractivity = 'first'; browserdl = 'first'; defenderlog = 'first'
+    execution = 'first'; useractivity = 'first'; browserdl = 'first'; defenderlog = 'first'; modules = 'first'; pipes = 'first'
     changes = 'keep'; regchanges = 'keep'; filechanges = 'keep'; deleted = 'keep'; installs = 'keep'; executions = 'keep'; connhistory = 'keep'; configchanges = 'keep'
 }
 $script:WfxRiskyExt = '(?i)\.(?:iso|img|vhdx?|lnk|hta|js|jse|vbs|vbe|wsf|wsh|one|xll|cpl|scr|pif|bat|cmd|ps1|msc|jar|appref-ms|library-ms|search-ms|url)$'
@@ -468,6 +480,8 @@ function Test-WfxProductName {
 }
 
 $script:WfxInsightChecks = @{
+    pipes = { param($r) $v = Test-WfxSuspiciousPipe -Name ([string]$r.Pipe); if ($v) { Add-WfxVerdict $r $v.Severity $v.Why $v.Technique $v.Rule } }
+    modules = { param($r) $v = Test-WfxModuleLoad -Module $r; if ($v) { Add-WfxVerdict $r $v.Severity $v.Why $v.Technique $v.Rule } }
     tasks = { param($r) Add-WfxCommandVerdict -InputObject $r -Text $r._Text -Context 'scheduled task' -CheckImagePath }
     wmi = {
         param($r)

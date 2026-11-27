@@ -10,7 +10,7 @@
           • IPv4/IPv6 — exact address match (1.2.3.4 does NOT match 11.2.3.45).
           • Domains — the name itself or any subdomain (evil.com matches a.evil.com, not notevil.com).
           • Anything else — case-insensitive substring.
-        Searched: processes, network, DNS cache, persistence, event logs (message + fields), files, exposure paths,
+        Searched: processes (and their SHA-256), network, DNS cache, open named pipes, loaded DLLs, ARP cache, persistence, event logs (message + fields), files, exposure paths,
         recent activity, and execution / user-activity artifacts (Amcache SHA-1, ShimCache, Prefetch, BAM,
         Jump Lists, shortcuts, ShellBags, browser downloads with their URLs, Defender logs).
         Results are written to a hunt case folder (hunt.json / hunt.csv / manifest) unless -NoCase.
@@ -76,8 +76,13 @@
     foreach ($p in @(Get-WfxValue $bundle 'Process' @())) {
         $ctx = "pid $($p.Pid) $($p.Name)"
         & $push 'process' $p.Name $ctx; & $push 'process' $p.Path $ctx; & $push 'process' $p.CommandLine $ctx
+        & $push 'hash' (Get-WfxValue $p 'Sha256' '') "$ctx ($($p.Path))"
         if ($HashProcesses -and -not $InputPath) { & $hashFile $p.Path $ctx }
     }
+    $vol = Get-WfxValue $bundle 'Volatile' $null
+    foreach ($n in @(Get-WfxValue $vol 'Pipes' @())) { & $push 'pipe' $n "\\.\pipe\$n" }
+    foreach ($m in @(Get-WfxValue $vol 'Modules' @())) { & $push 'module' $m.Module "pid $($m.Pid) $($m.Process)" }
+    foreach ($a in @(Get-WfxValue $vol 'Arp' @())) { & $push 'arp' $a.IPAddress "neighbour $($a.LinkLayerAddress)" }
     foreach ($c in @(Get-WfxValue $bundle 'Network' @())) {
         $ctx = "$($c.Process) $($c.LocalAddress):$($c.LocalPort) → $($c.RemoteAddress):$($c.RemotePort) $($c.State)"
         & $push 'network' $c.RemoteAddress $ctx; & $push 'network' $c.LocalAddress $ctx; & $push 'network' $c.RemoteHost $ctx

@@ -9,7 +9,7 @@ function Get-WfxRegValue {
 
 function Get-WfxSecurityData {
     if (-not (Test-WfxWindows)) {
-        return [pscustomobject]@{ Defender = $null; ThirdPartyAV = @(); Firewall = $null; Audit = $null; BitLocker = $null; Lsa = $null; Rdp = $null; AiTools = @() }
+        return [pscustomobject]@{ Defender = $null; ThirdPartyAV = @(); Firewall = $null; Audit = $null; BitLocker = $null; Lsa = $null; Rdp = $null; AiTools = @(); Readiness = $null }
     }
 
     # ── Microsoft Defender ──
@@ -137,5 +137,7 @@ function Get-WfxSecurityData {
         Rdp          = $rdp
         BitLocker    = $bitlocker
         AiTools      = @($aiTools)
+        # Memory-capture readiness (Collectors/Readiness.ps1): shown in the report, never scored.
+        Readiness    = (Get-WfxReadinessData)
     }
 }

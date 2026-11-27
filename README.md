@@ -4,7 +4,7 @@
 
 One command collects the state of a Windows host, checks it against detection rules mapped to MITRE ATT&CK,
 and writes a case report you can hand to a colleague. Around that core is a toolkit for the rest of the job:
-57 live views of the machine, execution artifacts (Amcache, ShimCache, Jump Lists, ShellBags, SRUM, `$MFT` …)
+60 live views of the machine, execution artifacts (Amcache, ShimCache, Jump Lists, ShellBags, SRUM, `$MFT` …)
 from the live host or a KAPE folder, process trees, event-log tampering checks, Sigma and YARA, incident grouping, IOC hunting, file triage, payload decoding,
 timelines, case diffing, and exports to Timesketch, Elastic (ECS) and STIX 2.1.
 
@@ -36,9 +36,10 @@ No install, no external modules, no network traffic of its own. Windows PowerShe
 ## Quick start
 
 1. **Download and extract the whole archive.** Optionally [verify the hashes](#verifying-the-download).
-2. **Open PowerShell as administrator** (Start → type *PowerShell* → *Run as administrator*). Admin rights
-   give access to the Security log, every process, Prefetch, the NTFS change journal and BitLocker state.
-   Without them the tool still runs and lists what it could not see.
+2. **Open PowerShell** (Start → type *PowerShell*). Administrator rights give access to the Security log,
+   every process, Prefetch, the NTFS change journal and BitLocker state. If the window is not elevated, the tool
+   asks once: **A** restart as administrator (Windows asks you to confirm), **C** continue without (each report
+   lists what it could not see) or **Q** quit. `-Elevate` skips the question, `-NoElevate` never asks.
 3. **Start it from that window:**
 
    ```powershell
@@ -51,14 +52,17 @@ No install, no external modules, no network traffic of its own. Windows PowerShe
    | *running scripts is disabled on this system* | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, then run it again. It applies to this window only. |
    | *…is not digitally signed* | The files still carry the downloaded-from-the-Internet mark. After checking the hashes: `Get-ChildItem -Recurse \| Unblock-File`. |
 
-   > Right-click → **Run with PowerShell** is not supported: it never runs as administrator and closes the
-   > window as soon as PowerShell refuses, so all you see is a window flashing open and shut.
+   > Right-click → **Run with PowerShell** is not supported: it closes the window as soon as PowerShell
+   > refuses the script, so all you see is a window flashing open and shut.
+
+   At start it also checks its own files against `SHA256SUMS.txt` and says if any code file was changed,
+   removed or added.
 
 4. **Pick from the menu:**
 
    ```
      1  Investigate this computer    triage: find signs of compromise and get a report
-     2  Explore this computer        57 live views: what changed recently, users, software, network, USB...
+     2  Explore this computer        60 live views: what changed recently, users, software, network, USB...
      3  Hunt & analyze               IOC hunting, file triage, decode payloads
      4  Cases & evidence             open reports, verify, timeline, compare
      5  Live monitor                 watch new processes / connections as they happen
@@ -86,6 +90,7 @@ analysis machine.
 | Section | What you get |
 |---|---|
 | **Summary** | A verdict in words, what happened from the earliest to the latest finding, a numbered *Do first* list with the action for each item, the suspicious-activity window, accounts involved, external addresses, compromise risk and hardening scores. |
+| **Act now** | Live triage only. The first steps for *this* computer and what to avoid, and whether its memory could be kept if it had to go off: virtual-machine snapshot, crash-dump type, page file and free space for a full dump, Ctrl+Scroll Lock, hibernation and Fast Startup, BitLocker recovery key, Memory Integrity, LSA protection, Credential Guard, uptime. Each check is *Ready*, *Not ready*, *Note* or *Unknown*, with the fix to make before an incident. Nothing is changed. |
 | **When it happened** | Every time-stamped finding on a time axis, one row per ATT&CK stage, with incidents shaded behind them. Zoom to any incident; select a point to open the finding. |
 | **Incidents** | Findings that share a file, account or address within hours (or a burst of high-severity findings) grouped into one story, with the ATT&CK stages it covers, why each finding was joined and the **likely starting point**. |
 | **Attack path** | Findings placed on the ATT&CK lifecycle, earliest stage first, with the time each stage was first seen. |
@@ -122,12 +127,12 @@ Views that can show attacker activity run the same analyzers as triage over each
 | **Evidence of execution** | What ran (Amcache, ShimCache, Prefetch, BAM, UserAssist, PCA, with SHA-1 where recorded); user activity (Jump Lists, shortcuts, ShellBags, RunMRU, typed paths, Explorer searches); browser downloads with source URL; Defender support logs |
 | **Recent changes** | Combined timeline; registry writes in persistence and security keys; NTFS change journal (created, deleted, modified, renamed, alternate streams, timestamps); deleted files (Recycle Bin, Sysmon); software and driver installs; programs that ran (Prefetch, BAM, UserAssist); connection history; security configuration changes |
 | System | Overview, updates, software, users, privileged groups, sessions, profiles, shares, USB history, drives and BitLocker |
-| Processes | All processes (signer, owner, parent, command line), process tree, unsigned or user-folder programs |
+| Processes | All processes (signer, owner, parent, command line, SHA-256), process tree, unsigned or user-folder programs, DLLs loaded from user-writable folders, open named pipes |
 | Network | Listening ports, connections (named from the DNS cache), DNS cache, adapters, routes, ARP, hosts file, proxy, Wi-Fi profiles, firewall rules, SMB sessions |
 | Persistence | Autostarts, non-standard services and drivers, scheduled tasks, WMI subscriptions |
 | Events | Logons, failed logons, RDP, account and group changes, new services, cleared logs, reboots and crashes, suspicious PowerShell, Defender detections |
 | Files | Downloads with source URL, new programs in user folders, Prefetch, recent files, PowerShell history (redacted), Run-dialog history |
-| Security | Posture checklist (AV, tamper protection, firewall, UAC, LSA, Credential Guard, WDigest, SMBv1, LLMNR, logging, Sysmon, RDP NLA, auto-logon, patch age) with fixes |
+| Security | Posture checklist (AV, tamper protection, firewall, UAC, LSA, Credential Guard, WDigest, SMBv1, LLMNR, logging, Sysmon, RDP NLA, auto-logon, patch age) with fixes; memory-capture readiness and the incident card |
 
 **How "recent changes" works with no prior monitoring:** Windows already keeps the evidence. Registry keys
 have last-write times, the NTFS change journal records file operations, the Recycle Bin keeps original
@@ -182,9 +187,10 @@ removable-drive access, encoded or LOLBin arguments in shortcuts and Run history
 | `Save-WfxEvidence` | Collect a hashed evidence bundle now; analyze later, anywhere. |
 | `Invoke-WfxAnalyze` | Run every analyzer over a bundle. Runs on Windows, Linux and macOS. |
 | `Get-WfxArtifact` | Execution and user-activity artifacts from this computer or a folder of collected files. |
-| `Get-WfxInsight` / `Save-WfxInsight` | The 57 live views / export them all as a hashed inventory report. |
+| `Get-WfxInsight` / `Save-WfxInsight` | The 60 live views / export them all as a hashed inventory report. |
 | `Get-WfxActivity` | What changed recently; `-Journal` adds the NTFS change journal. |
 | `Invoke-WfxHunt` | Sweep a host or saved case for IOCs (hashes, IPs, domains and subdomains, strings), including event logs. Accepts defanged values and IOC files. |
+| `Find-WfxFile` | Fast search across all drives by name (wildcards or regex), extension or none, size, date, hidden; as administrator, NTFS drives are read from the master file table in seconds. Optional SHA-256, real type, signature. |
 | `Get-WfxFileTriage` | "What is this file?" Hashes, true type vs. extension, entropy, download URL (Mark of the Web), alternate streams, signer, PE facts, strings and IOCs. Never executes it. |
 | `ConvertFrom-WfxEncodedCommand` | Decode `-EncodedCommand`, Base64, gzip and nested `FromBase64String` payloads, then run the rules over the result. |
 | `Export-WfxTimeline` | UTC super-timeline of a case (findings, events, changes and artifacts) to CSV or JSON. |
@@ -193,10 +199,12 @@ removable-drive access, encoded or LOLBin arguments in shortcuts and Run history
 | `Compare-WfxCase` | Diff two cases: new processes, autostarts, services, listeners, DNS names, findings. |
 | `New-WfxFileBaseline` / `Compare-WfxFileBaseline` | File-integrity baseline for chosen folders. |
 | `Test-WfxCase` | Re-hash a case against its manifest: changed, missing or added files. |
+| `Test-WfxIntegrity` | Check this copy of WinForensicX against `SHA256SUMS.txt`: changed, missing, or extra code files the module would load. |
 | `Start-WfxMonitor` | Live baseline, then alerts on new suspicious processes, connections and beaconing. |
 | `Show-WfxMenu` / `Show-WfxHelp` | The menu; help in the terminal or (`-Html`) in the browser. |
 
 ```powershell
+Invoke-WfxTriage -FileScan -Plan                                   # what it would read, with these options; reads nothing
 Invoke-WfxTriage -OutputPath E:\cases                              # triage this host to external media
 Invoke-WfxTriage -FileScan -ExposureScan -OutputPath E:\cases      # plus web roots, drop folders, exposed secrets
 Invoke-WfxTriage -ComputerName srv01,srv02 -Credential (Get-Credential)
@@ -207,6 +215,8 @@ Invoke-WfxTriage -InputPath .\WFX_PC01_20261103-101500Z -AllowlistPath .\allowli
 
 Invoke-WfxHunt -Ioc 'evil[.]example','203.0.113.7' -InputPath .\case
 Get-ChildItem $env:USERPROFILE\Downloads -File | Get-WfxFileTriage | Where-Object ExtensionMismatch
+Find-WfxFile -Extension ps1,hta,js,vbs -ModifiedAfter (Get-Date).AddDays(-7)   # scripts changed this week, every drive
+Find-WfxFile -NoExtension -Path C:\Users -CheckType | Where-Object TypeMismatch
 ConvertFrom-WfxEncodedCommand 'powershell -nop -enc VwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIAAnAGgAaQAnAA=='
 Compare-WfxCase -Baseline .\golden -Current .\today | Where-Object Change -eq 'Added'
 Export-WfxCase -InputPath .\case -Format All                       # Timesketch, ECS, STIX 2.1, indicators
@@ -220,7 +230,7 @@ New-WfxFleetReport -Path E:\cases                                  # every host'
 | Area | Examples |
 |---|---|
 | **Command lines** (49 rules) | Encoded PowerShell (decoded and re-scanned), download cradles, AMSI tampering, LOLBin proxy execution (certutil, mshta, regsvr32, rundll32, MSBuild …), LSASS dumping, hive and NTDS export, Kerberoasting, shadow-copy deletion, log clearing, port proxies, SSH tunnels, ClickFix lures. Matched on the original **and** a normalised form, so carets, en-dashes, split quotes and `/switch` spellings do not evade them. |
-| **Processes** | System-name masquerading, renamed interpreters, parent spoofing, Office or browsers spawning shells, unsigned programs in user folders, offensive and remote-management tools, AI agents |
+| **Processes** | C2 and privilege-escalation named pipes open now, unsigned DLLs side-loaded from user-writable folders, system-name masquerading, renamed interpreters, parent spoofing, Office or browsers spawning shells, unsigned programs in user folders, offensive and remote-management tools, AI agents |
 | **Persistence** | Run keys, Startup, services, drivers (including known-vulnerable BYOVD drivers), tasks, WMI, Winlogon, AppInit, IFEO, LSA packages, COM hijacks |
 | **Event logs** (20 rules) | Spraying and brute force (including spray-then-success by source), log clearing, new services and tasks, 4688 / Sysmon 1 command lines, 4104 script blocks, account and group changes, external RDP, Defender detections and tampering, LSASS access |
 | **Network and DNS** | Listeners on all interfaces, tunnels (ngrok, Cloudflare …), C2 ports, DGA-like names, risky TLDs, paste sites, beaconing |
@@ -309,6 +319,9 @@ evidence log.
 ## Safety boundaries
 
 - **Read-only.** It changes no settings and executes nothing it finds. Its only writes are its own case folder.
+  `Invoke-WfxTriage -Plan` shows what a triage will read before it reads anything.
+- **Never elevates without asking.** The restart as administrator goes through the Windows prompt, runs without
+  your PowerShell profile and with the execution policy you already have.
 - **Secrets are audited, never extracted.** No LSASS dumping, no SAM/NTDS hash parsing, no DPAPI or browser
   decryption. Command lines and file contents are scrubbed of secrets at collection time.
 - **No network traffic of its own.** Remote mode uses the WinRM session you start; `-ExposureScan` reads

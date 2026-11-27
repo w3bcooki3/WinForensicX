@@ -8,7 +8,7 @@
     Description       = 'A read-only DFIR / incident-triage toolkit for Windows: collects host, process, network, DNS, persistence, event-log, file and security-posture data; maps findings to MITRE ATT&CK; scores host risk; and produces a self-contained HTML report with full chain of custody. Credential exposure is audited and redacted, never extracted.'
     PowerShellVersion = '5.1'
     CompatiblePSEditions = @('Desktop', 'Core')
-    FunctionsToExport = @('Invoke-WfxTriage', 'Invoke-WfxAnalyze', 'Start-WfxMonitor', 'Invoke-WfxHunt', 'Save-WfxEvidence', 'Show-WfxMenu', 'Show-WfxHelp', 'Get-WfxFileTriage', 'ConvertFrom-WfxEncodedCommand', 'Get-WfxTimeline', 'Export-WfxTimeline', 'Compare-WfxCase', 'Get-WfxInsight', 'Save-WfxInsight', 'Test-WfxCase', 'Get-WfxActivity', 'New-WfxFileBaseline', 'Compare-WfxFileBaseline', 'Get-WfxArtifact', 'Export-WfxCase', 'New-WfxFleetReport')
+    FunctionsToExport = @('Invoke-WfxTriage', 'Invoke-WfxAnalyze', 'Start-WfxMonitor', 'Invoke-WfxHunt', 'Save-WfxEvidence', 'Show-WfxMenu', 'Show-WfxHelp', 'Get-WfxFileTriage', 'ConvertFrom-WfxEncodedCommand', 'Get-WfxTimeline', 'Export-WfxTimeline', 'Compare-WfxCase', 'Get-WfxInsight', 'Save-WfxInsight', 'Test-WfxCase', 'Test-WfxIntegrity', 'Find-WfxFile', 'Get-WfxActivity', 'New-WfxFileBaseline', 'Compare-WfxFileBaseline', 'Get-WfxArtifact', 'Export-WfxCase', 'New-WfxFleetReport')
     CmdletsToExport   = @()
     VariablesToExport = @()
     AliasesToExport   = @()
